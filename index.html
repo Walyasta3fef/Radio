@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>راديو وليستعفف</title>
+    
+    <!-- React & Babel CDN -->
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Lucide Icons CDN -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;700&display=swap' );
+        
+        body {
+            margin: 0;
+            font-family: 'Cairo', sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        .main-container {
+            min-height: 100vh;
+            background: linear-gradient(to bottom right, #4c1d95, #312e81, #1e3a8a);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+        }
+
+        .radio-card {
+            background-color: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            padding: 2rem;
+            border-radius: 1.5rem;
+            box-shadow: 0 0 30px rgba(124, 58, 237, 0.5);
+        }
+
+        .vinyl-spin {
+            animation: spin 8s linear infinite;
+        }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        .accent-purple-500 {
+            accent-color: #8b5cf6;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useEffect, useRef, useState } = React;
+
+        // --- Playlist Data (from playlist.ts) ---
+        const PLAYLIST = [
+          { url: "https://archive.org/download/xWalyastaafefMp3/_xWalyastaafef01.mp3", duration: 2719, title: "الكورس الأساسي لقاء 1" },
+          { url: "https://archive.org/download/xWalyastaafefMp3/_xWalyastaafef02.mp3", duration: 2619, title: "الكورس الأساسي لقاء 2" },
+          { url: "https://archive.org/download/xWalyastaafefMp3/_xWalyastaafef03.mp3", duration: 3036, title: "الكورس الأساسي لقاء 3" },
+          { url: "https://archive.org/download/xWalyastaafefMp3/_xWalyastaafef04.mp3", duration: 2250, title: "الكورس الأساسي لقاء 4" },
+          { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE01.mp3", duration: 2714, title: "لقاء 1 - محاور التغيير" },
+          { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE02.mp3", duration: 2510, title: "لقاء 2 - قرار الإقلاع" },
+          { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE03.mp3", duration: 2073, title: "لقاء 3 - الإباحية فرصة" },
+          { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE04.mp3", duration: 1859, title: "لقاء 4 - الأفكار مسيطرة" },
+          { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE05.mp3", duration: 1828, title: "لقاء 5 - مغالطات الإدمان" },
+          { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE06.mp3", duration: 1989, title: "لقاء 6 - الخوف من المصيبة" },
+          { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE07.mp3", duration: 2193, title: "اللقاء 7 - الخواطر الجنسية" },
+          { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE08.mp3", duration: 2197, title: "لقاء 8 - هتفرج وأتوب" },
+          { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE09.mp3", duration: 2850, title: "اللقاء 9 - المعاناة بدون جنس" },
+          { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE10.mp3", duration: 1584, title: "لقاء 10 - العلاج الشمولي" },
+          { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE11.mp3", duration: 1434, title: "لقاء 11 - علاج اليأس" },
+          { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE12.mp3", duration: 2117, title: "لقاء 12 - التعامل مع الشهوة" },
+          { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE13.mp3", duration: 2063, title: "اللقاء 13 - التقدم والتراجع" },
+          { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE14.mp3", duration: 2193, title: "لقاء 14 - الخوف والرعب" },
+          { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE15.mp3", duration: 2151, title: "لقاء 15 - طاعة قصاد معصية" },
+          { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE16.mp3", duration: 2345, title: "لقاء 16 - خطوات عملية" },
+          { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE17.mp3", duration: 2121, title: "لقاء 17 - العلاج فن" },
+          { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE18.mp3", duration: 2251, title: "لقاء 18 - أتجوز ولا أتعافى؟" },
+          { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE19.mp3", duration: 1955, title: "لقاء 19 - أعراض الانسحاب" },
+          { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE20.mp3", duration: 1978, title: "لقاء 20 - الزواج والإباحية" },
+          { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE21.mp3", duration: 1586, title: "لقاء 21 - الخوف من الانفجار" },
+          { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE22.mp3", duration: 1613, title: "لقاء 22 - التبطيل والتعافي" },
+          { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE23.mp3", duration: 2091, title: "لقاء 23 - ليه بستحلاها؟" },
+        ];
+
+        // --- Sync Logic ---
+        const RADIO_EPOCH = 1672531200000; // A fixed date in the past: Jan 1, 2023
+        const totalPlaylistDuration = PLAYLIST.reduce((sum, track ) => sum + track.duration, 0);
+
+        function getRadioState() {
+            const now = Date.now();
+            const elapsedSeconds = Math.floor((now - RADIO_EPOCH) / 1000);
+            const positionInPlaylist = elapsedSeconds % totalPlaylistDuration;
+
+            let accumulatedTime = 0;
+            for (let i = 0; i < PLAYLIST.length; i++) {
+                const track = PLAYLIST[i];
+                if (positionInPlaylist < accumulatedTime + track.duration) {
+                    return {
+                        currentTrack: track,
+                        currentTrackIndex: i,
+                        positionInTrack: positionInPlaylist - accumulatedTime,
+                        playlist: PLAYLIST,
+                    };
+                }
+                accumulatedTime += track.duration;
+            }
+            // Fallback
+            return { currentTrack: PLAYLIST[0], currentTrackIndex: 0, positionInTrack: 0, playlist: PLAYLIST };
+        }
+
+        // --- React Component ---
+        function App() {
+            const audioRef = useRef(null);
+            const [isPlaying, setIsPlaying] = useState(false);
+            const [isMuted, setIsMuted] = useState(false);
+            const [volume, setVolume] = useState(0.7);
+            const [currentTime, setCurrentTime] = useState(0);
+            const [radioState, setRadioState] = useState(null);
+
+            // Initial sync
+            useEffect(() => {
+                const initialState = getRadioState();
+                setRadioState(initialState);
+
+                const audio = audioRef.current;
+                if (audio && initialState) {
+                    audio.src = initialState.currentTrack.url;
+                    audio.currentTime = initialState.positionInTrack;
+                    audio.volume = volume;
+                }
+            }, []);
+            
+            // Auto-play handling
+            const tryAutoPlay = () => {
+                const audio = audioRef.current;
+                if (audio && audio.paused) {
+                    audio.play().then(() => {
+                        setIsPlaying(true);
+                    }).catch(error => {
+                        console.log("Auto-play was prevented. User must interact with the page first.");
+                        setIsPlaying(false);
+                    });
+                }
+            };
+
+            // Sync when track changes
+            useEffect(() => {
+                const interval = setInterval(() => {
+                    const newState = getRadioState();
+                    if (newState.currentTrack.url !== radioState?.currentTrack.url) {
+                        setRadioState(newState);
+                        const audio = audioRef.current;
+                        if (audio) {
+                            audio.src = newState.currentTrack.url;
+                            audio.currentTime = newState.positionInTrack;
+                            if (isPlaying) {
+                                audio.play();
+                            }
+                        }
+                    }
+                }, 1000);
+                return () => clearInterval(interval);
+            }, [radioState, isPlaying]);
+
+            // Update current time display
+            useEffect(() => {
+                const audio = audioRef.current;
+                const updateTime = () => setCurrentTime(audio.currentTime);
+                audio?.addEventListener("timeupdate", updateTime);
+                return () => audio?.removeEventListener("timeupdate", updateTime);
+            }, []);
+
+            const togglePlay = () => {
+                const audio = audioRef.current;
+                if (isPlaying) {
+                    audio.pause();
+                    setIsPlaying(false);
+                } else {
+                    // Resync before playing
+                    const state = getRadioState();
+                    audio.currentTime = state.positionInTrack;
+                    audio.play().then(() => setIsPlaying(true));
+                }
+            };
+
+            const toggleMute = () => {
+                audioRef.current.muted = !isMuted;
+                setIsMuted(!isMuted);
+            };
+
+            const handleVolumeChange = (e) => {
+                const newVolume = parseFloat(e.target.value);
+                setVolume(newVolume);
+                audioRef.current.volume = newVolume;
+            };
+
+            const formatTime = (seconds) => {
+                const mins = Math.floor(seconds / 60);
+                const secs = Math.floor(seconds % 60);
+                return `${mins}:${secs.toString().padStart(2, "0")}`;
+            };
+            
+            // Render Lucide icons after component mounts
+            useEffect(() => {
+                lucide.createIcons();
+            });
+
+            if (!radioState) {
+                return (
+                    <div className="main-container">
+                        <i data-lucide="loader-2" className="w-12 h-12 animate-spin text-white"></i>
+                    </div>
+                );
+            }
+
+            return (
+                <div className="main-container">
+                    <audio ref={audioRef} onCanPlay={tryAutoPlay} />
+                    <div className="w-full max-w-2xl">
+                        <div className="text-center mb-8">
+                            <div className="flex items-center justify-center gap-3 mb-4">
+                                <i data-lucide="radio" className="w-12 h-12 text-purple-300 vinyl-spin"></i>
+                                <h1 className="text-5xl font-bold text-white">راديو وليستعفف</h1>
+                            </div>
+                            <p className="text-purple-200 text-lg">الكوتش مصطفى حسان</p>
+                        </div>
+
+                        <div className="radio-card">
+                            <div className="text-center mb-8">
+                                <div className="w-32 h-32 mx-auto mb-6 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center vinyl-spin">
+                                    <i data-lucide="radio" className="w-16 h-16 text-white"></i>
+                                </div>
+                                <h2 className="text-3xl font-bold text-white mb-2">{radioState.currentTrack.title}</h2>
+                                <p className="text-purple-200">{`لقاء ${radioState.currentTrackIndex + 1} من ${radioState.playlist.length}`}</p>
+                            </div>
+
+                            <div className="mb-6">
+                                <div className="flex justify-between text-sm text-purple-200 mb-2">
+                                    <span>{formatTime(currentTime)}</span>
+                                    <span>{formatTime(radioState.currentTrack.duration)}</span>
+                                </div>
+                                <div className="w-full h-2 bg-white/20 rounded-full overflow-hidden">
+                                    <div
+                                        className="h-full bg-gradient-to-r from-purple-500 to-pink-500"
+                                        style={{ width: `${(currentTime / radioState.currentTrack.duration) * 100}%` }}
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="flex items-center justify-center gap-6 mb-6">
+                                <button onClick={togglePlay} className="w-20 h-20 rounded-full bg-white text-purple-900 hover:bg-purple-100 transition-all shadow-lg flex items-center justify-center">
+                                    {isPlaying ? <i data-lucide="pause" className="w-8 h-8"></i> : <i data-lucide="play" className="w-8 h-8 ml-1"></i>}
+                                </button>
+                            </div>
+
+                            <div className="flex items-center gap-4 justify-center">
+                                <button onClick={toggleMute} className="text-white hover:bg-white/10 p-2 rounded-full">
+                                    {isMuted ? <i data-lucide="volume-x" className="w-5 h-5"></i> : <i data-lucide="volume-2" className="w-5 h-5"></i>}
+                                </button>
+                                <input type="range" min="0" max="1" step="0.01" value={volume} onChange={handleVolumeChange} className="w-32 accent-purple-500" />
+                            </div>
+
+                            <div className="mt-6 text-center">
+                                <p className="text-sm text-purple-300">
+                                    <a href="https://www.facebook.com/walyasta3fef" target="_blank" rel="noopener noreferrer" className="underline hover:text-white">
+                                        وليستعفف على الفيسبوك
+                                    </a>
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+             );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
