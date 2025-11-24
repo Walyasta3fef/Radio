@@ -4,13 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>راديو وليستعفف</title>
-
-  <!-- React & Babel -->
   <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-
-  <!-- Tailwind -->
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body>
@@ -20,7 +16,8 @@
 
 const { useState, useEffect, useRef } = React;
 
-// --- Original Playlist Data with New Titles ---
+// --- Playlist: PLEASE VERIFY THESE FILENAMES ---
+// Make sure these names are EXACTLY the same as in your 'audio' folder on GitHub.
 const ORIGINAL_PLAYLIST = [
     { url: "audio/_xWalyastaafef01.mp3", duration: 2719, title: "الكورس الأساسي لقاء 1" },
     { url: "audio/_xWalyastaafef02.mp3", duration: 2619, title: "الكورس الأساسي لقاء 2" },
@@ -51,5 +48,143 @@ const ORIGINAL_PLAYLIST = [
     { url: "audio/xWalyastaafef_LIVE23.mp3", duration: 2091, title: "لقاء 23 - ليه لما بقع بستحلاها ومش بعرف أوقف؟" },
 ];
 
-// --- Unified Shuffle Logic ---
-function se
+function seededShuffle(array, seed) {
+    let currentIndex = array.length, temporaryValue, randomIndex;
+    const random = () => {
+        var x = Math.sin(seed++) * 10000;
+        return x - Math.floor(x);
+    };
+    while (0 !== currentIndex) {
+        randomIndex = Math.floor(random() * currentIndex);
+        currentIndex -= 1;
+        temporaryValue = array[currentIndex];
+        array[currentIndex] = array[randomIndex];
+        array[randomIndex] = temporaryValue;
+    }
+    return array;
+}
+
+const today = new Date();
+const dateSeed = today.getFullYear() * 10000 + (today.getMonth() + 1) * 100 + today.getDate();
+const PLAYLIST = seededShuffle([...ORIGINAL_PLAYLIST], dateSeed);
+
+const RADIO_EPOCH = 1672531200000;
+const totalPlaylistDuration = PLAYLIST.reduce((sum, track) => sum + track.duration, 0);
+
+function getRadioState() {
+  const now = Date.now();
+  const elapsedSeconds = Math.floor((now - RADIO_EPOCH) / 1000);
+  const positionInPlaylist = elapsedSeconds % totalPlaylistDuration;
+  let accumulatedTime = 0;
+  for (let i = 0; i < PLAYLIST.length; i++) {
+    const track = PLAYLIST[i];
+    if (positionInPlaylist < accumulatedTime + track.duration) {
+      return {
+        currentTrack: track,
+        positionInTrack: positionInPlaylist - accumulatedTime,
+      };
+    }
+    accumulatedTime += track.duration;
+  }
+  return { currentTrack: PLAYLIST[0], positionInTrack: 0 };
+}
+
+function App() {
+  const audioRef = useRef(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [volume, setVolume] = useState(0.7);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [currentTrack, setCurrentTrack] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const initialState = getRadioState();
+    setCurrentTrack(initialState.currentTrack);
+    setCurrentTime(initialState.positionInTrack);
+    setIsLoading(false);
+  }, []);
+
+  const togglePlay = () => {
+    const audioEl = audioRef.current;
+    if (!audioEl || !currentTrack) return;
+
+    if (isPlaying) {
+      audioEl.pause();
+      setIsPlaying(false);
+    } else {
+      const state = getRadioState();
+      
+      // Simple and direct: set the source and time, then play.
+      audioEl.src = state.currentTrack.url;
+      audioEl.currentTime = state.positionInTrack;
+      
+      audioEl.play()
+        .then(() => {
+          setCurrentTrack(state.currentTrack); // Ensure track title is updated
+          setIsPlaying(true);
+        })
+        .catch(error => {
+          console.error("Playback failed:", error);
+        });
+    }
+  };
+
+  useEffect(() => {
+    const audioEl = audioRef.current;
+    if (!audioEl) return;
+    const timeUpdater = setInterval(() => {
+        if (isPlaying) {
+            setCurrentTime(audioEl.currentTime);
+        }
+    }, 1000);
+    return () => clearInterval(timeUpdater);
+  }, [isPlaying]);
+
+  const handleVolumeChange = (e) => {
+    const newVol = parseFloat(e.target.value);
+    setVolume(newVol);
+    if (audioRef.current) audioRef.current.volume = newVol;
+  };
+
+  const formatTime = (s) => {
+      if (isNaN(s)) return "0:00";
+      return `${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}`;
+  }
+
+  if (isLoading || !currentTrack) {
+    return <div className="flex justify-center items-center h-screen text-white bg-gradient-to-br from-purple-900 to-blue-800">جارٍ التحميل...</div>;
+  }
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-900 to-blue-800 p-4">
+      <audio ref={audioRef} />
+      <div className="bg-white/10 backdrop-blur-lg p-6 rounded-2xl text-center w-full max-w-md shadow-lg">
+        <h1 className="text-white text-3xl font-bold mb-2">راديو وليستعفف</h1>
+        <p className="text-purple-200 mb-4">{currentTrack.title}</p>
+
+        <button onClick={togglePlay} className="bg-white text-purple-900 w-20 h-20 rounded-full flex items-center justify-center shadow-lg mb-4 mx-auto">
+          {isPlaying ? "⏸️" : "▶️"}
+        </button>
+
+        <div className="mb-4">
+          <div className="flex justify-between text-sm text-purple-200 mb-1">
+            <span>{formatTime(currentTime)}</span>
+            <span>{formatTime(currentTrack.duration)}</span>
+          </div>
+          <div className="w-full h-2 bg-white/20 rounded-full overflow-hidden">
+            <div className="h-full bg-gradient-to-r from-purple-500 to-pink-500"
+                 style={{ width: `${(currentTime / currentTrack.duration) * 100}%` }}/>
+          </div>
+        </div>
+
+        <input type="range" min="0" max="1" step="0.01" value={volume} onChange={handleVolumeChange} className="w-full accent-purple-500"/>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+
+</script>
+</body>
+</html>
