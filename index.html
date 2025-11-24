@@ -4,9 +4,13 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>راديو وليستعفف</title>
+
+  <!-- React & Babel -->
   <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <!-- Tailwind -->
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body>
@@ -16,92 +20,46 @@
 
 const { useState, useEffect, useRef } = React;
 
-// --- Playlist with your New Titles ---
-const ORIGINAL_PLAYLIST = [
-    { url: "audio/_xWalyastaafef01.mp3", duration: 2719, title: "الكورس الأساسي لقاء 1" },
-    { url: "audio/_xWalyastaafef02.mp3", duration: 2619, title: "الكورس الأساسي لقاء 2" },
-    { url: "audio/_xWalyastaafef03.mp3", duration: 3036, title: "الكورس الأساسي لقاء 3" },
-    { url: "audio/_xWalyastaafef04.mp3", duration: 2250, title: "الكورس الأساسي لقاء 4" },
-    { url: "audio/xWalyastaafef_LIVE01.mp3", duration: 2714, title: "لقاء 1 - محاور التغيير ( التحفيز - القرار - التغيير - التثبيت  )" },
-    { url: "audio/xWalyastaafef_LIVE02.mp3", duration: 2510, title: "لقاء 2 - محور القرار - قرار الإقلاع عن الإباحية" },
-    { url: "audio/xWalyastaafef_LIVE03.mp3", duration: 2073, title: "لقاء 3 - بحس إن الإباحية فرصة صعب تتفوت" },
-    { url: "audio/xWalyastaafef_LIVE04.mp3", duration: 1859, title: "لقاء 4 - الأفكار مسيطرة عليا وبتوقعني" },
-    { url: "audio/xWalyastaafef_LIVE05.mp3", duration: 1828, title: "لقاء 5 - مغالطات الإدمان وعلاجه" },
-    { url: "audio/xWalyastaafef_LIVE06.mp3", duration: 1989, title: "لقاء 6 - بخاف تنزل عليا مصيبة بعد الوقوع" },
-    { url: "audio/xWalyastaafef_LIVE07.mp3", duration: 2193, title: "اللقاء 7 - التعامل مع الخواطر والتفكير الجنسي" },
-    { url: "audio/xWalyastaafef_LIVE08.mp3", duration: 2197, title: "لقاء 8 - هتفرج وابقى أتوب" },
-    { url: "audio/xWalyastaafef_LIVE09.mp3", duration: 2850, title: "اللقاء 9 - أنا هفضل أعاني بدون جنس كده كتير؟" },
-    { url: "audio/xWalyastaafef_LIVE10.mp3", duration: 1584, title: "لقاء 10 - العلاج الشمولي للإباحية" },
-    { url: "audio/xWalyastaafef_LIVE11.mp3", duration: 1434, title: "لقاء 11 - علاج اليأس وسرعة الإحباط خلال رحلة التعافي" },
-    { url: "audio/xWalyastaafef_LIVE12.mp3", duration: 2117, title: "لقاء 12 - كيف نتعامل مع الشعور بالشهوة" },
-    { url: "audio/xWalyastaafef_LIVE13.mp3", duration: 2063, title: "اللقاء 13 - ليه بتقدم فترة وبعدين بتراجع؟" },
-    { url: "audio/xWalyastaafef_LIVE14.mp3", duration: 2193, title: "لقاء 14 - الفرق بين الخوف والرعب من المعصية" },
-    { url: "audio/xWalyastaafef_LIVE15.mp3", duration: 2151, title: "لقاء 15 - ايه المشكلة؟ طاعة قصاد معصية والدنيا ماشية!" },
-    { url: "audio/xWalyastaafef_LIVE16.mp3", duration: 2345, title: "لقاء 16 - أنا عايز خطوات عملية لعلاج الإباحية" },
-    { url: "audio/xWalyastaafef_LIVE17.mp3", duration: 2121, title: "لقاء 17 - علاج الإباحية فن مش عن عن (مش بالعافية)" },
-    { url: "audio/xWalyastaafef_LIVE18.mp3", duration: 2251, title: "لقاء 18 - أتجوز ولا أستنى لما اتعافى؟" },
-    { url: "audio/xWalyastaafef_LIVE19.mp3", duration: 1955, title: "لقاء 19 - ازاي اتعامل مع أعراض الانسحاب؟" },
-    { url: "audio/xWalyastaafef_LIVE20.mp3", duration: 1978, title: "لقاء 20 - الفرق بين الزواج والإباحية" },
-    { url: "audio/xWalyastaafef_LIVE21.mp3", duration: 1586, title: "لقاء 21 - خايف أقاوم وفي الآخر أنفجر" },
-    { url: "audio/xWalyastaafef_LIVE22.mp3", duration: 1613, title: "لقاء 22 - الفرق بين التبطيل والتعافي" },
-    { url: "audio/xWalyastaafef_LIVE23.mp3", duration: 2091, title: "لقاء 23 - ليه لما بقع بستحلاها ومش بعرف أوقف؟" },
+// --- Playlist ---
+const PLAYLIST = [
+  { url: "audio/_xWalyastaafef01.mp3", duration: 2719, title: "الكورس الأساسي لقاء 1" },
+  { url: "audio/_xWalyastaafef02.mp3", duration: 2619, title: "الكورس الأساسي لقاء 2" },
+  { url: "audio/xWalyastaafef_LIVE01.mp3", duration: 2714, title: "لقاء 1 - محاور التغيير" },
+  { url: "audio/xWalyastaafef_LIVE11.mp3", duration: 1434, title: "لقاء 11 - علاج اليأس" },
+  // أضف باقي الملفات هنا بنفس الطريقة
 ];
 
-function seededShuffle(array, seed) {
-    let currentIndex = array.length, temporaryValue, randomIndex;
-    const random = () => {
-        var x = Math.sin(seed++) * 10000;
-        return x - Math.floor(x);
-    };
-    while (0 !== currentIndex) {
-        randomIndex = Math.floor(random() * currentIndex);
-        currentIndex -= 1;
-        temporaryValue = array[currentIndex];
-        array[currentIndex] = array[randomIndex];
-        array[randomIndex] = temporaryValue;
-    }
-    return array;
-}
-
-const today = new Date();
-const dateSeed = today.getFullYear() * 10000 + (today.getMonth() + 1) * 100 + today.getDate();
-const PLAYLIST = seededShuffle([...ORIGINAL_PLAYLIST], dateSeed);
-
-const RADIO_EPOCH = 1672531200000;
-const totalPlaylistDuration = PLAYLIST.reduce((sum, track) => sum + track.duration, 0);
-
-function getRadioState() {
-  const now = Date.now();
-  const elapsedSeconds = Math.floor((now - RADIO_EPOCH) / 1000);
-  const positionInPlaylist = elapsedSeconds % totalPlaylistDuration;
-  let accumulatedTime = 0;
-  for (let i = 0; i < PLAYLIST.length; i++) {
-    const track = PLAYLIST[i];
-    if (positionInPlaylist < accumulatedTime + track.duration) {
-      return {
-        currentTrack: track,
-        positionInTrack: positionInPlaylist - accumulatedTime,
-      };
-    }
-    accumulatedTime += track.duration;
-  }
-  return { currentTrack: PLAYLIST[0], positionInTrack: 0 };
-}
-
+// --- React App ---
 function App() {
   const audioRef = useRef(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [volume, setVolume] = useState(0.7);
+  const [currentTrackIndex, setCurrentTrackIndex] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
-  const [currentTrack, setCurrentTrack] = useState(null);
-  const [isInitialized, setIsInitialized] = useState(false);
+
+  const currentTrack = PLAYLIST[currentTrackIndex];
 
   useEffect(() => {
-    // Set the initial track info, but don't load the audio file
-    const initialState = getRadioState();
-    setCurrentTrack(initialState.currentTrack);
-    setCurrentTime(initialState.positionInTrack);
-  }, []);
+    const audioEl = audioRef.current;
+    if (!audioEl) return;
+
+    audioEl.src = currentTrack.url;
+    audioEl.volume = volume;
+
+    const handleTimeUpdate = () => setCurrentTime(audioEl.currentTime);
+    const handleTrackEnd = () => {
+      // انتقل للمقطع التالي تلقائيًا
+      setCurrentTrackIndex((prev) => (prev + 1) % PLAYLIST.length);
+    };
+
+    audioEl.addEventListener("timeupdate", handleTimeUpdate);
+    audioEl.addEventListener("ended", handleTrackEnd);
+
+    return () => {
+      audioEl.removeEventListener("timeupdate", handleTimeUpdate);
+      audioEl.removeEventListener("ended", handleTrackEnd);
+    };
+  }, [currentTrackIndex, volume]);
 
   const togglePlay = () => {
     const audioEl = audioRef.current;
@@ -111,46 +69,11 @@ function App() {
       audioEl.pause();
       setIsPlaying(false);
     } else {
-      // This is the key: Load and play ONLY on user interaction
-      const state = getRadioState();
-      
-      // If it's the very first play, or if the track is wrong
-      if (!isInitialized || audioEl.src !== new URL(state.currentTrack.url, window.location.href).href) {
-        audioEl.src = state.currentTrack.url;
-        audioEl.currentTime = state.positionInTrack;
-        setCurrentTrack(state.currentTrack); // Update title
-        setIsInitialized(true);
-      }
-      
       audioEl.play()
         .then(() => setIsPlaying(true))
-        .catch(error => console.error("Playback failed:", error));
+        .catch(err => console.error("Playback failed:", err));
     }
   };
-
-  useEffect(() => {
-    const audioEl = audioRef.current;
-    if (!audioEl || !isPlaying) return;
-    
-    const timeUpdater = setInterval(() => {
-        setCurrentTime(audioEl.currentTime);
-    }, 1000);
-
-    const handleTrackEnd = () => {
-        const newState = getRadioState();
-        setCurrentTrack(newState.currentTrack);
-        audioEl.src = newState.currentTrack.url;
-        audioEl.currentTime = newState.positionInTrack;
-        audioEl.play();
-    };
-
-    audioEl.addEventListener('ended', handleTrackEnd);
-
-    return () => {
-        clearInterval(timeUpdater);
-        audioEl.removeEventListener('ended', handleTrackEnd);
-    };
-  }, [isPlaying]);
 
   const handleVolumeChange = (e) => {
     const newVol = parseFloat(e.target.value);
@@ -159,12 +82,8 @@ function App() {
   };
 
   const formatTime = (s) => {
-      if (isNaN(s)) return "0:00";
-      return `${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}`;
-  }
-
-  if (!currentTrack) {
-    return <div className="flex justify-center items-center h-screen text-white bg-gradient-to-br from-purple-900 to-blue-800">جارٍ التحميل...</div>;
+    if (isNaN(s)) return "0:00";
+    return `${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}`;
   }
 
   return (
