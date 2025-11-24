@@ -20,50 +20,41 @@
 
 const { useState, useEffect, useRef } = React;
 
-// --- CORS Proxy ---
-// Using a public proxy to bypass CORS issues with archive.org
-const CORS_PROXY = "https://cors-anywhere.herokuapp.com/";
-
 // --- Playlist Data ---
-const ORIGINAL_PLAYLIST = [
-    { url: "https://archive.org/download/xWalyastaafefMp3/_xWalyastaafef01.mp3", duration: 2719, title: "الكورس الأساسي لقاء 1" },
-    { url: "https://archive.org/download/xWalyastaafefMp3/_xWalyastaafef02.mp3", duration: 2619, title: "الكورس الأساسي لقاء 2" },
-    { url: "https://archive.org/download/xWalyastaafefMp3/_xWalyastaafef03.mp3", duration: 3036, title: "الكورس الأساسي لقاء 3" },
-    { url: "https://archive.org/download/xWalyastaafefMp3/_xWalyastaafef04.mp3", duration: 2250, title: "الكورس الأساسي لقاء 4" },
-    { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE01.mp3", duration: 2714, title: "لقاء 1 - محاور التغيير" },
-    { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE02.mp3", duration: 2510, title: "لقاء 2 - قرار الإقلاع" },
-    { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE03.mp3", duration: 2073, title: "لقاء 3 - الإباحية فرصة" },
-    { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE04.mp3", duration: 1859, title: "لقاء 4 - الأفكار مسيطرة" },
-    { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE05.mp3", duration: 1828, title: "لقاء 5 - مغالطات الإدمان" },
-    { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE06.mp3", duration: 1989, title: "لقاء 6 - الخوف من المصيبة" },
-    { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE07.mp3", duration: 2193, title: "اللقاء 7 - الخواطر الجنسية" },
-    { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE08.mp3", duration: 2197, title: "لقاء 8 - هتفرج وأتوب" },
-    { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE09.mp3", duration: 2850, title: "اللقاء 9 - المعاناة بدون جنس" },
-    { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE10.mp3", duration: 1584, title: "لقاء 10 - العلاج الشمولي" },
-    { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE11.mp3", duration: 1434, title: "لقاء 11 - علاج اليأس" },
-    { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE12.mp3", duration: 2117, title: "لقاء 12 - التعامل مع الشهوة" },
-    { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE13.mp3", duration: 2063, title: "اللقاء 13 - التقدم والتراجع" },
-    { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE14.mp3", duration: 2193, title: "لقاء 14 - الخوف والرعب" },
-    { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE15.mp3", duration: 2151, title: "لقاء 15 - طاعة قصاد معصية" },
-    { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE16.mp3", duration: 2345, title: "لقاء 16 - خطوات عملية" },
-    { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE17.mp3", duration: 2121, title: "لقاء 17 - العلاج فن" },
-    { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE18.mp3", duration: 2251, title: "لقاء 18 - أتجوز ولا أتعافى؟" },
-    { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE19.mp3", duration: 1955, title: "لقاء 19 - أعراض الانسحاب" },
-    { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE20.mp3", duration: 1978, title: "لقاء 20 - الزواج والإباحية" },
-    { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE21.mp3", duration: 1586, title: "لقاء 21 - الخوف من الانفجار" },
-    { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE22.mp3", duration: 1613, title: "لقاء 22 - التبطيل والتعافي" },
-    { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE23.mp3", duration: 2091, title: "لقاء 23 - ليه بستحلاها؟" },
-];
-
-const PLAYLIST = ORIGINAL_PLAYLIST.map(track => ({
-    ...track,
-    url: `${CORS_PROXY}${track.url}`
-} ));
+const PLAYLIST = [
+          { url: "https://archive.org/download/xWalyastaafefMp3/_xWalyastaafef01.mp3", duration: 2719, title: "الكورس الأساسي لقاء 1" },
+          { url: "https://archive.org/download/xWalyastaafefMp3/_xWalyastaafef02.mp3", duration: 2619, title: "الكورس الأساسي لقاء 2" },
+          { url: "https://archive.org/download/xWalyastaafefMp3/_xWalyastaafef03.mp3", duration: 3036, title: "الكورس الأساسي لقاء 3" },
+          { url: "https://archive.org/download/xWalyastaafefMp3/_xWalyastaafef04.mp3", duration: 2250, title: "الكورس الأساسي لقاء 4" },
+          { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE01.mp3", duration: 2714, title: "لقاء 1 - محاور التغيير" },
+          { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE02.mp3", duration: 2510, title: "لقاء 2 - قرار الإقلاع" },
+          { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE03.mp3", duration: 2073, title: "لقاء 3 - الإباحية فرصة" },
+          { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE04.mp3", duration: 1859, title: "لقاء 4 - الأفكار مسيطرة" },
+          { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE05.mp3", duration: 1828, title: "لقاء 5 - مغالطات الإدمان" },
+          { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE06.mp3", duration: 1989, title: "لقاء 6 - الخوف من المصيبة" },
+          { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE07.mp3", duration: 2193, title: "اللقاء 7 - الخواطر الجنسية" },
+          { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE08.mp3", duration: 2197, title: "لقاء 8 - هتفرج وأتوب" },
+          { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE09.mp3", duration: 2850, title: "اللقاء 9 - المعاناة بدون جنس" },
+          { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE10.mp3", duration: 1584, title: "لقاء 10 - العلاج الشمولي" },
+          { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE11.mp3", duration: 1434, title: "لقاء 11 - علاج اليأس" },
+          { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE12.mp3", duration: 2117, title: "لقاء 12 - التعامل مع الشهوة" },
+          { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE13.mp3", duration: 2063, title: "اللقاء 13 - التقدم والتراجع" },
+          { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE14.mp3", duration: 2193, title: "لقاء 14 - الخوف والرعب" },
+          { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE15.mp3", duration: 2151, title: "لقاء 15 - طاعة قصاد معصية" },
+          { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE16.mp3", duration: 2345, title: "لقاء 16 - خطوات عملية" },
+          { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE17.mp3", duration: 2121, title: "لقاء 17 - العلاج فن" },
+          { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE18.mp3", duration: 2251, title: "لقاء 18 - أتجوز ولا أتعافى؟" },
+          { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE19.mp3", duration: 1955, title: "لقاء 19 - أعراض الانسحاب" },
+          { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE20.mp3", duration: 1978, title: "لقاء 20 - الزواج والإباحية" },
+          { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE21.mp3", duration: 1586, title: "لقاء 21 - الخوف من الانفجار" },
+          { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE22.mp3", duration: 1613, title: "لقاء 22 - التبطيل والتعافي" },
+          { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE23.mp3", duration: 2091, title: "لقاء 23 - ليه بستحلاها؟" },
+        ];
 
 
 // --- Radio Sync ---
 const RADIO_EPOCH = 1672531200000; // Jan 1, 2023
-const totalPlaylistDuration = PLAYLIST.reduce((sum, track) => sum + track.duration, 0);
+const totalPlaylistDuration = PLAYLIST.reduce((sum, track ) => sum + track.duration, 0);
 
 function getRadioState() {
   const now = Date.now();
@@ -94,13 +85,19 @@ function App() {
   const [currentTime, setCurrentTime] = useState(0);
   const [radioState, setRadioState] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [userInteracted, setUserInteracted] = useState(false);
+  const isSeeking = useRef(false); // To prevent time updates while seeking
 
   useEffect(() => {
     const state = getRadioState();
     setRadioState(state);
     setCurrentTime(state.positionInTrack);
     setIsLoading(false);
+
+    if (audioRef.current) {
+      audioRef.current.src = state.currentTrack.url;
+      audioRef.current.volume = volume;
+      // We don't set currentTime here to avoid race conditions before user interaction
+    }
   }, []);
 
   useEffect(() => {
@@ -108,7 +105,9 @@ function App() {
     if (!audioEl) return;
 
     const handleTimeUpdate = () => {
-        setCurrentTime(audioEl.currentTime);
+        if (!isSeeking.current) {
+            setCurrentTime(audioEl.currentTime);
+        }
     };
 
     const handleCanPlay = () => {
@@ -126,6 +125,7 @@ function App() {
     };
   }, [isPlaying]);
 
+
   useEffect(() => {
     const interval = setInterval(() => {
       const newState = getRadioState();
@@ -134,13 +134,13 @@ function App() {
         if (audioRef.current) {
           const wasPlaying = !audioRef.current.paused;
           audioRef.current.src = newState.currentTrack.url;
+          audioRef.current.currentTime = newState.positionInTrack;
           if (wasPlaying) {
-            // Set time and play
-            audioRef.current.currentTime = newState.positionInTrack;
             audioRef.current.play().catch(e => console.error("Error switching track:", e));
           }
         }
       }
+       // Update current time display even when paused
       if (!isPlaying) {
           setCurrentTime(newState.positionInTrack);
       }
@@ -148,35 +148,25 @@ function App() {
     return () => clearInterval(interval);
   }, [radioState, isPlaying]);
 
-  const togglePlay = () => {
-    if (!audioRef.current || !radioState) return;
-    
-    if (!userInteracted) {
-        setUserInteracted(true);
-        // Load the correct source for the first time
-        audioRef.current.src = radioState.currentTrack.url;
-    }
 
-    if (isPlaying) {
-      audioRef.current.pause();
-      setIsPlaying(false);
-    } else {
-      const state = getRadioState();
-      // Ensure the source is correct
-      if (audioRef.current.src !== state.currentTrack.url) {
-          audioRef.current.src = state.currentTrack.url;
-      }
-      // Sync time before playing
-      audioRef.current.currentTime = state.positionInTrack;
-      audioRef.current.play()
-        .then(() => {
-          setIsPlaying(true);
-        })
-        .catch(error => {
-          console.error("Playback was prevented:", error);
-        });
-    }
-  };
+  const togglePlay = () => {
+  if (!audioRef.current || !radioState) return;
+
+  const state = getRadioState();
+  audioRef.current.src = state.currentTrack.url;
+  audioRef.current.currentTime = state.positionInTrack;
+  audioRef.current.muted = false; // اتأكد الصوت مش مكتوم
+
+  if (isPlaying) {
+    audioRef.current.pause();
+    setIsPlaying(false);
+  } else {
+    audioRef.current.play()
+      .then(() => setIsPlaying(true))
+      .catch(error => console.error("Playback prevented:", error));
+  }
+};
+
 
   const handleVolumeChange = (e) => {
     const newVol = parseFloat(e.target.value);
@@ -195,15 +185,17 @@ function App() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-900 to-blue-800 p-4">
-      <audio ref={audioRef} crossOrigin="anonymous" />
+      <audio ref={audioRef} crossOrigin="anonymous"/>
       <div className="bg-white/10 backdrop-blur-lg p-6 rounded-2xl text-center w-full max-w-md shadow-lg">
         <h1 className="text-white text-3xl font-bold mb-2">راديو وليستعفف</h1>
         <p className="text-purple-200 mb-4">{radioState.currentTrack.title}</p>
 
+        {/* Play/Pause Button */}
         <button onClick={togglePlay} className="bg-white text-purple-900 w-20 h-20 rounded-full flex items-center justify-center shadow-lg mb-4 mx-auto">
           {isPlaying ? "⏸️" : "▶️"}
         </button>
 
+        {/* Progress */}
         <div className="mb-4">
           <div className="flex justify-between text-sm text-purple-200 mb-1">
             <span>{formatTime(currentTime)}</span>
@@ -215,6 +207,7 @@ function App() {
           </div>
         </div>
 
+        {/* Volume */}
         <input type="range" min="0" max="1" step="0.01" value={volume} onChange={handleVolumeChange} className="w-full accent-purple-500"/>
       </div>
     </div>
