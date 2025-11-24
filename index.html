@@ -22,7 +22,7 @@ const { useState, useEffect, useRef } = React;
 
 // --- CORS Proxy ---
 // Using a public proxy to bypass CORS issues with archive.org
-const CORS_PROXY = "https://cors-anywhere.herokuapp.com/";
+const CORS_PROXY = "https://radio-proxy-qi74.onrender.com/proxy?url=";
 
 // --- Playlist Data ---
 const ORIGINAL_PLAYLIST = [
@@ -57,7 +57,8 @@ const ORIGINAL_PLAYLIST = [
 
 const PLAYLIST = ORIGINAL_PLAYLIST.map(track => ({
     ...track,
-    url: `${CORS_PROXY}${track.url}`
+    url: CORS_PROXY + track.url
+
 } ));
 
 
@@ -226,4 +227,5 @@ ReactDOM.createRoot(document.getElementById('root')).render(<App />);
 </script>
 </body>
 </html>
+
 
