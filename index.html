@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>راديو وليستعفف - فحص الملفات</title>
+  <title>راديو وليستعفف</title>
 
   <!-- React & Babel -->
   <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
@@ -20,64 +20,153 @@
 
 const { useState, useEffect, useRef } = React;
 
-// --- Playlist ---
-const PLAYLIST = [
-  { url: "audio/_xWalyastaafef01.mp3", duration: 2719, title: "الكورس الأساسي لقاء 1" },
-  { url: "audio/_xWalyastaafef02.mp3", duration: 2619, title: "الكورس الأساسي لقاء 2" },
-  { url: "audio/xWalyastaafef_LIVE01.mp3", duration: 2714, title: "لقاء 1 - محاور التغيير" },
-  { url: "audio/xWalyastaafef_LIVE11.mp3", duration: 1434, title: "لقاء 11 - علاج اليأس" },
-  // أضف باقي الملفات هنا
+// --- Original Playlist Data ---
+// IMPORTANT: This list will be shuffled. The URLs will be updated after we upload the files.
+const ORIGINAL_PLAYLIST = [
+    // Assuming files are in an 'audio' folder
+    { url: "audio/xWalyastaafef01.mp3", duration: 2719, title: "الكورس الأساسي لقاء 1" },
+    { url: "audio/xWalyastaafef02.mp3", duration: 2619, title: "الكورس الأساسي لقاء 2" },
+    { url: "audio/xWalyastaafef03.mp3", duration: 3036, title: "الكورس الأساسي لقاء 3" },
+    { url: "audio/xWalyastaafef04.mp3", duration: 2250, title: "الكورس الأساسي لقاء 4" },
+    { url: "audio/xWalyastaafef_LIVE01.mp3", duration: 2714, title: "لقاء 1 - محاور التغيير" },
+    { url: "audio/xWalyastaafef_LIVE02.mp3", duration: 2510, title: "لقاء 2 - قرار الإقلاع" },
+    { url: "audio/xWalyastaafef_LIVE03.mp3", duration: 2073, title: "لقاء 3 - الإباحية فرصة" },
+    { url: "audio/xWalyastaafef_LIVE04.mp3", duration: 1859, title: "لقاء 4 - الأفكار مسيطرة" },
+    { url: "audio/xWalyastaafef_LIVE05.mp3", duration: 1828, title: "لقاء 5 - مغالطات الإدمان" },
+    { url: "audio/xWalyastaafef_LIVE06.mp3", duration: 1989, title: "لقاء 6 - الخوف من المصيبة" },
+    { url: "audio/xWalyastaafef_LIVE07.mp3", duration: 2193, title: "اللقاء 7 - الخواطر الجنسية" },
+    { url: "audio/xWalyastaafef_LIVE08.mp3", duration: 2197, title: "لقاء 8 - هتفرج وأتوب" },
+    { url: "audio/xWalyastaafef_LIVE09.mp3", duration: 2850, title: "اللقاء 9 - المعاناة بدون جنس" },
+    { url: "audio/xWalyastaafef_LIVE10.mp3", duration: 1584, title: "لقاء 10 - العلاج الشمولي" },
+    { url: "audio/xWalyastaafef_LIVE11.mp3", duration: 1434, title: "لقاء 11 - علاج اليأس" },
+    { url: "audio/xWalyastaafef_LIVE12.mp3", duration: 2117, title: "لقاء 12 - التعامل مع الشهوة" },
+    { url: "audio/xWalyastaafef_LIVE13.mp3", duration: 2063, title: "اللقاء 13 - التقدم والتراجع" },
+    { url: "audio/xWalyastaafef_LIVE14.mp3", duration: 2193, title: "لقاء 14 - الخوف والرعب" },
+    { url: "audio/xWalyastaafef_LIVE15.mp3", duration: 2151, title: "لقاء 15 - طاعة قصاد معصية" },
+    { url: "audio/xWalyastaafef_LIVE16.mp3", duration: 2345, title: "لقاء 16 - خطوات عملية" },
+    { url: "audio/xWalyastaafef_LIVE17.mp3", duration: 2121, title: "لقاء 17 - العلاج فن" },
+    { url: "audio/xWalyastaafef_LIVE18.mp3", duration: 2251, title: "لقاء 18 - أتجوز ولا أتعافى؟" },
+    { url: "audio/xWalyastaafef_LIVE19.mp3", duration: 1955, title: "لقاء 19 - أعراض الانسحاب" },
+    { url: "audio/xWalyastaafef_LIVE20.mp3", duration: 1978, title: "لقاء 20 - الزواج والإباحية" },
+    { url: "audio/xWalyastaafef_LIVE21.mp3", duration: 1586, title: "لقاء 21 - الخوف من الانفجار" },
+    { url: "audio/xWalyastaafef_LIVE22.mp3", duration: 1613, title: "لقاء 22 - التبطيل والتعافي" },
+    { url: "audio/xWalyastaafef_LIVE23.mp3", duration: 2091, title: "لقاء 23 - ليه بستحلاها؟" },
 ];
 
-// --- تحقق من وجود كل الملفات ---
-PLAYLIST.forEach(f => {
-  fetch(f.url)
-    .then(res => console.log(f.url, res.ok ? "✅ موجود" : "❌ مفقود"))
-    .catch(err => console.log(f.url, "❌ خطأ", err));
-});
+// --- Unified Shuffle Logic ---
+function seededShuffle(array, seed ) {
+    let currentIndex = array.length, temporaryValue, randomIndex;
+    const random = () => {
+        var x = Math.sin(seed++) * 10000;
+        return x - Math.floor(x);
+    };
+    while (0 !== currentIndex) {
+        randomIndex = Math.floor(random() * currentIndex);
+        currentIndex -= 1;
+        temporaryValue = array[currentIndex];
+        array[currentIndex] = array[randomIndex];
+        array[randomIndex] = temporaryValue;
+    }
+    return array;
+}
+
+// Use today's date as a seed for the shuffle.
+// This makes the playlist random but the same for everyone throughout the day.
+const today = new Date();
+const dateSeed = today.getFullYear() * 10000 + (today.getMonth() + 1) * 100 + today.getDate();
+const PLAYLIST = seededShuffle([...ORIGINAL_PLAYLIST], dateSeed);
+
+
+// --- Radio Sync ---
+const RADIO_EPOCH = 1672531200000; // Jan 1, 2023
+const totalPlaylistDuration = PLAYLIST.reduce((sum, track) => sum + track.duration, 0);
+
+function getRadioState() {
+  const now = Date.now();
+  const elapsedSeconds = Math.floor((now - RADIO_EPOCH) / 1000);
+  const positionInPlaylist = elapsedSeconds % totalPlaylistDuration;
+
+  let accumulatedTime = 0;
+  for (let i = 0; i < PLAYLIST.length; i++) {
+    const track = PLAYLIST[i];
+    if (positionInPlaylist < accumulatedTime + track.duration) {
+      return {
+        currentTrack: track,
+        currentTrackIndex: i,
+        positionInTrack: positionInPlaylist - accumulatedTime,
+        playlist: PLAYLIST
+      };
+    }
+    accumulatedTime += track.duration;
+  }
+  // Fallback, should not be reached if playlist is not empty
+  return { currentTrack: PLAYLIST[0], currentTrackIndex: 0, positionInTrack: 0, playlist: PLAYLIST };
+}
 
 // --- React App ---
 function App() {
   const audioRef = useRef(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [volume, setVolume] = useState(0.7);
-  const [currentTrackIndex, setCurrentTrackIndex] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
+  const [radioState, setRadioState] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const currentTrack = PLAYLIST[currentTrackIndex];
+  useEffect(() => {
+    const state = getRadioState();
+    setRadioState(state);
+    setCurrentTime(state.positionInTrack);
+    setIsLoading(false);
+  }, []);
 
   useEffect(() => {
     const audioEl = audioRef.current;
     if (!audioEl) return;
 
-    audioEl.src = currentTrack.url;
-    audioEl.volume = volume;
-
     const handleTimeUpdate = () => setCurrentTime(audioEl.currentTime);
-    const handleTrackEnd = () => {
-      setCurrentTrackIndex((prev) => (prev + 1) % PLAYLIST.length);
-    };
-
     audioEl.addEventListener("timeupdate", handleTimeUpdate);
+
+    const handleTrackEnd = () => {
+        // When a track ends, get the new state to load the next track
+        const newState = getRadioState();
+        setRadioState(newState);
+        audioEl.src = newState.currentTrack.url;
+        audioEl.currentTime = newState.positionInTrack;
+        if(isPlaying) audioEl.play();
+    };
     audioEl.addEventListener("ended", handleTrackEnd);
 
     return () => {
       audioEl.removeEventListener("timeupdate", handleTimeUpdate);
       audioEl.removeEventListener("ended", handleTrackEnd);
     };
-  }, [currentTrackIndex, volume]);
+  }, [isPlaying]);
 
   const togglePlay = () => {
+    if (!audioRef.current || !radioState) return;
+
     const audioEl = audioRef.current;
-    if (!audioEl) return;
 
     if (isPlaying) {
       audioEl.pause();
       setIsPlaying(false);
     } else {
+      // First time playing or resuming
+      const state = getRadioState();
+      
+      // Load the correct source if it's not already loaded
+      if (audioEl.src !== new URL(state.currentTrack.url, window.location.href).href) {
+          audioEl.src = state.currentTrack.url;
+      }
+
+      // Sync time before playing, but only if significantly different
+      if (Math.abs(audioEl.currentTime - state.positionInTrack) > 5) {
+          audioEl.currentTime = state.positionInTrack;
+      }
+      
       audioEl.play()
         .then(() => setIsPlaying(true))
-        .catch(err => console.error("Playback failed:", err));
+        .catch(error => console.error("Playback failed:", error));
     }
   };
 
@@ -88,8 +177,12 @@ function App() {
   };
 
   const formatTime = (s) => {
-    if (isNaN(s)) return "0:00";
-    return `${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}`;
+      if (isNaN(s)) return "0:00";
+      return `${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}`;
+  }
+
+  if (isLoading || !radioState) {
+    return <div className="flex justify-center items-center h-screen text-white bg-gradient-to-br from-purple-900 to-blue-800">جارٍ التحميل...</div>;
   }
 
   return (
@@ -97,7 +190,7 @@ function App() {
       <audio ref={audioRef} />
       <div className="bg-white/10 backdrop-blur-lg p-6 rounded-2xl text-center w-full max-w-md shadow-lg">
         <h1 className="text-white text-3xl font-bold mb-2">راديو وليستعفف</h1>
-        <p className="text-purple-200 mb-4">{currentTrack.title}</p>
+        <p className="text-purple-200 mb-4">{radioState.currentTrack.title}</p>
 
         <button onClick={togglePlay} className="bg-white text-purple-900 w-20 h-20 rounded-full flex items-center justify-center shadow-lg mb-4 mx-auto">
           {isPlaying ? "⏸️" : "▶️"}
@@ -106,11 +199,11 @@ function App() {
         <div className="mb-4">
           <div className="flex justify-between text-sm text-purple-200 mb-1">
             <span>{formatTime(currentTime)}</span>
-            <span>{formatTime(currentTrack.duration)}</span>
+            <span>{formatTime(radioState.currentTrack.duration)}</span>
           </div>
           <div className="w-full h-2 bg-white/20 rounded-full overflow-hidden">
             <div className="h-full bg-gradient-to-r from-purple-500 to-pink-500"
-                 style={{ width: `${(currentTime / currentTrack.duration) * 100}%` }}/>
+                 style={{ width: `${(currentTime / radioState.currentTrack.duration) * 100}%` }}/>
           </div>
         </div>
 
