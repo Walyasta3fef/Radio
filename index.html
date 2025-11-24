@@ -4,9 +4,13 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>راديو وليستعفف</title>
+
+  <!-- React & Babel -->
   <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <!-- Tailwind -->
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body>
@@ -16,38 +20,41 @@
 
 const { useState, useEffect, useRef } = React;
 
-// --- Playlist with ORIGINAL filenames (with underscore ) ---
+// --- Original Playlist Data ---
+// IMPORTANT: This list will be shuffled. The URLs will be updated after we upload the files.
 const ORIGINAL_PLAYLIST = [
+    // Assuming files are in an 'audio' folder
     { url: "audio/_xWalyastaafef01.mp3", duration: 2719, title: "الكورس الأساسي لقاء 1" },
     { url: "audio/_xWalyastaafef02.mp3", duration: 2619, title: "الكورس الأساسي لقاء 2" },
     { url: "audio/_xWalyastaafef03.mp3", duration: 3036, title: "الكورس الأساسي لقاء 3" },
     { url: "audio/_xWalyastaafef04.mp3", duration: 2250, title: "الكورس الأساسي لقاء 4" },
-    { url: "audio/xWalyastaafef_LIVE01.mp3", duration: 2714, title: "لقاء 1 - محاور التغيير ( التحفيز - القرار - التغيير - التثبيت )" },
-    { url: "audio/xWalyastaafef_LIVE02.mp3", duration: 2510, title: "لقاء 2 - محور القرار - قرار الإقلاع عن الإباحية" },
-    { url: "audio/xWalyastaafef_LIVE03.mp3", duration: 2073, title: "لقاء 3 - بحس إن الإباحية فرصة صعب تتفوت" },
-    { url: "audio/xWalyastaafef_LIVE04.mp3", duration: 1859, title: "لقاء 4 - الأفكار مسيطرة عليا وبتوقعني" },
-    { url: "audio/xWalyastaafef_LIVE05.mp3", duration: 1828, title: "لقاء 5 - مغالطات الإدمان وعلاجه" },
-    { url: "audio/xWalyastaafef_LIVE06.mp3", duration: 1989, title: "لقاء 6 - بخاف تنزل عليا مصيبة بعد الوقوع" },
-    { url: "audio/xWalyastaafef_LIVE07.mp3", duration: 2193, title: "اللقاء 7 - التعامل مع الخواطر والتفكير الجنسي" },
-    { url: "audio/xWalyastaafef_LIVE08.mp3", duration: 2197, title: "لقاء 8 - هتفرج وابقى أتوب" },
-    { url: "audio/xWalyastaafef_LIVE09.mp3", duration: 2850, title: "اللقاء 9 - أنا هفضل أعاني بدون جنس كده كتير؟" },
-    { url: "audio/xWalyastaafef_LIVE10.mp3", duration: 1584, title: "لقاء 10 - العلاج الشمولي للإباحية" },
-    { url: "audio/xWalyastaafef_LIVE11.mp3", duration: 1434, title: "لقاء 11 - علاج اليأس وسرعة الإحباط خلال رحلة التعافي" },
-    { url: "audio/xWalyastaafef_LIVE12.mp3", duration: 2117, title: "لقاء 12 - كيف نتعامل مع الشعور بالشهوة" },
-    { url: "audio/xWalyastaafef_LIVE13.mp3", duration: 2063, title: "اللقاء 13 - ليه بتقدم فترة وبعدين بتراجع؟" },
-    { url: "audio/xWalyastaafef_LIVE14.mp3", duration: 2193, title: "لقاء 14 - الفرق بين الخوف والرعب من المعصية" },
-    { url: "audio/xWalyastaafef_LIVE15.mp3", duration: 2151, title: "لقاء 15 - ايه المشكلة؟ طاعة قصاد معصية والدنيا ماشية!" },
-    { url: "audio/xWalyastaafef_LIVE16.mp3", duration: 2345, title: "لقاء 16 - أنا عايز خطوات عملية لعلاج الإباحية" },
-    { url: "audio/xWalyastaafef_LIVE17.mp3", duration: 2121, title: "لقاء 17 - علاج الإباحية فن مش عن عن (مش بالعافية)" },
-    { url: "audio/xWalyastaafef_LIVE18.mp3", duration: 2251, title: "لقاء 18 - أتجوز ولا أستنى لما اتعافى؟" },
-    { url: "audio/xWalyastaafef_LIVE19.mp3", duration: 1955, title: "لقاء 19 - ازاي اتعامل مع أعراض الانسحاب؟" },
-    { url: "audio/xWalyastaafef_LIVE20.mp3", duration: 1978, title: "لقاء 20 - الفرق بين الزواج والإباحية" },
-    { url: "audio/xWalyastaafef_LIVE21.mp3", duration: 1586, title: "لقاء 21 - خايف أقاوم وفي الآخر أنفجر" },
-    { url: "audio/xWalyastaafef_LIVE22.mp3", duration: 1613, title: "لقاء 22 - الفرق بين التبطيل والتعافي" },
-    { url: "audio/xWalyastaafef_LIVE23.mp3", duration: 2091, title: "لقاء 23 - ليه لما بقع بستحلاها ومش بعرف أوقف؟" },
+    { url: "audio/xWalyastaafef_LIVE01.mp3", duration: 2714, title: "لقاء 1 - محاور التغيير" },
+    { url: "audio/xWalyastaafef_LIVE02.mp3", duration: 2510, title: "لقاء 2 - قرار الإقلاع" },
+    { url: "audio/xWalyastaafef_LIVE03.mp3", duration: 2073, title: "لقاء 3 - الإباحية فرصة" },
+    { url: "audio/xWalyastaafef_LIVE04.mp3", duration: 1859, title: "لقاء 4 - الأفكار مسيطرة" },
+    { url: "audio/xWalyastaafef_LIVE05.mp3", duration: 1828, title: "لقاء 5 - مغالطات الإدمان" },
+    { url: "audio/xWalyastaafef_LIVE06.mp3", duration: 1989, title: "لقاء 6 - الخوف من المصيبة" },
+    { url: "audio/xWalyastaafef_LIVE07.mp3", duration: 2193, title: "اللقاء 7 - الخواطر الجنسية" },
+    { url: "audio/xWalyastaafef_LIVE08.mp3", duration: 2197, title: "لقاء 8 - هتفرج وأتوب" },
+    { url: "audio/xWalyastaafef_LIVE09.mp3", duration: 2850, title: "اللقاء 9 - المعاناة بدون جنس" },
+    { url: "audio/xWalyastaafef_LIVE10.mp3", duration: 1584, title: "لقاء 10 - العلاج الشمولي" },
+    { url: "audio/xWalyastaafef_LIVE11.mp3", duration: 1434, title: "لقاء 11 - علاج اليأس" },
+    { url: "audio/xWalyastaafef_LIVE12.mp3", duration: 2117, title: "لقاء 12 - التعامل مع الشهوة" },
+    { url: "audio/xWalyastaafef_LIVE13.mp3", duration: 2063, title: "اللقاء 13 - التقدم والتراجع" },
+    { url: "audio/xWalyastaafef_LIVE14.mp3", duration: 2193, title: "لقاء 14 - الخوف والرعب" },
+    { url: "audio/xWalyastaafef_LIVE15.mp3", duration: 2151, title: "لقاء 15 - طاعة قصاد معصية" },
+    { url: "audio/xWalyastaafef_LIVE16.mp3", duration: 2345, title: "لقاء 16 - خطوات عملية" },
+    { url: "audio/xWalyastaafef_LIVE17.mp3", duration: 2121, title: "لقاء 17 - العلاج فن" },
+    { url: "audio/xWalyastaafef_LIVE18.mp3", duration: 2251, title: "لقاء 18 - أتجوز ولا أتعافى؟" },
+    { url: "audio/xWalyastaafef_LIVE19.mp3", duration: 1955, title: "لقاء 19 - أعراض الانسحاب" },
+    { url: "audio/xWalyastaafef_LIVE20.mp3", duration: 1978, title: "لقاء 20 - الزواج والإباحية" },
+    { url: "audio/xWalyastaafef_LIVE21.mp3", duration: 1586, title: "لقاء 21 - الخوف من الانفجار" },
+    { url: "audio/xWalyastaafef_LIVE22.mp3", duration: 1613, title: "لقاء 22 - التبطيل والتعافي" },
+    { url: "audio/xWalyastaafef_LIVE23.mp3", duration: 2091, title: "لقاء 23 - ليه بستحلاها؟" },
 ];
 
-function seededShuffle(array, seed) {
+// --- Unified Shuffle Logic ---
+function seededShuffle(array, seed ) {
     let currentIndex = array.length, temporaryValue, randomIndex;
     const random = () => {
         var x = Math.sin(seed++) * 10000;
@@ -63,93 +70,105 @@ function seededShuffle(array, seed) {
     return array;
 }
 
+// Use today's date as a seed for the shuffle.
+// This makes the playlist random but the same for everyone throughout the day.
 const today = new Date();
 const dateSeed = today.getFullYear() * 10000 + (today.getMonth() + 1) * 100 + today.getDate();
 const PLAYLIST = seededShuffle([...ORIGINAL_PLAYLIST], dateSeed);
 
-const RADIO_EPOCH = 1672531200000;
+
+// --- Radio Sync ---
+const RADIO_EPOCH = 1672531200000; // Jan 1, 2023
 const totalPlaylistDuration = PLAYLIST.reduce((sum, track) => sum + track.duration, 0);
 
 function getRadioState() {
   const now = Date.now();
   const elapsedSeconds = Math.floor((now - RADIO_EPOCH) / 1000);
   const positionInPlaylist = elapsedSeconds % totalPlaylistDuration;
+
   let accumulatedTime = 0;
   for (let i = 0; i < PLAYLIST.length; i++) {
     const track = PLAYLIST[i];
     if (positionInPlaylist < accumulatedTime + track.duration) {
       return {
         currentTrack: track,
+        currentTrackIndex: i,
         positionInTrack: positionInPlaylist - accumulatedTime,
+        playlist: PLAYLIST
       };
     }
     accumulatedTime += track.duration;
   }
-  return { currentTrack: PLAYLIST[0], positionInTrack: 0 };
+  // Fallback, should not be reached if playlist is not empty
+  return { currentTrack: PLAYLIST[0], currentTrackIndex: 0, positionInTrack: 0, playlist: PLAYLIST };
 }
 
+// --- React App ---
 function App() {
   const audioRef = useRef(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [volume, setVolume] = useState(0.7);
   const [currentTime, setCurrentTime] = useState(0);
-  const [currentTrack, setCurrentTrack] = useState(null);
+  const [radioState, setRadioState] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const initialState = getRadioState();
-    setCurrentTrack(initialState.currentTrack);
-    setCurrentTime(initialState.positionInTrack);
+    const state = getRadioState();
+    setRadioState(state);
+    setCurrentTime(state.positionInTrack);
     setIsLoading(false);
   }, []);
 
-  const togglePlay = () => {
+  useEffect(() => {
     const audioEl = audioRef.current;
-    if (!audioEl || !currentTrack) return;
+    if (!audioEl) return;
+
+    const handleTimeUpdate = () => setCurrentTime(audioEl.currentTime);
+    audioEl.addEventListener("timeupdate", handleTimeUpdate);
+
+    const handleTrackEnd = () => {
+        // When a track ends, get the new state to load the next track
+        const newState = getRadioState();
+        setRadioState(newState);
+        audioEl.src = newState.currentTrack.url;
+        audioEl.currentTime = newState.positionInTrack;
+        if(isPlaying) audioEl.play();
+    };
+    audioEl.addEventListener("ended", handleTrackEnd);
+
+    return () => {
+      audioEl.removeEventListener("timeupdate", handleTimeUpdate);
+      audioEl.removeEventListener("ended", handleTrackEnd);
+    };
+  }, [isPlaying]);
+
+  const togglePlay = () => {
+    if (!audioRef.current || !radioState) return;
+
+    const audioEl = audioRef.current;
 
     if (isPlaying) {
       audioEl.pause();
       setIsPlaying(false);
     } else {
+      // First time playing or resuming
       const state = getRadioState();
       
-      audioEl.src = state.currentTrack.url;
-      audioEl.currentTime = state.positionInTrack;
+      // Load the correct source if it's not already loaded
+      if (audioEl.src !== new URL(state.currentTrack.url, window.location.href).href) {
+          audioEl.src = state.currentTrack.url;
+      }
+
+      // Sync time before playing, but only if significantly different
+      if (Math.abs(audioEl.currentTime - state.positionInTrack) > 5) {
+          audioEl.currentTime = state.positionInTrack;
+      }
       
       audioEl.play()
-        .then(() => {
-          setCurrentTrack(state.currentTrack);
-          setIsPlaying(true);
-        })
-        .catch(error => {
-          console.error("Playback failed:", error);
-        });
+        .then(() => setIsPlaying(true))
+        .catch(error => console.error("Playback failed:", error));
     }
   };
-
-  useEffect(() => {
-    const audioEl = audioRef.current;
-    if (!audioEl || !isPlaying) return;
-    
-    const timeUpdater = setInterval(() => {
-        setCurrentTime(audioEl.currentTime);
-    }, 1000);
-
-    const handleTrackEnd = () => {
-        const newState = getRadioState();
-        setCurrentTrack(newState.currentTrack);
-        audioEl.src = newState.currentTrack.url;
-        audioEl.currentTime = newState.positionInTrack;
-        audioEl.play();
-    };
-
-    audioEl.addEventListener('ended', handleTrackEnd);
-
-    return () => {
-        clearInterval(timeUpdater);
-        audioEl.removeEventListener('ended', handleTrackEnd);
-    };
-  }, [isPlaying]);
 
   const handleVolumeChange = (e) => {
     const newVol = parseFloat(e.target.value);
@@ -162,7 +181,7 @@ function App() {
       return `${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}`;
   }
 
-  if (isLoading || !currentTrack) {
+  if (isLoading || !radioState) {
     return <div className="flex justify-center items-center h-screen text-white bg-gradient-to-br from-purple-900 to-blue-800">جارٍ التحميل...</div>;
   }
 
@@ -171,7 +190,7 @@ function App() {
       <audio ref={audioRef} />
       <div className="bg-white/10 backdrop-blur-lg p-6 rounded-2xl text-center w-full max-w-md shadow-lg">
         <h1 className="text-white text-3xl font-bold mb-2">راديو وليستعفف</h1>
-        <p className="text-purple-200 mb-4">{currentTrack.title}</p>
+        <p className="text-purple-200 mb-4">{radioState.currentTrack.title}</p>
 
         <button onClick={togglePlay} className="bg-white text-purple-900 w-20 h-20 rounded-full flex items-center justify-center shadow-lg mb-4 mx-auto">
           {isPlaying ? "⏸️" : "▶️"}
@@ -180,11 +199,11 @@ function App() {
         <div className="mb-4">
           <div className="flex justify-between text-sm text-purple-200 mb-1">
             <span>{formatTime(currentTime)}</span>
-            <span>{formatTime(currentTrack.duration)}</span>
+            <span>{formatTime(radioState.currentTrack.duration)}</span>
           </div>
           <div className="w-full h-2 bg-white/20 rounded-full overflow-hidden">
             <div className="h-full bg-gradient-to-r from-purple-500 to-pink-500"
-                 style={{ width: `${(currentTime / currentTrack.duration) * 100}%` }}/>
+                 style={{ width: `${(currentTime / radioState.currentTrack.duration) * 100}%` }}/>
           </div>
         </div>
 
