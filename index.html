@@ -218,7 +218,8 @@
             
             useEffect(() => {
                 lucide.createIcons();
-            });
+            }, []); 
+
 
             if (isLoading || !radioState) {
                 return (
@@ -293,5 +294,6 @@
     </script>
 </body>
 </html>
+
 
 
