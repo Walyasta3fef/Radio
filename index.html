@@ -63,7 +63,7 @@
     <div id="root"></div>
 
     <!-- The critical fix is adding type="text/babel" to this script tag -->
-    <script type="text/babel">
+    <script type="text/babel" data-presets="react,env">
         const { useEffect, useRef, useState } = React;
 
         // --- Playlist Data ---
@@ -290,3 +290,4 @@
     </script>
 </body>
 </html>
+
