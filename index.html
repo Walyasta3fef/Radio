@@ -44,6 +44,10 @@
         .vinyl-spin {
             animation: spin 8s linear infinite;
         }
+        
+        .loading-spin {
+            animation: spin 2s linear infinite;
+        }
 
         @keyframes spin {
             from { transform: rotate(0deg); }
@@ -58,10 +62,11 @@
 <body>
     <div id="root"></div>
 
+    <!-- The critical fix is adding type="text/babel" to this script tag -->
     <script type="text/babel">
         const { useEffect, useRef, useState } = React;
 
-        // --- Playlist Data (from playlist.ts) ---
+        // --- Playlist Data ---
         const PLAYLIST = [
           { url: "https://archive.org/download/xWalyastaafefMp3/_xWalyastaafef01.mp3", duration: 2719, title: "الكورس الأساسي لقاء 1" },
           { url: "https://archive.org/download/xWalyastaafefMp3/_xWalyastaafef02.mp3", duration: 2619, title: "الكورس الأساسي لقاء 2" },
@@ -93,7 +98,7 @@
         ];
 
         // --- Sync Logic ---
-        const RADIO_EPOCH = 1672531200000; // A fixed date in the past: Jan 1, 2023
+        const RADIO_EPOCH = 1672531200000; // Jan 1, 2023
         const totalPlaylistDuration = PLAYLIST.reduce((sum, track ) => sum + track.duration, 0);
 
         function getRadioState() {
@@ -114,7 +119,6 @@
                 }
                 accumulatedTime += track.duration;
             }
-            // Fallback
             return { currentTrack: PLAYLIST[0], currentTrackIndex: 0, positionInTrack: 0, playlist: PLAYLIST };
         }
 
@@ -126,11 +130,12 @@
             const [volume, setVolume] = useState(0.7);
             const [currentTime, setCurrentTime] = useState(0);
             const [radioState, setRadioState] = useState(null);
+            const [isLoading, setIsLoading] = useState(true);
 
-            // Initial sync
             useEffect(() => {
                 const initialState = getRadioState();
                 setRadioState(initialState);
+                setIsLoading(false);
 
                 const audio = audioRef.current;
                 if (audio && initialState) {
@@ -140,24 +145,21 @@
                 }
             }, []);
             
-            // Auto-play handling
             const tryAutoPlay = () => {
                 const audio = audioRef.current;
                 if (audio && audio.paused) {
                     audio.play().then(() => {
                         setIsPlaying(true);
                     }).catch(error => {
-                        console.log("Auto-play was prevented. User must interact with the page first.");
                         setIsPlaying(false);
                     });
                 }
             };
 
-            // Sync when track changes
             useEffect(() => {
                 const interval = setInterval(() => {
                     const newState = getRadioState();
-                    if (newState.currentTrack.url !== radioState?.currentTrack.url) {
+                    if (radioState && newState.currentTrack.url !== radioState.currentTrack.url) {
                         setRadioState(newState);
                         const audio = audioRef.current;
                         if (audio) {
@@ -172,7 +174,6 @@
                 return () => clearInterval(interval);
             }, [radioState, isPlaying]);
 
-            // Update current time display
             useEffect(() => {
                 const audio = audioRef.current;
                 const updateTime = () => setCurrentTime(audio.currentTime);
@@ -186,9 +187,10 @@
                     audio.pause();
                     setIsPlaying(false);
                 } else {
-                    // Resync before playing
                     const state = getRadioState();
-                    audio.currentTime = state.positionInTrack;
+                    if (Math.abs(audio.currentTime - state.positionInTrack) > 5) {
+                       audio.currentTime = state.positionInTrack;
+                    }
                     audio.play().then(() => setIsPlaying(true));
                 }
             };
@@ -205,27 +207,27 @@
             };
 
             const formatTime = (seconds) => {
-                const mins = Math.floor(seconds / 60);
-                const secs = Math.floor(seconds % 60);
+                const s = Math.floor(seconds);
+                const mins = Math.floor(s / 60);
+                const secs = s % 60;
                 return `${mins}:${secs.toString().padStart(2, "0")}`;
             };
             
-            // Render Lucide icons after component mounts
             useEffect(() => {
                 lucide.createIcons();
             });
 
-            if (!radioState) {
+            if (isLoading || !radioState) {
                 return (
                     <div className="main-container">
-                        <i data-lucide="loader-2" className="w-12 h-12 animate-spin text-white"></i>
+                        <i data-lucide="loader-2" className="w-12 h-12 text-white loading-spin"></i>
                     </div>
                 );
             }
 
             return (
                 <div className="main-container">
-                    <audio ref={audioRef} onCanPlay={tryAutoPlay} />
+                    <audio ref={audioRef} onCanPlay={tryAutoPlay} crossOrigin="anonymous" />
                     <div className="w-full max-w-2xl">
                         <div className="text-center mb-8">
                             <div className="flex items-center justify-center gap-3 mb-4">
@@ -280,7 +282,7 @@
                         </div>
                     </div>
                 </div>
-             );
+              );
         }
 
         const root = ReactDOM.createRoot(document.getElementById('root'));
