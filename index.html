@@ -16,13 +16,13 @@
 
 const { useState, useEffect, useRef } = React;
 
-// --- Playlist with ORIGINAL filenames (with underscore ) ---
+// --- Playlist with your New Titles ---
 const ORIGINAL_PLAYLIST = [
     { url: "audio/_xWalyastaafef01.mp3", duration: 2719, title: "الكورس الأساسي لقاء 1" },
     { url: "audio/_xWalyastaafef02.mp3", duration: 2619, title: "الكورس الأساسي لقاء 2" },
     { url: "audio/_xWalyastaafef03.mp3", duration: 3036, title: "الكورس الأساسي لقاء 3" },
     { url: "audio/_xWalyastaafef04.mp3", duration: 2250, title: "الكورس الأساسي لقاء 4" },
-    { url: "audio/xWalyastaafef_LIVE01.mp3", duration: 2714, title: "لقاء 1 - محاور التغيير ( التحفيز - القرار - التغيير - التثبيت )" },
+    { url: "audio/xWalyastaafef_LIVE01.mp3", duration: 2714, title: "لقاء 1 - محاور التغيير ( التحفيز - القرار - التغيير - التثبيت  )" },
     { url: "audio/xWalyastaafef_LIVE02.mp3", duration: 2510, title: "لقاء 2 - محور القرار - قرار الإقلاع عن الإباحية" },
     { url: "audio/xWalyastaafef_LIVE03.mp3", duration: 2073, title: "لقاء 3 - بحس إن الإباحية فرصة صعب تتفوت" },
     { url: "audio/xWalyastaafef_LIVE04.mp3", duration: 1859, title: "لقاء 4 - الأفكار مسيطرة عليا وبتوقعني" },
@@ -47,6 +47,7 @@ const ORIGINAL_PLAYLIST = [
     { url: "audio/xWalyastaafef_LIVE23.mp3", duration: 2091, title: "لقاء 23 - ليه لما بقع بستحلاها ومش بعرف أوقف؟" },
 ];
 
+// --- Unified Shuffle Logic ---
 function seededShuffle(array, seed) {
     let currentIndex = array.length, temporaryValue, randomIndex;
     const random = () => {
@@ -93,63 +94,44 @@ function App() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [volume, setVolume] = useState(0.7);
   const [currentTime, setCurrentTime] = useState(0);
-  const [currentTrack, setCurrentTrack] = useState(null);
+  const [radioState, setRadioState] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const initialState = getRadioState();
-    setCurrentTrack(initialState.currentTrack);
-    setCurrentTime(initialState.positionInTrack);
+    const state = getRadioState();
+    setRadioState(state);
+    setCurrentTime(state.positionInTrack);
     setIsLoading(false);
+  }, []);
+
+  useEffect(() => {
+    const audioEl = audioRef.current;
+    if (!audioEl) return;
+    const handleTimeUpdate = () => setCurrentTime(audioEl.currentTime);
+    audioEl.addEventListener("timeupdate", handleTimeUpdate);
+    return () => audioEl.removeEventListener("timeupdate", handleTimeUpdate);
   }, []);
 
   const togglePlay = () => {
     const audioEl = audioRef.current;
-    if (!audioEl || !currentTrack) return;
+    if (!audioEl || !radioState) return;
 
     if (isPlaying) {
       audioEl.pause();
       setIsPlaying(false);
     } else {
       const state = getRadioState();
-      
-      audioEl.src = state.currentTrack.url;
-      audioEl.currentTime = state.positionInTrack;
-      
+      if (audioEl.src !== new URL(state.currentTrack.url, window.location.href).href) {
+          audioEl.src = state.currentTrack.url;
+      }
+      if (Math.abs(audioEl.currentTime - state.positionInTrack) > 5) {
+          audioEl.currentTime = state.positionInTrack;
+      }
       audioEl.play()
-        .then(() => {
-          setCurrentTrack(state.currentTrack);
-          setIsPlaying(true);
-        })
-        .catch(error => {
-          console.error("Playback failed:", error);
-        });
+        .then(() => setIsPlaying(true))
+        .catch(error => console.error("Playback failed:", error));
     }
   };
-
-  useEffect(() => {
-    const audioEl = audioRef.current;
-    if (!audioEl || !isPlaying) return;
-    
-    const timeUpdater = setInterval(() => {
-        setCurrentTime(audioEl.currentTime);
-    }, 1000);
-
-    const handleTrackEnd = () => {
-        const newState = getRadioState();
-        setCurrentTrack(newState.currentTrack);
-        audioEl.src = newState.currentTrack.url;
-        audioEl.currentTime = newState.positionInTrack;
-        audioEl.play();
-    };
-
-    audioEl.addEventListener('ended', handleTrackEnd);
-
-    return () => {
-        clearInterval(timeUpdater);
-        audioEl.removeEventListener('ended', handleTrackEnd);
-    };
-  }, [isPlaying]);
 
   const handleVolumeChange = (e) => {
     const newVol = parseFloat(e.target.value);
@@ -162,7 +144,7 @@ function App() {
       return `${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}`;
   }
 
-  if (isLoading || !currentTrack) {
+  if (isLoading || !radioState) {
     return <div className="flex justify-center items-center h-screen text-white bg-gradient-to-br from-purple-900 to-blue-800">جارٍ التحميل...</div>;
   }
 
@@ -171,23 +153,20 @@ function App() {
       <audio ref={audioRef} />
       <div className="bg-white/10 backdrop-blur-lg p-6 rounded-2xl text-center w-full max-w-md shadow-lg">
         <h1 className="text-white text-3xl font-bold mb-2">راديو وليستعفف</h1>
-        <p className="text-purple-200 mb-4">{currentTrack.title}</p>
-
+        <p className="text-purple-200 mb-4">{radioState.currentTrack.title}</p>
         <button onClick={togglePlay} className="bg-white text-purple-900 w-20 h-20 rounded-full flex items-center justify-center shadow-lg mb-4 mx-auto">
           {isPlaying ? "⏸️" : "▶️"}
         </button>
-
         <div className="mb-4">
           <div className="flex justify-between text-sm text-purple-200 mb-1">
             <span>{formatTime(currentTime)}</span>
-            <span>{formatTime(currentTrack.duration)}</span>
+            <span>{formatTime(radioState.currentTrack.duration)}</span>
           </div>
           <div className="w-full h-2 bg-white/20 rounded-full overflow-hidden">
             <div className="h-full bg-gradient-to-r from-purple-500 to-pink-500"
-                 style={{ width: `${(currentTime / currentTrack.duration) * 100}%` }}/>
+                 style={{ width: `${(currentTime / radioState.currentTrack.duration) * 100}%` }}/>
           </div>
         </div>
-
         <input type="range" min="0" max="1" step="0.01" value={volume} onChange={handleVolumeChange} className="w-full accent-purple-500"/>
       </div>
     </div>
