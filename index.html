@@ -48,6 +48,7 @@ const ORIGINAL_PLAYLIST = [
     { url: "audio/xWalyastaafef_LIVE23.mp3", duration: 2091, title: "لقاء 23 - ليه لما بقع بستحلاها ومش بعرف أوقف؟" },
 ];
 
+// --- Unified Shuffle Logic ---
 function seededShuffle(array, seed) {
     let currentIndex = array.length, temporaryValue, randomIndex;
     const random = () => {
@@ -120,7 +121,7 @@ function App() {
       
       audioEl.play()
         .then(() => {
-          setCurrentTrack(state.currentTrack); // Ensure track title is updated
+          setCurrentTrack(state.currentTrack);
           setIsPlaying(true);
         })
         .catch(error => {
@@ -131,13 +132,26 @@ function App() {
 
   useEffect(() => {
     const audioEl = audioRef.current;
-    if (!audioEl) return;
+    if (!audioEl || !isPlaying) return;
+    
     const timeUpdater = setInterval(() => {
-        if (isPlaying) {
-            setCurrentTime(audioEl.currentTime);
-        }
+        setCurrentTime(audioEl.currentTime);
     }, 1000);
-    return () => clearInterval(timeUpdater);
+
+    const handleTrackEnd = () => {
+        const newState = getRadioState();
+        setCurrentTrack(newState.currentTrack);
+        audioEl.src = newState.currentTrack.url;
+        audioEl.currentTime = newState.positionInTrack;
+        audioEl.play();
+    };
+
+    audioEl.addEventListener('ended', handleTrackEnd);
+
+    return () => {
+        clearInterval(timeUpdater);
+        audioEl.removeEventListener('ended', handleTrackEnd);
+    };
   }, [isPlaying]);
 
   const handleVolumeChange = (e) => {
