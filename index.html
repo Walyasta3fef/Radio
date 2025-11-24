@@ -12,12 +12,11 @@
 <body>
 <div id="root"></div>
 
-  
 <script type="text/babel" data-presets="react,env">
 
 const { useState, useEffect, useRef } = React;
 
-// --- Playlist with your New Titles ---
+// --- Playlist with ORIGINAL filenames and NEW titles ---
 const ORIGINAL_PLAYLIST = [
     { url: "audio/_xWalyastaafef01.mp3", duration: 2719, title: "الكورس الأساسي لقاء 1" },
     { url: "audio/_xWalyastaafef02.mp3", duration: 2619, title: "الكورس الأساسي لقاء 2" },
@@ -48,7 +47,6 @@ const ORIGINAL_PLAYLIST = [
     { url: "audio/xWalyastaafef_LIVE23.mp3", duration: 2091, title: "لقاء 23 - ليه لما بقع بستحلاها ومش بعرف أوقف؟" },
 ];
 
-// --- Unified Shuffle Logic ---
 function seededShuffle(array, seed) {
     let currentIndex = array.length, temporaryValue, randomIndex;
     const random = () => {
@@ -95,39 +93,30 @@ function App() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [volume, setVolume] = useState(0.7);
   const [currentTime, setCurrentTime] = useState(0);
-  const [radioState, setRadioState] = useState(null);
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    const state = getRadioState();
-    setRadioState(state);
-    setCurrentTime(state.positionInTrack);
-    setIsLoading(false);
-  }, []);
-
+  const [radioState, setRadioState] = useState(getRadioState());
+  
   useEffect(() => {
     const audioEl = audioRef.current;
-    if (!audioEl) return;
-    const handleTimeUpdate = () => setCurrentTime(audioEl.currentTime);
-    audioEl.addEventListener("timeupdate", handleTimeUpdate);
-    return () => audioEl.removeEventListener("timeupdate", handleTimeUpdate);
+    const timeUpdater = setInterval(() => {
+        if (audioEl.paused) return;
+        setCurrentTime(audioEl.currentTime);
+    }, 1000);
+    return () => clearInterval(timeUpdater);
   }, []);
 
   const togglePlay = () => {
     const audioEl = audioRef.current;
-    if (!audioEl || !radioState) return;
-
     if (isPlaying) {
       audioEl.pause();
       setIsPlaying(false);
     } else {
       const state = getRadioState();
-      if (audioEl.src !== new URL(state.currentTrack.url, window.location.href).href) {
-          audioEl.src = state.currentTrack.url;
-      }
-      if (Math.abs(audioEl.currentTime - state.positionInTrack) > 5) {
-          audioEl.currentTime = state.positionInTrack;
-      }
+      setRadioState(state); // Update state just in case
+      
+      // Simple, direct, and reliable
+      audioEl.src = state.currentTrack.url;
+      audioEl.currentTime = state.positionInTrack;
+      
       audioEl.play()
         .then(() => setIsPlaying(true))
         .catch(error => console.error("Playback failed:", error));
@@ -143,10 +132,6 @@ function App() {
   const formatTime = (s) => {
       if (isNaN(s)) return "0:00";
       return `${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}`;
-  }
-
-  if (isLoading || !radioState) {
-    return <div className="flex justify-center items-center h-screen text-white bg-gradient-to-br from-purple-900 to-blue-800">جارٍ التحميل...</div>;
   }
 
   return (
@@ -179,4 +164,3 @@ ReactDOM.createRoot(document.getElementById('root')).render(<App />);
 </script>
 </body>
 </html>
-
