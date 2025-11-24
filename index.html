@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>راديو وليستعفف</title>
+  <title>راديو وليستعفف - فحص الملفات</title>
 
   <!-- React & Babel -->
   <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
@@ -26,8 +26,15 @@ const PLAYLIST = [
   { url: "audio/_xWalyastaafef02.mp3", duration: 2619, title: "الكورس الأساسي لقاء 2" },
   { url: "audio/xWalyastaafef_LIVE01.mp3", duration: 2714, title: "لقاء 1 - محاور التغيير" },
   { url: "audio/xWalyastaafef_LIVE11.mp3", duration: 1434, title: "لقاء 11 - علاج اليأس" },
-  // أضف باقي الملفات هنا بنفس الطريقة
+  // أضف باقي الملفات هنا
 ];
+
+// --- تحقق من وجود كل الملفات ---
+PLAYLIST.forEach(f => {
+  fetch(f.url)
+    .then(res => console.log(f.url, res.ok ? "✅ موجود" : "❌ مفقود"))
+    .catch(err => console.log(f.url, "❌ خطأ", err));
+});
 
 // --- React App ---
 function App() {
@@ -48,7 +55,6 @@ function App() {
 
     const handleTimeUpdate = () => setCurrentTime(audioEl.currentTime);
     const handleTrackEnd = () => {
-      // انتقل للمقطع التالي تلقائيًا
       setCurrentTrackIndex((prev) => (prev + 1) % PLAYLIST.length);
     };
 
