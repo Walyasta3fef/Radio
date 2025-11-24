@@ -54,7 +54,7 @@ const PLAYLIST = [
 
 // --- Radio Sync ---
 const RADIO_EPOCH = 1672531200000; // Jan 1, 2023
-const totalPlaylistDuration = PLAYLIST.reduce((sum, track) => sum + track.duration, 0);
+const totalPlaylistDuration = PLAYLIST.reduce((sum, track ) => sum + track.duration, 0);
 
 function getRadioState() {
   const now = Date.now();
@@ -85,18 +85,46 @@ function App() {
   const [currentTime, setCurrentTime] = useState(0);
   const [radioState, setRadioState] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const isSeeking = useRef(false); // To prevent time updates while seeking
 
   useEffect(() => {
     const state = getRadioState();
     setRadioState(state);
+    setCurrentTime(state.positionInTrack);
     setIsLoading(false);
 
     if (audioRef.current) {
       audioRef.current.src = state.currentTrack.url;
-      audioRef.current.currentTime = state.positionInTrack;
       audioRef.current.volume = volume;
+      // We don't set currentTime here to avoid race conditions before user interaction
     }
   }, []);
+
+  useEffect(() => {
+    const audioEl = audioRef.current;
+    if (!audioEl) return;
+
+    const handleTimeUpdate = () => {
+        if (!isSeeking.current) {
+            setCurrentTime(audioEl.currentTime);
+        }
+    };
+
+    const handleCanPlay = () => {
+        if (isPlaying) {
+            audioEl.play().catch(e => console.error("Error playing audio:", e));
+        }
+    };
+
+    audioEl.addEventListener("timeupdate", handleTimeUpdate);
+    audioEl.addEventListener("canplay", handleCanPlay);
+
+    return () => {
+      audioEl.removeEventListener("timeupdate", handleTimeUpdate);
+      audioEl.removeEventListener("canplay", handleCanPlay);
+    };
+  }, [isPlaying]);
+
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -104,33 +132,42 @@ function App() {
       if (radioState && newState.currentTrack.url !== radioState.currentTrack.url) {
         setRadioState(newState);
         if (audioRef.current) {
+          const wasPlaying = !audioRef.current.paused;
           audioRef.current.src = newState.currentTrack.url;
           audioRef.current.currentTime = newState.positionInTrack;
-          if (isPlaying) audioRef.current.play();
+          if (wasPlaying) {
+            audioRef.current.play().catch(e => console.error("Error switching track:", e));
+          }
         }
+      }
+       // Update current time display even when paused
+      if (!isPlaying) {
+          setCurrentTime(newState.positionInTrack);
       }
     }, 1000);
     return () => clearInterval(interval);
   }, [radioState, isPlaying]);
 
-  useEffect(() => {
-    if (!audioRef.current) return;
-    const updateTime = () => setCurrentTime(audioRef.current.currentTime);
-    audioRef.current.addEventListener("timeupdate", updateTime);
-    return () => audioRef.current.removeEventListener("timeupdate", updateTime);
-  }, []);
 
   const togglePlay = () => {
-    if (!audioRef.current) return;
+    if (!audioRef.current || !radioState) return;
+
     if (isPlaying) {
       audioRef.current.pause();
       setIsPlaying(false);
     } else {
+      // This is the first interaction or resuming play
       const state = getRadioState();
-      if (Math.abs(audioRef.current.currentTime - state.positionInTrack) > 5) {
-        audioRef.current.currentTime = state.positionInTrack;
-      }
-      audioRef.current.play().then(() => setIsPlaying(true));
+      // Sync time before playing
+      audioRef.current.currentTime = state.positionInTrack;
+      audioRef.current.play()
+        .then(() => {
+          setIsPlaying(true);
+        })
+        .catch(error => {
+          console.error("Playback was prevented:", error);
+          // Handle the error, maybe show a message to the user
+        });
     }
   };
 
@@ -140,10 +177,13 @@ function App() {
     if (audioRef.current) audioRef.current.volume = newVol;
   };
 
-  const formatTime = (s) => `${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}`;
+  const formatTime = (s) => {
+      if (isNaN(s)) return "0:00";
+      return `${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}`;
+  }
 
   if (isLoading || !radioState) {
-    return <div className="flex justify-center items-center h-screen text-white">جارٍ التحميل...</div>;
+    return <div className="flex justify-center items-center h-screen text-white bg-gradient-to-br from-purple-900 to-blue-800">جارٍ التحميل...</div>;
   }
 
   return (
@@ -151,10 +191,10 @@ function App() {
       <audio ref={audioRef} crossOrigin="anonymous"/>
       <div className="bg-white/10 backdrop-blur-lg p-6 rounded-2xl text-center w-full max-w-md shadow-lg">
         <h1 className="text-white text-3xl font-bold mb-2">راديو وليستعفف</h1>
-        <p className="text-purple-200 mb-4">الكوتش مصطفى حسان</p>
+        <p className="text-purple-200 mb-4">{radioState.currentTrack.title}</p>
 
         {/* Play/Pause Button */}
-        <button onClick={togglePlay} className="bg-white text-purple-900 w-20 h-20 rounded-full flex items-center justify-center shadow-lg mb-4">
+        <button onClick={togglePlay} className="bg-white text-purple-900 w-20 h-20 rounded-full flex items-center justify-center shadow-lg mb-4 mx-auto">
           {isPlaying ? "⏸️" : "▶️"}
         </button>
 
