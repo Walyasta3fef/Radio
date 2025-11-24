@@ -1,76 +1,27 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>راديو وليستعفف</title>
-    
-    <!-- React & Babel CDN -->
-    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    
-    <!-- Lucide Icons CDN -->
-    <script src="https://unpkg.com/lucide@latest"></script>
-    <!-- Tailwind CDN -->
-<script src="https://cdn.tailwindcss.com"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>راديو وليستعفف</title>
 
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;700&display=swap' );
-        
-        body {
-            margin: 0;
-            font-family: 'Cairo', sans-serif;
-            -webkit-font-smoothing: antialiased;
-            -moz-osx-font-smoothing: grayscale;
-        }
+  <!-- React & Babel -->
+  <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
-        .main-container {
-            min-height: 100vh;
-            background: linear-gradient(to bottom right, #4c1d95, #312e81, #1e3a8a);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 1rem;
-        }
-
-        .radio-card {
-            background-color: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            padding: 2rem;
-            border-radius: 1.5rem;
-            box-shadow: 0 0 30px rgba(124, 58, 237, 0.5);
-        }
-
-        .vinyl-spin {
-            animation: spin 8s linear infinite;
-        }
-        
-        .loading-spin {
-            animation: spin 2s linear infinite;
-        }
-
-        @keyframes spin {
-            from { transform: rotate(0deg); }
-            to { transform: rotate(360deg); }
-        }
-
-        .accent-purple-500 {
-            accent-color: #8b5cf6;
-        }
-    
-    </style>
+  <!-- Tailwind -->
+  <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body>
-    <div id="root"></div>
+<div id="root"></div>
 
-    <!-- The critical fix is adding type="text/babel" to this script tag -->
-    <script type="text/babel" data-presets="react,env">
-        const { useEffect, useRef, useState } = React;
+<script type="text/babel" data-presets="react,env">
 
-        // --- Playlist Data ---
-        const PLAYLIST = [
+const { useState, useEffect, useRef } = React;
+
+// --- Playlist Data ---
+const PLAYLIST = [
           { url: "https://archive.org/download/xWalyastaafefMp3/_xWalyastaafef01.mp3", duration: 2719, title: "الكورس الأساسي لقاء 1" },
           { url: "https://archive.org/download/xWalyastaafefMp3/_xWalyastaafef02.mp3", duration: 2619, title: "الكورس الأساسي لقاء 2" },
           { url: "https://archive.org/download/xWalyastaafefMp3/_xWalyastaafef03.mp3", duration: 3036, title: "الكورس الأساسي لقاء 3" },
@@ -100,202 +51,134 @@
           { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE23.mp3", duration: 2091, title: "لقاء 23 - ليه بستحلاها؟" },
         ];
 
-        // --- Sync Logic ---
-        const RADIO_EPOCH = 1672531200000; // Jan 1, 2023
-        const totalPlaylistDuration = PLAYLIST.reduce((sum, track ) => sum + track.duration, 0);
 
-        function getRadioState() {
-            const now = Date.now();
-            const elapsedSeconds = Math.floor((now - RADIO_EPOCH) / 1000);
-            const positionInPlaylist = elapsedSeconds % totalPlaylistDuration;
+// --- Radio Sync ---
+const RADIO_EPOCH = 1672531200000; // Jan 1, 2023
+const totalPlaylistDuration = PLAYLIST.reduce((sum, track) => sum + track.duration, 0);
 
-            let accumulatedTime = 0;
-            for (let i = 0; i < PLAYLIST.length; i++) {
-                const track = PLAYLIST[i];
-                if (positionInPlaylist < accumulatedTime + track.duration) {
-                    return {
-                        currentTrack: track,
-                        currentTrackIndex: i,
-                        positionInTrack: positionInPlaylist - accumulatedTime,
-                        playlist: PLAYLIST,
-                    };
-                }
-                accumulatedTime += track.duration;
-            }
-            return { currentTrack: PLAYLIST[0], currentTrackIndex: 0, positionInTrack: 0, playlist: PLAYLIST };
+function getRadioState() {
+  const now = Date.now();
+  const elapsedSeconds = Math.floor((now - RADIO_EPOCH) / 1000);
+  const positionInPlaylist = elapsedSeconds % totalPlaylistDuration;
+
+  let accumulatedTime = 0;
+  for (let i = 0; i < PLAYLIST.length; i++) {
+    const track = PLAYLIST[i];
+    if (positionInPlaylist < accumulatedTime + track.duration) {
+      return {
+        currentTrack: track,
+        currentTrackIndex: i,
+        positionInTrack: positionInPlaylist - accumulatedTime,
+        playlist: PLAYLIST
+      };
+    }
+    accumulatedTime += track.duration;
+  }
+  return { currentTrack: PLAYLIST[0], currentTrackIndex: 0, positionInTrack: 0, playlist: PLAYLIST };
+}
+
+// --- React App ---
+function App() {
+  const audioRef = useRef(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [volume, setVolume] = useState(0.7);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [radioState, setRadioState] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const state = getRadioState();
+    setRadioState(state);
+    setIsLoading(false);
+
+    if (audioRef.current) {
+      audioRef.current.src = state.currentTrack.url;
+      audioRef.current.currentTime = state.positionInTrack;
+      audioRef.current.volume = volume;
+    }
+  }, []);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const newState = getRadioState();
+      if (radioState && newState.currentTrack.url !== radioState.currentTrack.url) {
+        setRadioState(newState);
+        if (audioRef.current) {
+          audioRef.current.src = newState.currentTrack.url;
+          audioRef.current.currentTime = newState.positionInTrack;
+          if (isPlaying) audioRef.current.play();
         }
+      }
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [radioState, isPlaying]);
 
-        // --- React Component ---
-        function App() {
-            const audioRef = useRef(null);
-            const [isPlaying, setIsPlaying] = useState(false);
-            const [isMuted, setIsMuted] = useState(false);
-            const [volume, setVolume] = useState(0.7);
-            const [currentTime, setCurrentTime] = useState(0);
-            const [radioState, setRadioState] = useState(null);
-            const [isLoading, setIsLoading] = useState(true);
+  useEffect(() => {
+    if (!audioRef.current) return;
+    const updateTime = () => setCurrentTime(audioRef.current.currentTime);
+    audioRef.current.addEventListener("timeupdate", updateTime);
+    return () => audioRef.current.removeEventListener("timeupdate", updateTime);
+  }, []);
 
-            useEffect(() => {
-                const initialState = getRadioState();
-                setRadioState(initialState);
-                setIsLoading(false);
+  const togglePlay = () => {
+    if (!audioRef.current) return;
+    if (isPlaying) {
+      audioRef.current.pause();
+      setIsPlaying(false);
+    } else {
+      const state = getRadioState();
+      if (Math.abs(audioRef.current.currentTime - state.positionInTrack) > 5) {
+        audioRef.current.currentTime = state.positionInTrack;
+      }
+      audioRef.current.play().then(() => setIsPlaying(true));
+    }
+  };
 
-                const audio = audioRef.current;
-                if (audio && initialState) {
-                    audio.src = initialState.currentTrack.url;
-                    audio.currentTime = initialState.positionInTrack;
-                    audio.volume = volume;
-                }
-            }, []);
-            
-            const tryAutoPlay = () => {
-                const audio = audioRef.current;
-                if (audio && audio.paused) {
-                    audio.play().then(() => {
-                        setIsPlaying(true);
-                    }).catch(error => {
-                        setIsPlaying(false);
-                    });
-                }
-            };
+  const handleVolumeChange = (e) => {
+    const newVol = parseFloat(e.target.value);
+    setVolume(newVol);
+    if (audioRef.current) audioRef.current.volume = newVol;
+  };
 
-            useEffect(() => {
-                const interval = setInterval(() => {
-                    const newState = getRadioState();
-                    if (radioState && newState.currentTrack.url !== radioState.currentTrack.url) {
-                        setRadioState(newState);
-                        const audio = audioRef.current;
-                        if (audio) {
-                            audio.src = newState.currentTrack.url;
-                            audio.currentTime = newState.positionInTrack;
-                            if (isPlaying) {
-                                audio.play();
-                            }
-                        }
-                    }
-                }, 1000);
-                return () => clearInterval(interval);
-            }, [radioState, isPlaying]);
+  const formatTime = (s) => `${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}`;
 
-            useEffect(() => {
-                const audio = audioRef.current;
-                const updateTime = () => setCurrentTime(audio.currentTime);
-                audio?.addEventListener("timeupdate", updateTime);
-                return () => audio?.removeEventListener("timeupdate", updateTime);
-            }, []);
+  if (isLoading || !radioState) {
+    return <div className="flex justify-center items-center h-screen text-white">جارٍ التحميل...</div>;
+  }
 
-            const togglePlay = () => {
-                const audio = audioRef.current;
-                if (isPlaying) {
-                    audio.pause();
-                    setIsPlaying(false);
-                } else {
-                    const state = getRadioState();
-                    if (Math.abs(audio.currentTime - state.positionInTrack) > 5) {
-                       audio.currentTime = state.positionInTrack;
-                    }
-                    audio.play().then(() => setIsPlaying(true));
-                }
-            };
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-900 to-blue-800 p-4">
+      <audio ref={audioRef} crossOrigin="anonymous"/>
+      <div className="bg-white/10 backdrop-blur-lg p-6 rounded-2xl text-center w-full max-w-md shadow-lg">
+        <h1 className="text-white text-3xl font-bold mb-2">راديو وليستعفف</h1>
+        <p className="text-purple-200 mb-4">الكوتش مصطفى حسان</p>
 
-            const toggleMute = () => {
-                audioRef.current.muted = !isMuted;
-                setIsMuted(!isMuted);
-            };
+        {/* Play/Pause Button */}
+        <button onClick={togglePlay} className="bg-white text-purple-900 w-20 h-20 rounded-full flex items-center justify-center shadow-lg mb-4">
+          {isPlaying ? "⏸️" : "▶️"}
+        </button>
 
-            const handleVolumeChange = (e) => {
-                const newVolume = parseFloat(e.target.value);
-                setVolume(newVolume);
-                audioRef.current.volume = newVolume;
-            };
+        {/* Progress */}
+        <div className="mb-4">
+          <div className="flex justify-between text-sm text-purple-200 mb-1">
+            <span>{formatTime(currentTime)}</span>
+            <span>{formatTime(radioState.currentTrack.duration)}</span>
+          </div>
+          <div className="w-full h-2 bg-white/20 rounded-full overflow-hidden">
+            <div className="h-full bg-gradient-to-r from-purple-500 to-pink-500"
+                 style={{ width: `${(currentTime / radioState.currentTrack.duration) * 100}%` }}/>
+          </div>
+        </div>
 
-            const formatTime = (seconds) => {
-                const s = Math.floor(seconds);
-                const mins = Math.floor(s / 60);
-                const secs = s % 60;
-                return `${mins}:${secs.toString().padStart(2, "0")}`;
-            };
-            
-            useEffect(() => {
-    lucide.createIcons();
-}, []); // ← المهم هنا []
+        {/* Volume */}
+        <input type="range" min="0" max="1" step="0.01" value={volume} onChange={handleVolumeChange} className="w-full accent-purple-500"/>
+      </div>
+    </div>
+  );
+}
 
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
 
-
-            if (isLoading || !radioState) {
-                return (
-                    <div className="main-container">
-                        <i data-lucide="loader-2" className="w-12 h-12 text-white loading-spin"></i>
-                    </div>
-                );
-            }
-
-            return (
-                <div className="main-container">
-                    <audio ref={audioRef} onCanPlay={tryAutoPlay} crossOrigin="anonymous" />
-                    <div className="w-full max-w-2xl">
-                        <div className="text-center mb-8">
-                            <div className="flex items-center justify-center gap-3 mb-4">
-                                <i data-lucide="radio" className="w-12 h-12 text-purple-300 vinyl-spin"></i>
-                                <h1 className="text-5xl font-bold text-white">راديو وليستعفف</h1>
-                            </div>
-                            <p className="text-purple-200 text-lg">الكوتش مصطفى حسان</p>
-                        </div>
-
-                        <div className="radio-card">
-                            <div className="text-center mb-8">
-                                <div className="w-32 h-32 mx-auto mb-6 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center vinyl-spin">
-                                    <i data-lucide="radio" className="w-16 h-16 text-white"></i>
-                                </div>
-                                <h2 className="text-3xl font-bold text-white mb-2">{radioState.currentTrack.title}</h2>
-                                <p className="text-purple-200">{`لقاء ${radioState.currentTrackIndex + 1} من ${radioState.playlist.length}`}</p>
-                            </div>
-
-                            <div className="mb-6">
-                                <div className="flex justify-between text-sm text-purple-200 mb-2">
-                                    <span>{formatTime(currentTime)}</span>
-                                    <span>{formatTime(radioState.currentTrack.duration)}</span>
-                                </div>
-                                <div className="w-full h-2 bg-white/20 rounded-full overflow-hidden">
-                                    <div
-                                        className="h-full bg-gradient-to-r from-purple-500 to-pink-500"
-                                        style={{ width: `${(currentTime / radioState.currentTrack.duration) * 100}%` }}
-                                    />
-                                </div>
-                            </div>
-
-                            <div className="flex items-center justify-center gap-6 mb-6">
-                                <button onClick={togglePlay} className="w-20 h-20 rounded-full bg-white text-purple-900 hover:bg-purple-100 transition-all shadow-lg flex items-center justify-center">
-                                    {isPlaying ? <i data-lucide="pause" className="w-8 h-8"></i> : <i data-lucide="play" className="w-8 h-8 ml-1"></i>}
-                                </button>
-                            </div>
-
-                            <div className="flex items-center gap-4 justify-center">
-                                <button onClick={toggleMute} className="text-white hover:bg-white/10 p-2 rounded-full">
-                                    {isMuted ? <i data-lucide="volume-x" className="w-5 h-5"></i> : <i data-lucide="volume-2" className="w-5 h-5"></i>}
-                                </button>
-                                <input type="range" min="0" max="1" step="0.01" value={volume} onChange={handleVolumeChange} className="w-32 accent-purple-500" />
-                            </div>
-
-                            <div className="mt-6 text-center">
-                                <p className="text-sm text-purple-300">
-                                    <a href="https://www.facebook.com/walyasta3fef" target="_blank" rel="noopener noreferrer" className="underline hover:text-white">
-                                        وليستعفف على الفيسبوك
-                                    </a>
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-              );
-        }
-
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
-    </script>
+</script>
 </body>
 </html>
-
-
-
-
