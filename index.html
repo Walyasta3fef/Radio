@@ -115,7 +115,7 @@ function CountryFlags() {
             if (data) {
                 const now = Date.now();
                 const onlineUsers = Object.values(data).filter(user => user.last_seen && (now - user.last_seen < 35000));
-                const countryCodes = onlineUsers.map(user => user.countryCode).filter(code => code);
+                const countryCodes = onlineUsers.map(user => user.countryCode).filter(code => code && code !== 'XX');
                 const uniqueCodes = [...new Set(countryCodes)];
                 setCountries(uniqueCodes);
             } else {
@@ -327,3 +327,4 @@ ReactDOM.createRoot(document.getElementById('root')).render(<App />);
 </script>
 </body>
 </html>
+
