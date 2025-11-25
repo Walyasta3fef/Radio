@@ -34,7 +34,14 @@ const analytics = firebase.analytics();
 const database = firebase.database();
 
 const { useState, useEffect, useRef } = React;
-
+// Helper function to get the next track's state
+function getNextTrackState(currentIndex) {
+    const nextIndex = (currentIndex + 1) % PLAYLIST.length;
+    return {
+        currentTrack: PLAYLIST[nextIndex],
+        currentIndex: nextIndex,
+    };
+}
 // --- UI Components ---
 function Listeners({ onlineCount }) {
     return (
@@ -169,6 +176,7 @@ function App() {
   const [currentTime, setCurrentTime] = useState(0);
   const [currentTrack, setCurrentTrack] = useState(null);
   const [isInitialized, setIsInitialized] = useState(false);
+  const [nextTrack, setNextTrack] = useState(null);
   const [onlineUsers, setOnlineUsers] = useState([]);
 
   // --- THE FIX IS HERE: Presence logic is now inside useEffect ---
@@ -238,19 +246,47 @@ function App() {
 
   useEffect(() => {
     const initialState = getRadioState();
+    const nextState = getNextTrackState(initialState.currentIndex);
+    
     setCurrentTrack(initialState.currentTrack);
+    setCurrentTrackIndex(initialState.currentIndex);
     setCurrentTime(initialState.positionInTrack);
-  }, []);
+    setNextTrack(nextState.currentTrack);
+}, []);
 
   useEffect(() => {
-    if (!isPlaying) return;
-    const timer = setInterval(() => {
-      if (audioRef.current) {
-        setCurrentTime(audioRef.current.currentTime);
-      }
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [isPlaying]);
+    const audioEl = audioRef.current;
+    if (!audioEl || !currentTrack) return;
+
+    // Set the source only when the track actually changes
+    if (audioEl.src !== new URL(currentTrack.url, window.location.href).href) {
+        audioEl.src = currentTrack.url;
+    }
+
+    const handleTimeUpdate = () => setCurrentTime(audioEl.currentTime);
+    
+    const handleTrackEnd = () => {
+        const nextState = getNextTrackState(currentTrackIndex);
+        setCurrentTrackIndex(nextState.currentIndex);
+        setCurrentTrack(nextState.currentTrack);
+
+        const futureNextState = getNextTrackState(nextState.currentIndex);
+        setNextTrack(futureNextState.currentTrack);
+    };
+
+    audioEl.addEventListener('timeupdate', handleTimeUpdate);
+    audioEl.addEventListener('ended', handleTrackEnd);
+
+    // If isPlaying is true, ensure audio plays
+    if (isPlaying) {
+        audioEl.play().catch(e => console.error("Autoplay after track end failed", e));
+    }
+
+    return () => {
+        audioEl.removeEventListener('timeupdate', handleTimeUpdate);
+        audioEl.removeEventListener('ended', handleTrackEnd);
+    };
+}, [currentTrack, isPlaying]); // Re-run when track or play-state changes
 
   const togglePlay = () => {
     const audioEl = audioRef.current;
@@ -304,6 +340,11 @@ function App() {
       <div className="bg-white/10 backdrop-blur-lg p-6 rounded-2xl text-center w-full max-w-md shadow-lg">
         <h1 className="text-white text-3xl font-bold mb-2">راديو وليستعفف</h1>
         <p className="text-purple-200 mb-4">{currentTrack.title}</p>
+        {nextTrack && (
+    <p className="text-purple-300 text-xs mb-4 animate-pulse">
+        التالي: {nextTrack.title}
+    </p>
+)}
 
         <button onClick={togglePlay} className="bg-white text-purple-900 w-20 h-20 rounded-full flex items-center justify-center shadow-lg mb-4 mx-auto">
           {isPlaying ? "⏸️" : "▶️"}
@@ -339,4 +380,5 @@ ReactDOM.createRoot(document.getElementById('root')).render(<App />);
 </script>
 </body>
 </html>
+
 
