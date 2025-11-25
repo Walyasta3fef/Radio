@@ -89,7 +89,11 @@ function CountryFlags() {
         const listener = statusRef.on('value', (snapshot) => {
             const data = snapshot.val();
             if (data) {
-                const countryCodes = Object.values(data).map(user => user.countryCode);
+                // *** THE FIX IS HERE: Filter out any users that don't have a countryCode yet ***
+                const countryCodes = Object.values(data)
+                    .map(user => user.countryCode)
+                    .filter(code => code); // This line ensures we don't have undefined codes
+                
                 const uniqueCodes = [...new Set(countryCodes)];
                 setCountries(uniqueCodes);
             } else {
