@@ -106,8 +106,9 @@ function Listeners() {
     );
 }
 
-function CountryFlags() {
-    const [countries, setCountries] = useState([]);
+function CountryStats() {
+    const [stats, setStats] = useState([]);
+
     useEffect(() => {
         const statusRef = database.ref('/status');
         const listener = statusRef.on('value', (snapshot) => {
@@ -115,33 +116,53 @@ function CountryFlags() {
             if (data) {
                 const now = Date.now();
                 const onlineUsers = Object.values(data).filter(user => user.last_seen && (now - user.last_seen < 35000));
-                const countryCodes = onlineUsers.map(user => user.countryCode).filter(code => code && code !== 'XX');
-                const uniqueCodes = [...new Set(countryCodes)];
-                setCountries(uniqueCodes);
+                
+                const countryCounts = onlineUsers.reduce((acc, user) => {
+                    const code = user.countryCode || 'XX';
+                    acc[code] = (acc[code] || 0) + 1;
+                    return acc;
+                }, {});
+
+                const statsArray = Object.entries(countryCounts)
+                    .map(([code, count]) => ({ code, count }))
+                    .sort((a, b) => b.count - a.count); // Sort by most listeners
+
+                setStats(statsArray);
             } else {
-                setCountries([]);
+                setStats([]);
             }
         });
         return () => statusRef.off('value', listener);
     }, []);
 
-    if (countries.length === 0) return null;
+    if (stats.length === 0) return null;
 
     return (
-        <div className="absolute top-4 right-4 flex space-x-2 rtl:space-x-reverse z-10">
-            {countries.slice(0, 5).map(code => (
-                <img 
-                    key={code}
-                    src={`https://flagcdn.com/w20/${code.toLowerCase( )}.png`}
-                    width="20"
-                    alt={code}
-                    className="rounded-sm shadow"
-                    title={code}
-                />
-            ))}
+        <div className="absolute top-12 left-4 bg-black/20 text-white text-xs p-2 rounded-lg z-10 max-w-[150px]">
+            <ul className="space-y-1">
+                {stats.slice(0, 4).map(({ code, count }) => (
+                    <li key={code} className="flex items-center justify-between text-right">
+                        <span className="font-bold mr-2">{count}</span>
+                        {code === 'XX' ? (
+                            <span className="flex items-center">
+                                <span className="mr-1">غير معروف</span>
+                                <span>🌐</span>
+                            </span>
+                        ) : (
+                            <img 
+                                src={`https://flagcdn.com/w20/${code.toLowerCase( )}.png`}
+                                width="20"
+                                alt={code}
+                                className="rounded-sm shadow"
+                            />
+                        )}
+                    </li>
+                ))}
+            </ul>
         </div>
     );
 }
+
 
 
 // --- Playlist & Radio Logic ---
@@ -287,7 +308,7 @@ function App() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-900 to-blue-800 p-4 relative">
       <Listeners />
-      <CountryFlags />
+      <CountryStats />
       <audio ref={audioRef} />
       <div className="bg-white/10 backdrop-blur-lg p-6 rounded-2xl text-center w-full max-w-md shadow-lg">
         <h1 className="text-white text-3xl font-bold mb-2">راديو وليستعفف</h1>
@@ -327,4 +348,5 @@ ReactDOM.createRoot(document.getElementById('root')).render(<App />);
 </script>
 </body>
 </html>
+
 
