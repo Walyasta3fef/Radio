@@ -29,7 +29,7 @@ const firebaseConfig = {
   databaseURL: "https://walyast3fef-default-rtdb.europe-west1.firebasedatabase.app"
 };
 
-firebase.initializeApp(firebaseConfig );
+firebase.initializeApp(firebaseConfig  );
 const analytics = firebase.analytics();
 const database = firebase.database();
 
@@ -77,7 +77,7 @@ function CountryStats({ onlineUsers }) {
                             </span>
                         ) : (
                             <img 
-                                src={`https://flagcdn.com/w20/${code.toLowerCase( )}.png`}
+                                src={`https://flagcdn.com/w20/${code.toLowerCase(  )}.png`}
                                 width="20"
                                 alt={code}
                                 className="rounded-sm shadow"
@@ -153,12 +153,13 @@ function getRadioState() {
     if (positionInPlaylist < accumulatedTime + track.duration) {
       return {
         currentTrack: track,
+        currentIndex: i, // We need the index
         positionInTrack: positionInPlaylist - accumulatedTime,
       };
     }
     accumulatedTime += track.duration;
   }
-  return { currentTrack: PLAYLIST[0], positionInTrack: 0 };
+  return { currentTrack: PLAYLIST[0], currentIndex: 0, positionInTrack: 0 };
 }
 
 
@@ -166,18 +167,24 @@ function App() {
   const audioRef = useRef(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [volume, setVolume] = useState(0.7);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [currentTrack, setCurrentTrack] = useState(null);
-  const [isInitialized, setIsInitialized] = useState(false);
   const [onlineUsers, setOnlineUsers] = useState([]);
+  
+  // --- Simplified State ---
+  const [currentTrackIndex, setCurrentTrackIndex] = useState(getRadioState().currentIndex);
+  const [currentTime, setCurrentTime] = useState(getRadioState().positionInTrack);
 
-  // --- THE FIX IS HERE: Presence logic is now inside useEffect ---
+  // --- Derived State (No complex useState) ---
+  const currentTrack = PLAYLIST[currentTrackIndex];
+  const nextTrackIndex = (currentTrackIndex + 1) % PLAYLIST.length;
+  const nextTrack = PLAYLIST[nextTrackIndex];
+
+  // --- Presence and Stats Logic (Runs ONCE) ---
   useEffect(() => {
     let sessionRef; 
 
     async function getCountry() {
         try {
-            const response = await fetch('https://ipapi.co/json/' );
+            const response = await fetch('https://ipapi.co/json/'  );
             const data = await response.json();
             return { countryCode: data.country_code, countryName: data.country_name };
         } catch (error) {
@@ -190,14 +197,12 @@ function App() {
         const sessionId = Math.random().toString(36).substring(2);
         sessionRef = database.ref('/status/' + sessionId);
         const location = await getCountry();
-
         const initialData = { 
             state: 'online',
             countryCode: location.countryCode,
             countryName: location.countryName,
             last_seen: firebase.database.ServerValue.TIMESTAMP
         };
-
         await sessionRef.set(initialData);
         sessionRef.onDisconnect().remove();
     }
@@ -216,12 +221,10 @@ function App() {
         const users = [];
         snapshot.forEach(childSnapshot => {
             const user = childSnapshot.val();
-            if (user.last_seen && (now - user.last_seen < 35000)) {
+            if (user && user.last_seen && (now - user.last_seen < 35000)) {
                 users.push(user);
-            } else {
-                if (now - user.last_seen > 60000) {
-                    childSnapshot.ref.remove();
-                }
+            } else if (user && user.last_seen && (now - user.last_seen > 60000)) {
+                childSnapshot.ref.remove();
             }
         });
         setOnlineUsers(users);
@@ -234,51 +237,51 @@ function App() {
             sessionRef.remove();
         }
     };
-  }, []); // Empty dependency array ensures this runs only ONCE
-
-  useEffect(() => {
-    const initialState = getRadioState();
-    setCurrentTrack(initialState.currentTrack);
-    setCurrentTime(initialState.positionInTrack);
   }, []);
 
+  // --- Audio Logic (The Core) ---
   useEffect(() => {
-    if (!isPlaying) return;
-    const timer = setInterval(() => {
-      if (audioRef.current) {
-        setCurrentTime(audioRef.current.currentTime);
-      }
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [isPlaying]);
+    const audioEl = audioRef.current;
+    if (!audioEl || !currentTrack) return;
+
+    const handleTimeUpdate = () => setCurrentTime(audioEl.currentTime);
+    const handleTrackEnd = () => {
+        setCurrentTrackIndex(prevIndex => (prevIndex + 1) % PLAYLIST.length);
+    };
+
+    audioEl.addEventListener('timeupdate', handleTimeUpdate);
+    audioEl.addEventListener('ended', handleTrackEnd);
+
+    // When track changes, update src.
+    if (audioEl.src !== new URL(currentTrack.url, window.location.href).href) {
+        audioEl.src = currentTrack.url;
+    }
+    
+    // Handle play/pause based on isPlaying state
+    if (isPlaying) {
+        audioEl.play().catch(e => console.error("Play failed:", e));
+    } else {
+        audioEl.pause();
+    }
+
+    return () => {
+        audioEl.removeEventListener('timeupdate', handleTimeUpdate);
+        audioEl.removeEventListener('ended', handleTrackEnd);
+    };
+  }, [currentTrack, isPlaying]);
+
 
   const togglePlay = () => {
-    const audioEl = audioRef.current;
-    if (!audioEl) return;
-
-    if (isPlaying) {
-      audioEl.pause();
-      setIsPlaying(false);
-      analytics.logEvent('playback_stopped');
-    } else {
-      if (!isInitialized) {
+    // On first click, sync time precisely
+    if (!isPlaying) {
         const state = getRadioState();
-        audioEl.src = state.currentTrack.url;
-        audioEl.currentTime = state.positionInTrack;
-        setCurrentTrack(state.currentTrack);
-        setIsInitialized(true);
-      }
-      
-      audioEl.play()
-        .then(() => {
-          setIsPlaying(true);
-          analytics.logEvent('playback_started', { track_title: currentTrack.title });
-        })
-        .catch(error => {
-          console.error("Playback failed:", error);
-          setIsInitialized(false); 
-        });
+        setCurrentTrackIndex(state.currentIndex);
+        audioRef.current.currentTime = state.positionInTrack;
+        analytics.logEvent('playback_started', { track_title: PLAYLIST[state.currentIndex].title });
+    } else {
+        analytics.logEvent('playback_stopped');
     }
+    setIsPlaying(prev => !prev);
   };
 
   const handleVolumeChange = (e) => {
@@ -304,6 +307,12 @@ function App() {
       <div className="bg-white/10 backdrop-blur-lg p-6 rounded-2xl text-center w-full max-w-md shadow-lg">
         <h1 className="text-white text-3xl font-bold mb-2">راديو وليستعفف</h1>
         <p className="text-purple-200 mb-4">{currentTrack.title}</p>
+        
+        {nextTrack && (
+            <p className="text-purple-300 text-xs mb-4">
+                التالي: {nextTrack.title}
+            </p>
+        )}
 
         <button onClick={togglePlay} className="bg-white text-purple-900 w-20 h-20 rounded-full flex items-center justify-center shadow-lg mb-4 mx-auto">
           {isPlaying ? "⏸️" : "▶️"}
@@ -331,7 +340,7 @@ function App() {
         </div>
       </div>
     </div>
-    );
+     );
 }
 
 ReactDOM.createRoot(document.getElementById('root')).render(<App />);
