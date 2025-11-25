@@ -4,13 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>راديو وليستعفف</title>
-
-  <!-- React & Babel -->
   <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-
-  <!-- Tailwind -->
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body>
@@ -20,7 +16,7 @@
 
 const { useState, useEffect, useRef } = React;
 
-// --- Original Playlist Data with New Titles ---
+// --- Playlist with your latest titles ---
 const ORIGINAL_PLAYLIST = [
     { url: "audio/xWalyastaafef01.mp3", duration: 2719, title: "الكورس الأساسي لقاء 1" },
     { url: "audio/xWalyastaafef02.mp3", duration: 2619, title: "الكورس الأساسي لقاء 2" },
@@ -40,170 +36,4 @@ const ORIGINAL_PLAYLIST = [
     { url: "audio/xWalyastaafef_LIVE12.mp3", duration: 2117, title: "لقاء 12 - كيف نتعامل مع الشعور بالشهوة" },
     { url: "audio/xWalyastaafef_LIVE13.mp3", duration: 2063, title: "اللقاء 13 - ليه بتقدم فترة وبعدين بتراجع؟" },
     { url: "audio/xWalyastaafef_LIVE14.mp3", duration: 2193, title: "لقاء 14 - الفرق بين الخوف والرعب من المعصية" },
-    { url: "audio/xWalyastaafef_LIVE15.mp3", duration: 2151, title: "لقاء 15 - ايه المشكلة؟ طاعة قصاد معصية والدنيا ماشية!" },
-    { url: "audio/xWalyastaafef_LIVE16.mp3", duration: 2345, title: "لقاء 16 - أنا عايز خطوات عملية لعلاج الإباحية" },
-    { url: "audio/xWalyastaafef_LIVE17.mp3", duration: 2121, title: "لقاء 17 - علاج الإباحية فن مش عن عن (مش بالعافية)" },
-    { url: "audio/xWalyastaafef_LIVE18.mp3", duration: 2251, title: "لقاء 18 - أتجوز ولا أستنى لما اتعافى؟" },
-    { url: "audio/xWalyastaafef_LIVE19.mp3", duration: 1955, title: "لقاء 19 - ازاي اتعامل مع أعراض الانسحاب؟" },
-    { url: "audio/xWalyastaafef_LIVE20.mp3", duration: 1978, title: "لقاء 20 - الفرق بين الزواج والإباحية" },
-    { url: "audio/xWalyastaafef_LIVE21.mp3", duration: 1586, title: "لقاء 21 - خايف أقاوم وفي الآخر أنفجر" },
-    { url: "audio/xWalyastaafef_LIVE22.mp3", duration: 1613, title: "لقاء 22 - الفرق بين التبطيل والتعافي" },
-    { url: "audio/xWalyastaafef_LIVE23.mp3", duration: 2091, title: "لقاء 23 - ليه لما بقع بستحلاها ومش بعرف أوقف؟" },
-];
-
-// --- Unified Shuffle Logic ---
-function seededShuffle(array, seed) {
-    let currentIndex = array.length, temporaryValue, randomIndex;
-    const random = () => {
-        var x = Math.sin(seed++) * 10000;
-        return x - Math.floor(x);
-    };
-    while (0 !== currentIndex) {
-        randomIndex = Math.floor(random() * currentIndex);
-        currentIndex -= 1;
-        temporaryValue = array[currentIndex];
-        array[currentIndex] = array[randomIndex];
-        array[randomIndex] = temporaryValue;
-    }
-    return array;
-}
-
-const today = new Date();
-const dateSeed = today.getFullYear() * 10000 + (today.getMonth() + 1) * 100 + today.getDate();
-const PLAYLIST = seededShuffle([...ORIGINAL_PLAYLIST], dateSeed);
-
-// --- Radio Sync ---
-const RADIO_EPOCH = 1672531200000;
-const totalPlaylistDuration = PLAYLIST.reduce((sum, track) => sum + track.duration, 0);
-
-function getRadioState() {
-  const now = Date.now();
-  const elapsedSeconds = Math.floor((now - RADIO_EPOCH) / 1000);
-  const positionInPlaylist = elapsedSeconds % totalPlaylistDuration;
-
-  let accumulatedTime = 0;
-  for (let i = 0; i < PLAYLIST.length; i++) {
-    const track = PLAYLIST[i];
-    if (positionInPlaylist < accumulatedTime + track.duration) {
-      return {
-        currentTrack: track,
-        currentTrackIndex: i,
-        positionInTrack: positionInPlaylist - accumulatedTime,
-      };
-    }
-    accumulatedTime += track.duration;
-  }
-  return { currentTrack: PLAYLIST[0], currentTrackIndex: 0, positionInTrack: 0 };
-}
-
-// --- React App ---
-function App() {
-  const audioRef = useRef(null);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [volume, setVolume] = useState(0.7);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [radioState, setRadioState] = useState(getRadioState());
-  const [isReady, setIsReady] = useState(false);
-
-  // This effect runs only once to initialize the audio element
-  useEffect(() => {
-    const audioEl = audioRef.current;
-    const initialState = getRadioState();
-    setRadioState(initialState);
-    setCurrentTime(initialState.positionInTrack);
-    audioEl.src = initialState.currentTrack.url; // Preload the first track
-    setIsReady(true);
-  }, []);
-
-  // This effect handles time updates and track changes
-  useEffect(() => {
-    const audioEl = audioRef.current;
-    if (!audioEl) return;
-
-    const handleTimeUpdate = () => setCurrentTime(audioEl.currentTime);
-    audioEl.addEventListener("timeupdate", handleTimeUpdate);
-
-    const handleTrackEnd = () => {
-        const newState = getRadioState();
-        setRadioState(newState);
-        audioEl.src = newState.currentTrack.url;
-        audioEl.currentTime = newState.positionInTrack;
-        if(isPlaying) {
-            audioEl.play();
-        }
-    };
-    audioEl.addEventListener("ended", handleTrackEnd);
-
-    return () => {
-      audioEl.removeEventListener("timeupdate", handleTimeUpdate);
-      audioEl.removeEventListener("ended", handleTrackEnd);
-    };
-  }, [isPlaying]); // Re-attach listeners if isPlaying changes
-
-  const togglePlay = () => {
-    if (!isReady) return;
-    const audioEl = audioRef.current;
-
-    if (isPlaying) {
-      audioEl.pause();
-      setIsPlaying(false);
-    } else {
-      const state = getRadioState();
-      // Always make sure the source is correct before playing
-      audioEl.src = state.currentTrack.url;
-      audioEl.currentTime = state.positionInTrack;
-      
-      audioEl.play()
-        .then(() => setIsPlaying(true))
-        .catch(error => console.error("Playback failed:", error));
-    }
-  };
-
-  const handleVolumeChange = (e) => {
-    const newVol = parseFloat(e.target.value);
-    setVolume(newVol);
-    if (audioRef.current) audioRef.current.volume = newVol;
-  };
-
-  const formatTime = (s) => {
-      if (isNaN(s)) return "0:00";
-      return `${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}`;
-  }
-
-  if (!isReady) {
-    return <div className="flex justify-center items-center h-screen text-white bg-gradient-to-br from-purple-900 to-blue-800">جارٍ التحميل...</div>;
-  }
-
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-900 to-blue-800 p-4">
-      <audio ref={audioRef} />
-      <div className="bg-white/10 backdrop-blur-lg p-6 rounded-2xl text-center w-full max-w-md shadow-lg">
-        <h1 className="text-white text-3xl font-bold mb-2">راديو وليستعفف</h1>
-        <p className="text-purple-200 mb-4">{radioState.currentTrack.title}</p>
-
-        <button onClick={togglePlay} className="bg-white text-purple-900 w-20 h-20 rounded-full flex items-center justify-center shadow-lg mb-4 mx-auto">
-          {isPlaying ? "⏸️" : "▶️"}
-        </button>
-
-        <div className="mb-4">
-          <div className="flex justify-between text-sm text-purple-200 mb-1">
-            <span>{formatTime(currentTime)}</span>
-            <span>{formatTime(radioState.currentTrack.duration)}</span>
-          </div>
-          <div className="w-full h-2 bg-white/20 rounded-full overflow-hidden">
-            <div className="h-full bg-gradient-to-r from-purple-500 to-pink-500"
-                 style={{ width: `${(currentTime / radioState.currentTrack.duration) * 100}%` }}/>
-          </div>
-        </div>
-
-        <input type="range" min="0" max="1" step="0.01" value={volume} onChange={handleVolumeChange} className="w-full accent-purple-500"/>
-      </div>
-    </div>
-  );
-}
-
-ReactDOM.createRoot(document.getElementById('root')).render(<App />);
-
-</script>
-</body>
-</html>
+    { url: "audio/xWalyastaafef_LIVE15.mp3", duration: 2151, title: "لقاء 15 - ايه المشكلة؟ طاعة قصاد معصية والدنيا ماشية!"
