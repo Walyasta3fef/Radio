@@ -33,107 +33,34 @@ firebase.initializeApp(firebaseConfig );
 const analytics = firebase.analytics();
 const database = firebase.database();
 
-// --- Robust Presence System with Heartbeat ---
-async function getCountry() {
-    try {
-        const response = await fetch('https://ipapi.co/json/' );
-        const data = await response.json();
-        return { countryCode: data.country_code, countryName: data.country_name };
-    } catch (error) {
-        console.error("Could not fetch country", error);
-        return { countryCode: 'XX', countryName: 'Unknown' };
-    }
-}
-
-async function setupPresence() {
-    const sessionId = Math.random().toString(36).substring(2);
-    const sessionRef = database.ref('/status/' + sessionId);
-    const location = await getCountry();
-
-    const initialData = { 
-        state: 'online',
-        countryCode: location.countryCode,
-        countryName: location.countryName,
-        last_seen: firebase.database.ServerValue.TIMESTAMP
-    };
-
-    sessionRef.set(initialData);
-    sessionRef.onDisconnect().remove();
-
-    // Heartbeat: Update last_seen every 15 seconds
-    setInterval(() => {
-        if (sessionRef) {
-            sessionRef.child('last_seen').set(firebase.database.ServerValue.TIMESTAMP);
-        }
-    }, 15000);
-}
-
-setupPresence();
-
-
 const { useState, useEffect, useRef } = React;
 
 // --- UI Components ---
-function Listeners() {
-    const [count, setCount] = useState(0);
-    useEffect(() => {
-        const statusRef = database.ref('/status');
-        const listener = statusRef.on('value', (snapshot) => {
-            const now = Date.now();
-            let onlineCount = 0;
-            snapshot.forEach(childSnapshot => {
-                const user = childSnapshot.val();
-                // Consider user online if last_seen was within the last 35 seconds
-                if (user.last_seen && (now - user.last_seen < 35000)) {
-                    onlineCount++;
-                } else {
-                    // Clean up stale sessions older than a minute
-                    if (now - user.last_seen > 60000) {
-                        childSnapshot.ref.remove();
-                    }
-                }
-            });
-            setCount(onlineCount);
-        });
-        return () => statusRef.off('value', listener);
-    }, []);
-
+function Listeners({ onlineCount }) {
     return (
         <div className="absolute top-4 left-4 bg-black/20 text-white text-xs px-2 py-1 rounded-full flex items-center z-10">
             <span className="w-2 h-2 bg-red-500 rounded-full mr-2 animate-pulse"></span>
-            {count} مستمع الآن
+            {onlineCount} مستمع الآن
         </div>
     );
 }
 
-function CountryStats() {
+function CountryStats({ onlineUsers }) {
     const [stats, setStats] = useState([]);
 
     useEffect(() => {
-        const statusRef = database.ref('/status');
-        const listener = statusRef.on('value', (snapshot) => {
-            const data = snapshot.val();
-            if (data) {
-                const now = Date.now();
-                const onlineUsers = Object.values(data).filter(user => user.last_seen && (now - user.last_seen < 35000));
-                
-                const countryCounts = onlineUsers.reduce((acc, user) => {
-                    const code = user.countryCode || 'XX';
-                    acc[code] = (acc[code] || 0) + 1;
-                    return acc;
-                }, {});
+        const countryCounts = onlineUsers.reduce((acc, user) => {
+            const code = user.countryCode || 'XX';
+            acc[code] = (acc[code] || 0) + 1;
+            return acc;
+        }, {});
 
-                const statsArray = Object.entries(countryCounts)
-                    .map(([code, count]) => ({ code, count }))
-                    .sort((a, b) => b.count - a.count); // Sort by most listeners
+        const statsArray = Object.entries(countryCounts)
+            .map(([code, count]) => ({ code, count }))
+            .sort((a, b) => b.count - a.count);
 
-                setStats(statsArray);
-            } else {
-                setStats([]);
-            }
-        });
-        return () => statusRef.off('value', listener);
-    }, []);
+        setStats(statsArray);
+    }, [onlineUsers]);
 
     if (stats.length === 0) return null;
 
@@ -145,7 +72,7 @@ function CountryStats() {
                         <span className="font-bold mr-2">{count}</span>
                         {code === 'XX' ? (
                             <span className="flex items-center">
-                                <span className="mr-1"></span>
+                                <span className="mr-1">غير معروف</span>
                                 <span>🌐</span>
                             </span>
                         ) : (
@@ -163,14 +90,12 @@ function CountryStats() {
     );
 }
 
-
-
 // --- Playlist & Radio Logic ---
 const ORIGINAL_PLAYLIST = [
-    { url: "audio/xWalyastaafef01.mp3", duration: 2719, title: "الكورس الأساسي لقاء 1" },
-    { url: "audio/xWalyastaafef02.mp3", duration: 2619, title: "الكورس الأساسي لقاء 2" },
-    { url: "audio/xWalyastaafef03.mp3", duration: 3036, title: "الكورس الأساسي لقاء 3" },
-    { url: "audio/xWalyastaafef04.mp3", duration: 2250, title: "الكورس الأساسي لقاء 4" },
+    { url: "audio/_xWalyastaafef01.mp3", duration: 2719, title: "الكورس الأساسي لقاء 1" },
+    { url: "audio/_xWalyastaafef02.mp3", duration: 2619, title: "الكورس الأساسي لقاء 2" },
+    { url: "audio/_xWalyastaafef03.mp3", duration: 3036, title: "الكورس الأساسي لقاء 3" },
+    { url: "audio/_xWalyastaafef04.mp3", duration: 2250, title: "الكورس الأساسي لقاء 4" },
     { url: "audio/xWalyastaafef_LIVE01.mp3", duration: 2714, title: "لقاء 1 - محاور التغيير ( التحفيز - القرار - التغيير - التثبيت )" },
     { url: "audio/xWalyastaafef_LIVE02.mp3", duration: 2510, title: "لقاء 2 - محور القرار - قرار الإقلاع عن الإباحية" },
     { url: "audio/xWalyastaafef_LIVE03.mp3", duration: 2073, title: "لقاء 3 - بحس إن الإباحية فرصة صعب تتفوت" },
@@ -244,6 +169,72 @@ function App() {
   const [currentTime, setCurrentTime] = useState(0);
   const [currentTrack, setCurrentTrack] = useState(null);
   const [isInitialized, setIsInitialized] = useState(false);
+  const [onlineUsers, setOnlineUsers] = useState([]);
+
+  // --- THE FIX IS HERE: Presence logic is now inside useEffect ---
+  useEffect(() => {
+    let sessionRef; 
+
+    async function getCountry() {
+        try {
+            const response = await fetch('https://ipapi.co/json/' );
+            const data = await response.json();
+            return { countryCode: data.country_code, countryName: data.country_name };
+        } catch (error) {
+            console.error("Could not fetch country", error);
+            return { countryCode: 'XX', countryName: 'Unknown' };
+        }
+    }
+
+    async function setupPresence() {
+        const sessionId = Math.random().toString(36).substring(2);
+        sessionRef = database.ref('/status/' + sessionId);
+        const location = await getCountry();
+
+        const initialData = { 
+            state: 'online',
+            countryCode: location.countryCode,
+            countryName: location.countryName,
+            last_seen: firebase.database.ServerValue.TIMESTAMP
+        };
+
+        await sessionRef.set(initialData);
+        sessionRef.onDisconnect().remove();
+    }
+
+    setupPresence();
+
+    const heartbeatInterval = setInterval(() => {
+        if (sessionRef) {
+            sessionRef.child('last_seen').set(firebase.database.ServerValue.TIMESTAMP);
+        }
+    }, 15000);
+
+    const statusRef = database.ref('/status');
+    const listener = statusRef.on('value', (snapshot) => {
+        const now = Date.now();
+        const users = [];
+        snapshot.forEach(childSnapshot => {
+            const user = childSnapshot.val();
+            if (user.last_seen && (now - user.last_seen < 35000)) {
+                users.push(user);
+            } else {
+                if (now - user.last_seen > 60000) {
+                    childSnapshot.ref.remove();
+                }
+            }
+        });
+        setOnlineUsers(users);
+    });
+
+    return () => {
+        clearInterval(heartbeatInterval);
+        statusRef.off('value', listener);
+        if (sessionRef) {
+            sessionRef.remove();
+        }
+    };
+  }, []); // Empty dependency array ensures this runs only ONCE
 
   useEffect(() => {
     const initialState = getRadioState();
@@ -307,8 +298,8 @@ function App() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-900 to-blue-800 p-4 relative">
-      <Listeners />
-      <CountryStats />
+      <Listeners onlineCount={onlineUsers.length} />
+      <CountryStats onlineUsers={onlineUsers} />
       <audio ref={audioRef} />
       <div className="bg-white/10 backdrop-blur-lg p-6 rounded-2xl text-center w-full max-w-md shadow-lg">
         <h1 className="text-white text-3xl font-bold mb-2">راديو وليستعفف</h1>
@@ -340,7 +331,7 @@ function App() {
         </div>
       </div>
     </div>
-   );
+    );
 }
 
 ReactDOM.createRoot(document.getElementById('root')).render(<App />);
@@ -348,6 +339,3 @@ ReactDOM.createRoot(document.getElementById('root')).render(<App />);
 </script>
 </body>
 </html>
-
-
-
