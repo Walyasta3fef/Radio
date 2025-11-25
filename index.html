@@ -62,7 +62,9 @@ async function setupPresence() {
 
     // Heartbeat: Update last_seen every 15 seconds
     setInterval(() => {
-        sessionRef.child('last_seen').set(firebase.database.ServerValue.TIMESTAMP);
+        if (sessionRef) {
+            sessionRef.child('last_seen').set(firebase.database.ServerValue.TIMESTAMP);
+        }
     }, 15000);
 }
 
@@ -81,9 +83,14 @@ function Listeners() {
             let onlineCount = 0;
             snapshot.forEach(childSnapshot => {
                 const user = childSnapshot.val();
-                // Consider user online if last_seen was within the last 30 seconds
-                if (user.last_seen && (now - user.last_seen < 30000)) {
+                // Consider user online if last_seen was within the last 35 seconds
+                if (user.last_seen && (now - user.last_seen < 35000)) {
                     onlineCount++;
+                } else {
+                    // Clean up stale sessions older than a minute
+                    if (now - user.last_seen > 60000) {
+                        childSnapshot.ref.remove();
+                    }
                 }
             });
             setCount(onlineCount);
@@ -107,7 +114,7 @@ function CountryFlags() {
             const data = snapshot.val();
             if (data) {
                 const now = Date.now();
-                const onlineUsers = Object.values(data).filter(user => user.last_seen && (now - user.last_seen < 30000));
+                const onlineUsers = Object.values(data).filter(user => user.last_seen && (now - user.last_seen < 35000));
                 const countryCodes = onlineUsers.map(user => user.countryCode).filter(code => code);
                 const uniqueCodes = [...new Set(countryCodes)];
                 setCountries(uniqueCodes);
@@ -137,7 +144,7 @@ function CountryFlags() {
 }
 
 
-// --- Playlist & Radio Logic (No changes here) ---
+// --- Playlist & Radio Logic ---
 const ORIGINAL_PLAYLIST = [
     { url: "audio/xWalyastaafef01.mp3", duration: 2719, title: "الكورس الأساسي لقاء 1" },
     { url: "audio/xWalyastaafef02.mp3", duration: 2619, title: "الكورس الأساسي لقاء 2" },
@@ -168,13 +175,45 @@ const ORIGINAL_PLAYLIST = [
     { url: "audio/xWalyastaafef_LIVE23.mp3", duration: 2091, title: "لقاء 23 - ليه لما بقع بستحلاها ومش بعرف أوقف؟" },
 ];
 
-function seededShuffle(array, seed) { /* ... */ }
+function seededShuffle(array, seed) {
+    let currentIndex = array.length, temporaryValue, randomIndex;
+    const random = () => {
+        var x = Math.sin(seed++) * 10000;
+        return x - Math.floor(x);
+    };
+    while (0 !== currentIndex) {
+        randomIndex = Math.floor(random() * currentIndex);
+        currentIndex -= 1;
+        temporaryValue = array[currentIndex];
+        array[currentIndex] = array[randomIndex];
+        array[randomIndex] = temporaryValue;
+    }
+    return array;
+}
+
 const today = new Date();
 const dateSeed = today.getFullYear() * 10000 + (today.getMonth() + 1) * 100 + today.getDate();
 const PLAYLIST = seededShuffle([...ORIGINAL_PLAYLIST], dateSeed);
 const RADIO_EPOCH = 1672531200000;
 const totalPlaylistDuration = PLAYLIST.reduce((sum, track) => sum + track.duration, 0);
-function getRadioState() { /* ... */ }
+
+function getRadioState() {
+  const now = Date.now();
+  const elapsedSeconds = Math.floor((now - RADIO_EPOCH) / 1000);
+  const positionInPlaylist = elapsedSeconds % totalPlaylistDuration;
+  let accumulatedTime = 0;
+  for (let i = 0; i < PLAYLIST.length; i++) {
+    const track = PLAYLIST[i];
+    if (positionInPlaylist < accumulatedTime + track.duration) {
+      return {
+        currentTrack: track,
+        positionInTrack: positionInPlaylist - accumulatedTime,
+      };
+    }
+    accumulatedTime += track.duration;
+  }
+  return { currentTrack: PLAYLIST[0], positionInTrack: 0 };
+}
 
 
 function App() {
@@ -185,11 +224,61 @@ function App() {
   const [currentTrack, setCurrentTrack] = useState(null);
   const [isInitialized, setIsInitialized] = useState(false);
 
-  useEffect(() => { /* ... */ }, []);
-  useEffect(() => { /* ... */ }, [isPlaying]);
-  const togglePlay = () => { /* ... */ };
-  const handleVolumeChange = (e) => { /* ... */ };
-  const formatTime = (s) => { /* ... */ };
+  useEffect(() => {
+    const initialState = getRadioState();
+    setCurrentTrack(initialState.currentTrack);
+    setCurrentTime(initialState.positionInTrack);
+  }, []);
+
+  useEffect(() => {
+    if (!isPlaying) return;
+    const timer = setInterval(() => {
+      if (audioRef.current) {
+        setCurrentTime(audioRef.current.currentTime);
+      }
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [isPlaying]);
+
+  const togglePlay = () => {
+    const audioEl = audioRef.current;
+    if (!audioEl) return;
+
+    if (isPlaying) {
+      audioEl.pause();
+      setIsPlaying(false);
+      analytics.logEvent('playback_stopped');
+    } else {
+      if (!isInitialized) {
+        const state = getRadioState();
+        audioEl.src = state.currentTrack.url;
+        audioEl.currentTime = state.positionInTrack;
+        setCurrentTrack(state.currentTrack);
+        setIsInitialized(true);
+      }
+      
+      audioEl.play()
+        .then(() => {
+          setIsPlaying(true);
+          analytics.logEvent('playback_started', { track_title: currentTrack.title });
+        })
+        .catch(error => {
+          console.error("Playback failed:", error);
+          setIsInitialized(false); 
+        });
+    }
+  };
+
+  const handleVolumeChange = (e) => {
+    const newVol = parseFloat(e.target.value);
+    setVolume(newVol);
+    if (audioRef.current) audioRef.current.volume = newVol;
+  };
+
+  const formatTime = (s) => {
+      if (isNaN(s)) return "0:00";
+      return `${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}`;
+  }
 
   if (!currentTrack) {
     return <div className="flex justify-center items-center h-screen text-white bg-gradient-to-br from-purple-900 to-blue-800">جارٍ التحميل...</div>;
