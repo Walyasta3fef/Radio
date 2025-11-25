@@ -175,125 +175,54 @@ function App() {
   const [volume, setVolume] = useState(0.7);
   const [currentTime, setCurrentTime] = useState(0);
   const [currentTrack, setCurrentTrack] = useState(null);
-  const [isInitialized, setIsInitialized] = useState(false);
   const [currentTrackIndex, setCurrentTrackIndex] = useState(0);
-  const nextTrackIndex = (currentTrackIndex + 1) % PLAYLIST.length;
-const nextTrackTitle = PLAYLIST[nextTrackIndex].title;
-  const [onlineUsers, setOnlineUsers] = useState([]);
+  const [isInitialized, setIsInitialized] = useState(false);
 
-  // --- THE FIX IS HERE: Presence logic is now inside useEffect ---
-  useEffect(() => {
-    let sessionRef; 
-
-    async function getCountry() {
-        try {
-            const response = await fetch('https://ipapi.co/json/' );
-            const data = await response.json();
-            return { countryCode: data.country_code, countryName: data.country_name };
-        } catch (error) {
-            console.error("Could not fetch country", error);
-            return { countryCode: 'XX', countryName: 'Unknown' };
-        }
-    }
-
-    async function setupPresence() {
-        const sessionId = Math.random().toString(36).substring(2);
-        sessionRef = database.ref('/status/' + sessionId);
-        const location = await getCountry();
-
-        const initialData = { 
-            state: 'online',
-            countryCode: location.countryCode,
-            countryName: location.countryName,
-            last_seen: firebase.database.ServerValue.TIMESTAMP
-        };
-
-        await sessionRef.set(initialData);
-        sessionRef.onDisconnect().remove();
-    }
-
-    setupPresence();
-
-    const heartbeatInterval = setInterval(() => {
-        if (sessionRef) {
-            sessionRef.child('last_seen').set(firebase.database.ServerValue.TIMESTAMP);
-        }
-    }, 15000);
-
-    const statusRef = database.ref('/status');
-    const listener = statusRef.on('value', (snapshot) => {
-        const now = Date.now();
-        const users = [];
-        snapshot.forEach(childSnapshot => {
-            const user = childSnapshot.val();
-            if (user.last_seen && (now - user.last_seen < 35000)) {
-                users.push(user);
-            } else {
-                if (now - user.last_seen > 60000) {
-                    childSnapshot.ref.remove();
-                }
-            }
-        });
-        setOnlineUsers(users);
-    });
-
-    return () => {
-        clearInterval(heartbeatInterval);
-        statusRef.off('value', listener);
-        if (sessionRef) {
-            sessionRef.remove();
-        }
-    };
-  }, []); // Empty dependency array ensures this runs only ONCE
-
-  useEffect(() => {
+  // This should only run ONCE to setup everything
+  useEffect(() => {    
     const initialState = getRadioState();
     if (initialState) {
-        const nextState = getNextTrackState(initialState.currentIndex);
         setCurrentTrack(initialState.currentTrack);
         setCurrentTrackIndex(initialState.currentIndex);
         setCurrentTime(initialState.positionInTrack);
     }
-}, []);
+  }, []);
 
-
+  // This effect handles audio playback logic
   useEffect(() => {
-    const audioEl = audioRef.current;
-    if (!audioEl || !currentTrack) return;
+      const audioEl = audioRef.current;
+      if (!audioEl || !currentTrack) return;
 
-    // Set the source only when the track actually changes
-    if (audioEl.src !== new URL(currentTrack.url, window.location.href).href) {
-        audioEl.src = currentTrack.url;
-    }
+      // Set the source only when the track actually changes
+      if (audioEl.src !== new URL(currentTrack.url, window.location.href).href) {
+          audioEl.src = currentTrack.url;
+      }
 
-    const handleTimeUpdate = () => setCurrentTime(audioEl.currentTime);
-    
-    const handleTrackEnd = () => {
-        const nextState = getNextTrackState(currentTrackIndex);
-        setCurrentTrackIndex(nextState.currentIndex);
-        setCurrentTrack(nextState.currentTrack);
+      const handleTimeUpdate = () => setCurrentTime(audioEl.currentTime);
+      
+      const handleTrackEnd = () => {
+          const nextState = getNextTrackState(currentTrackIndex);
+          setCurrentTrackIndex(nextState.currentIndex);
+          setCurrentTrack(nextState.currentTrack);
+      };
 
-        const futureNextState = getNextTrackState(nextState.currentIndex);
-        setNextTrack(futureNextState.currentTrack);
-    };
+      audioEl.addEventListener('timeupdate', handleTimeUpdate);
+      audioEl.addEventListener('ended', handleTrackEnd);
 
-    audioEl.addEventListener('timeupdate', handleTimeUpdate);
-    audioEl.addEventListener('ended', handleTrackEnd);
+      if (isPlaying) {
+          audioEl.play().catch(e => console.error("Autoplay failed", e));
+      }
 
-    // If isPlaying is true, ensure audio plays
-    if (isPlaying) {
-        audioEl.play().catch(e => console.error("Autoplay after track end failed", e));
-    }
+      return () => {
+          audioEl.removeEventListener('timeupdate', handleTimeUpdate);
+          audioEl.removeEventListener('ended', handleTrackEnd);
+      };
+  }, [currentTrack, isPlaying]);
 
-    return () => {
-        audioEl.removeEventListener('timeupdate', handleTimeUpdate);
-        audioEl.removeEventListener('ended', handleTrackEnd);
-    };
-}, [currentTrack, isPlaying]); // Re-run when track or play-state changes
 
   const togglePlay = () => {
     const audioEl = audioRef.current;
-    if (!audioEl) return;
+    if (!audioEl || !currentTrack) return;
 
     if (isPlaying) {
       audioEl.pause();
@@ -302,9 +231,10 @@ const nextTrackTitle = PLAYLIST[nextTrackIndex].title;
     } else {
       if (!isInitialized) {
         const state = getRadioState();
-        audioEl.src = state.currentTrack.url;
+        if (audioEl.src !== new URL(state.currentTrack.url, window.location.href).href) {
+            audioEl.src = state.currentTrack.url;
+        }
         audioEl.currentTime = state.positionInTrack;
-        setCurrentTrack(state.currentTrack);
         setIsInitialized(true);
       }
       
@@ -331,21 +261,27 @@ const nextTrackTitle = PLAYLIST[nextTrackIndex].title;
       return `${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}`;
   }
 
+  // --- New Simple Logic for Next Track Title ---
+  const nextTrackIndex = (currentTrackIndex + 1) % PLAYLIST.length;
+  const nextTrackTitle = PLAYLIST[nextTrackIndex].title;
+
+  // Render a loading state until the first track is ready
   if (!currentTrack) {
     return <div className="flex justify-center items-center h-screen text-white bg-gradient-to-br from-purple-900 to-blue-800">جارٍ التحميل...</div>;
   }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-900 to-blue-800 p-4 relative">
-      <Listeners onlineCount={onlineUsers.length} />
-      <CountryStats onlineUsers={onlineUsers} />
+      <Listeners />
+      <CountryStats />
       <audio ref={audioRef} />
       <div className="bg-white/10 backdrop-blur-lg p-6 rounded-2xl text-center w-full max-w-md shadow-lg">
         <h1 className="text-white text-3xl font-bold mb-2">راديو وليستعفف</h1>
         <p className="text-purple-200 mb-4">{currentTrack.title}</p>
-       <p className="text-purple-300 text-xs mb-4">
-    التالي: {nextTrackTitle}
-</p>
+        
+        <p className="text-purple-300 text-xs mb-4">
+            التالي: {nextTrackTitle}
+        </p>
 
         <button onClick={togglePlay} className="bg-white text-purple-900 w-20 h-20 rounded-full flex items-center justify-center shadow-lg mb-4 mx-auto">
           {isPlaying ? "⏸️" : "▶️"}
@@ -376,11 +312,13 @@ const nextTrackTitle = PLAYLIST[nextTrackIndex].title;
     );
 }
 
+
 ReactDOM.createRoot(document.getElementById('root')).render(<App />);
 
 </script>
 </body>
 </html>
+
 
 
 
