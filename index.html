@@ -8,21 +8,79 @@
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- Firebase Libraries -->
+  <script src="https://www.gstatic.com/firebasejs/9.6.7/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.7/firebase-analytics-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.7/firebase-database-compat.js"></script>
+
 </head>
 <body>
 <div id="root"></div>
 
 <script type="text/babel" data-presets="react,env">
 
+// --- Firebase Initialization ---
+// *** PASTE YOUR FIREBASE CONFIG HERE ***
+// Import the functions you need from the SDKs you need
+import { initializeApp } from "firebase/app";
+import { getAnalytics } from "firebase/analytics";
+// TODO: Add SDKs for Firebase products that you want to use
+// https://firebase.google.com/docs/web/setup#available-libraries
+
+// Your web app's Firebase configuration
+// For Firebase JS SDK v7.20.0 and later, measurementId is optional
+const firebaseConfig = {
+  apiKey: "AIzaSyB-ILlMJfQkfCN8ZBashSVgEz-Ok1w1vss",
+  authDomain: "walyast3fef.firebaseapp.com",
+  projectId: "walyast3fef",
+  storageBucket: "walyast3fef.firebasestorage.app",
+  messagingSenderId: "646833730084",
+  appId: "1:646833730084:web:2926a50695ed8ebefddeb1",
+  measurementId: "G-JB4JXZ3ZYL"
+};
+
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+const analytics = getAnalytics(app);
+// Initialize Firebase
+firebase.initializeApp(firebaseConfig );
+const analytics = firebase.analytics();
+const database = firebase.database();
+
+// --- Presence System ---
+const isOfflineForDatabase = {
+    state: 'offline',
+    last_changed: firebase.database.ServerValue.TIMESTAMP,
+};
+
+const isOnlineForDatabase = {
+    state: 'online',
+    last_changed: firebase.database.ServerValue.TIMESTAMP,
+};
+
+// Get a reference to the presence data in the Realtime Database.
+const userStatusDatabaseRef = database.ref('/status/' + analytics.app.INTERNAL.getTokenDetails().appId);
+
+firebase.database().ref('.info/connected').on('value', function(snapshot) {
+    if (snapshot.val() === false) {
+        return;
+    };
+    userStatusDatabaseRef.onDisconnect().set(isOfflineForDatabase).then(function() {
+        userStatusDatabaseRef.set(isOnlineForDatabase);
+    });
+});
+
+
 const { useState, useEffect, useRef } = React;
 
-// --- Playlist with your latest titles ---
+// --- Playlist ---
 const ORIGINAL_PLAYLIST = [
     { url: "audio/_xWalyastaafef01.mp3", duration: 2719, title: "الكورس الأساسي لقاء 1" },
     { url: "audio/_xWalyastaafef02.mp3", duration: 2619, title: "الكورس الأساسي لقاء 2" },
     { url: "audio/_xWalyastaafef03.mp3", duration: 3036, title: "الكورس الأساسي لقاء 3" },
     { url: "audio/_xWalyastaafef04.mp3", duration: 2250, title: "الكورس الأساسي لقاء 4" },
-    { url: "audio/xWalyastaafef_LIVE01.mp3", duration: 2714, title: "لقاء 1 - محاور التغيير ( التحفيز - القرار - التغيير - التثبيت  )" },
+    { url: "audio/xWalyastaafef_LIVE01.mp3", duration: 2714, title: "لقاء 1 - محاور التغيير ( التحفيز - القرار - التغيير - التثبيت )" },
     { url: "audio/xWalyastaafef_LIVE02.mp3", duration: 2510, title: "لقاء 2 - محور القرار - قرار الإقلاع عن الإباحية" },
     { url: "audio/xWalyastaafef_LIVE03.mp3", duration: 2073, title: "لقاء 3 - بحس إن الإباحية فرصة صعب تتفوت" },
     { url: "audio/xWalyastaafef_LIVE04.mp3", duration: 1859, title: "لقاء 4 - الأفكار مسيطرة عليا وبتوقعني" },
@@ -119,6 +177,7 @@ function App() {
     if (isPlaying) {
       audioEl.pause();
       setIsPlaying(false);
+      analytics.logEvent('playback_stopped');
     } else {
       if (!isInitialized) {
         const state = getRadioState();
@@ -131,6 +190,7 @@ function App() {
       audioEl.play()
         .then(() => {
           setIsPlaying(true);
+          analytics.logEvent('playback_started', { track_title: currentTrack.title });
         })
         .catch(error => {
           console.error("Playback failed:", error);
