@@ -25,7 +25,9 @@ const firebaseConfig = {
   storageBucket: "walyast3fef.firebasestorage.app",
   messagingSenderId: "646833730084",
   appId: "1:646833730084:web:2926a50695ed8ebefddeb1",
-  measurementId: "G-JB4JXZ3ZYL"
+  measurementId: "G-JB4JXZ3ZYL",
+  // *** THIS IS THE FIX: Tell Firebase where the database is ***
+  databaseURL: "https://walyast3fef-default-rtdb.europe-west1.firebasedatabase.app"
 };
 
 firebase.initializeApp(firebaseConfig );
@@ -43,25 +45,21 @@ const { useState, useEffect, useRef } = React;
 // --- Listener Count Component ---
 function Listeners() {
     const [count, setCount] = useState(0);
-
     useEffect(() => {
         const statusRef = database.ref('/status');
         const listener = statusRef.on('value', (snapshot) => {
             setCount(snapshot.numChildren());
         });
-
-        // Cleanup listener on component unmount
         return () => statusRef.off('value', listener);
     }, []);
 
     return (
-        <div className="absolute top-4 left-4 bg-black/20 text-white text-xs px-2 py-1 rounded-full flex items-center">
+        <div className="absolute top-4 left-4 bg-black/20 text-white text-xs px-2 py-1 rounded-full flex items-center z-10">
             <span className="w-2 h-2 bg-red-500 rounded-full mr-2 animate-pulse"></span>
             {count} مستمع الآن
         </div>
     );
 }
-
 
 // --- Playlist ---
 const ORIGINAL_PLAYLIST = [
@@ -94,14 +92,45 @@ const ORIGINAL_PLAYLIST = [
     { url: "audio/xWalyastaafef_LIVE23.mp3", duration: 2091, title: "لقاء 23 - ليه لما بقع بستحلاها ومش بعرف أوقف؟" },
 ];
 
-function seededShuffle(array, seed) { /* ... (shuffle logic remains the same) ... */ }
+function seededShuffle(array, seed) {
+    let currentIndex = array.length, temporaryValue, randomIndex;
+    const random = () => {
+        var x = Math.sin(seed++) * 10000;
+        return x - Math.floor(x);
+    };
+    while (0 !== currentIndex) {
+        randomIndex = Math.floor(random() * currentIndex);
+        currentIndex -= 1;
+        temporaryValue = array[currentIndex];
+        array[currentIndex] = array[randomIndex];
+        array[randomIndex] = temporaryValue;
+    }
+    return array;
+}
+
 const today = new Date();
 const dateSeed = today.getFullYear() * 10000 + (today.getMonth() + 1) * 100 + today.getDate();
 const PLAYLIST = seededShuffle([...ORIGINAL_PLAYLIST], dateSeed);
 const RADIO_EPOCH = 1672531200000;
 const totalPlaylistDuration = PLAYLIST.reduce((sum, track) => sum + track.duration, 0);
 
-function getRadioState() { /* ... (getRadioState logic remains the same) ... */ }
+function getRadioState() {
+  const now = Date.now();
+  const elapsedSeconds = Math.floor((now - RADIO_EPOCH) / 1000);
+  const positionInPlaylist = elapsedSeconds % totalPlaylistDuration;
+  let accumulatedTime = 0;
+  for (let i = 0; i < PLAYLIST.length; i++) {
+    const track = PLAYLIST[i];
+    if (positionInPlaylist < accumulatedTime + track.duration) {
+      return {
+        currentTrack: track,
+        positionInTrack: positionInPlaylist - accumulatedTime,
+      };
+    }
+    accumulatedTime += track.duration;
+  }
+  return { currentTrack: PLAYLIST[0], positionInTrack: 0 };
+}
 
 function App() {
   const audioRef = useRef(null);
@@ -117,11 +146,55 @@ function App() {
     setCurrentTime(initialState.positionInTrack);
   }, []);
 
-  useEffect(() => { /* ... (timer effect remains the same) ... */ }, [isPlaying]);
+  useEffect(() => {
+    if (!isPlaying) return;
+    const timer = setInterval(() => {
+      if (audioRef.current) {
+        setCurrentTime(audioRef.current.currentTime);
+      }
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [isPlaying]);
 
-  const togglePlay = () => { /* ... (togglePlay logic remains the same) ... */ };
-  const handleVolumeChange = (e) => { /* ... (volume logic remains the same) ... */ };
-  const formatTime = (s) => { /* ... (formatTime logic remains the same) ... */ };
+  const togglePlay = () => {
+    const audioEl = audioRef.current;
+    if (!audioEl) return;
+
+    if (isPlaying) {
+      audioEl.pause();
+      setIsPlaying(false);
+      analytics.logEvent('playback_stopped');
+    } else {
+      if (!isInitialized) {
+        const state = getRadioState();
+        audioEl.src = state.currentTrack.url;
+        audioEl.currentTime = state.positionInTrack;
+        setCurrentTrack(state.currentTrack);
+        setIsInitialized(true);
+      }
+      
+      audioEl.play()
+        .then(() => {
+          setIsPlaying(true);
+          analytics.logEvent('playback_started', { track_title: currentTrack.title });
+        })
+        .catch(error => {
+          console.error("Playback failed:", error);
+          setIsInitialized(false); 
+        });
+    }
+  };
+
+  const handleVolumeChange = (e) => {
+    const newVol = parseFloat(e.target.value);
+    setVolume(newVol);
+    if (audioRef.current) audioRef.current.volume = newVol;
+  };
+
+  const formatTime = (s) => {
+      if (isNaN(s)) return "0:00";
+      return `${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}`;
+  }
 
   if (!currentTrack) {
     return <div className="flex justify-center items-center h-screen text-white bg-gradient-to-br from-purple-900 to-blue-800">جارٍ التحميل...</div>;
@@ -132,9 +205,26 @@ function App() {
       <Listeners />
       <audio ref={audioRef} />
       <div className="bg-white/10 backdrop-blur-lg p-6 rounded-2xl text-center w-full max-w-md shadow-lg">
-        {/* ... (player UI remains the same) ... */}
+        <h1 className="text-white text-3xl font-bold mb-2">راديو وليستعفف</h1>
+        <p className="text-purple-200 mb-4">{currentTrack.title}</p>
+
+        <button onClick={togglePlay} className="bg-white text-purple-900 w-20 h-20 rounded-full flex items-center justify-center shadow-lg mb-4 mx-auto">
+          {isPlaying ? "⏸️" : "▶️"}
+        </button>
+
+        <div className="mb-4">
+          <div className="flex justify-between text-sm text-purple-200 mb-1">
+            <span>{formatTime(currentTime)}</span>
+            <span>{formatTime(currentTrack.duration)}</span>
+          </div>
+          <div className="w-full h-2 bg-white/20 rounded-full overflow-hidden">
+            <div className="h-full bg-gradient-to-r from-purple-500 to-pink-500"
+                 style={{ width: `${(currentTime / currentTrack.duration) * 100}%` }}/>
+          </div>
+        </div>
+
+        <input type="range" min="0" max="1" step="0.01" value={volume} onChange={handleVolumeChange} className="w-full accent-purple-500"/>
         
-        {/* Facebook Icon Link */}
         <div className="mt-6">
             <a href="https://www.facebook.com/Walyastaafef" target="_blank" rel="noopener noreferrer" className="text-purple-200 hover:text-white transition-colors">
                 <svg className="w-8 h-8 mx-auto" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
