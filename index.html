@@ -36,19 +36,19 @@ firebase.initializeApp(firebaseConfig );
 const analytics = firebase.analytics();
 const database = firebase.database();
 
-// --- Presence System ---
-const isOfflineForDatabase = {
-    state: 'offline',
-    last_changed: firebase.database.ServerValue.TIMESTAMP,
-};
-const isOnlineForDatabase = {
+// --- Simplified Presence System ---
+// Generate a unique ID for this session
+const sessionId = Math.random().toString(36).substring(2);
+const sessionRef = database.ref('/status/' + sessionId);
+
+// Set online status
+sessionRef.set({
     state: 'online',
-    last_changed: firebase.database.ServerValue.TIMESTAMP,
-};
-const userStatusDatabaseRef = database.ref('/status/' + (Math.random().toString(36).substring(2)));
-userStatusDatabaseRef.onDisconnect().set(isOfflineForDatabase).then(() => {
-    userStatusDatabaseRef.set(isOnlineForDatabase);
+    last_changed: firebase.database.ServerValue.TIMESTAMP
 });
+
+// Set offline status when the user disconnects
+sessionRef.onDisconnect().remove();
 
 
 const { useState, useEffect, useRef } = React;
