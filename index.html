@@ -22,15 +22,6 @@
 
 // --- Firebase Initialization ---
 const firebaseConfig = {
-    // *** PASTE YOUR FIREBASE CONFIG HERE ***
-    // (Make sure you have pasted your config in the previous step )
-// Import the functions you need from the SDKs you need
-// TODO: Add SDKs for Firebase products that you want to use
-// https://firebase.google.com/docs/web/setup#available-libraries
-
-// Your web app's Firebase configuration
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
-const firebaseConfig = {
   apiKey: "AIzaSyB-ILlMJfQkfCN8ZBashSVgEz-Ok1w1vss",
   authDomain: "walyast3fef.firebaseapp.com",
   projectId: "walyast3fef",
@@ -41,15 +32,8 @@ const firebaseConfig = {
 };
 
 // Initialize Firebase
-const app = initializeApp(firebaseConfig);
-const analytics = getAnalytics(app);
-
-  
-};
-
-// Initialize Firebase
-firebase.initializeApp(firebaseConfig);
-const analytics = firebase.analytics(); // This is now declared only once
+firebase.initializeApp(firebaseConfig );
+const analytics = firebase.analytics();
 const database = firebase.database();
 
 // --- Presence System ---
@@ -57,18 +41,13 @@ const isOfflineForDatabase = {
     state: 'offline',
     last_changed: firebase.database.ServerValue.TIMESTAMP,
 };
-
 const isOnlineForDatabase = {
     state: 'online',
     last_changed: firebase.database.ServerValue.TIMESTAMP,
 };
-
-// Get a reference to the presence data in the Realtime Database.
-// Use a unique ID for each user session
-const presenceRef = database.ref('/status/' + firebase.app().name + '/' + Date.now());
-
-presenceRef.onDisconnect().set(isOfflineForDatabase).then(() => {
-    presenceRef.set(isOnlineForDatabase);
+const userStatusDatabaseRef = database.ref('/status/' + (Math.random().toString(36).substring(2)));
+userStatusDatabaseRef.onDisconnect().set(isOfflineForDatabase).then(() => {
+    userStatusDatabaseRef.set(isOnlineForDatabase);
 });
 
 
@@ -76,10 +55,10 @@ const { useState, useEffect, useRef } = React;
 
 // --- Playlist ---
 const ORIGINAL_PLAYLIST = [
-    { url: "audio/_xWalyastaafef01.mp3", duration: 2719, title: "الكورس الأساسي لقاء 1" },
-    { url: "audio/_xWalyastaafef02.mp3", duration: 2619, title: "الكورس الأساسي لقاء 2" },
-    { url: "audio/_xWalyastaafef03.mp3", duration: 3036, title: "الكورس الأساسي لقاء 3" },
-    { url: "audio/_xWalyastaafef04.mp3", duration: 2250, title: "الكورس الأساسي لقاء 4" },
+    { url: "audio/xWalyastaafef01.mp3", duration: 2719, title: "الكورس الأساسي لقاء 1" },
+    { url: "audio/xWalyastaafef02.mp3", duration: 2619, title: "الكورس الأساسي لقاء 2" },
+    { url: "audio/xWalyastaafef03.mp3", duration: 3036, title: "الكورس الأساسي لقاء 3" },
+    { url: "audio/xWalyastaafef04.mp3", duration: 2250, title: "الكورس الأساسي لقاء 4" },
     { url: "audio/xWalyastaafef_LIVE01.mp3", duration: 2714, title: "لقاء 1 - محاور التغيير ( التحفيز - القرار - التغيير - التثبيت )" },
     { url: "audio/xWalyastaafef_LIVE02.mp3", duration: 2510, title: "لقاء 2 - محور القرار - قرار الإقلاع عن الإباحية" },
     { url: "audio/xWalyastaafef_LIVE03.mp3", duration: 2073, title: "لقاء 3 - بحس إن الإباحية فرصة صعب تتفوت" },
@@ -247,4 +226,3 @@ ReactDOM.createRoot(document.getElementById('root')).render(<App />);
 </script>
 </body>
 </html>
-
