@@ -89,7 +89,54 @@ function CountryStats({ onlineUsers }) {
         </div>
     );
 }
+// --- New Total Stats Component ---
+function TotalStats() {
+    const [stats, setStats] = useState({ total_visits: 0, total_listeners: 0 });
 
+    useEffect(() => {
+        const statsRef = database.ref('/stats');
+
+        const listener = statsRef.on('value', (snapshot) => {
+            const data = snapshot.val();
+            if (data) {
+                setStats({
+                    total_visits: data.total_visits || 0,
+                    total_listeners: data.total_listeners || 0
+                });
+            }
+        });
+
+        // Cleanup function to stop listening when the component is removed
+        return () => statsRef.off('value', listener);
+    }, []);
+
+    // Helper to format large numbers (e.g., 12345 -> 12.3k)
+    const formatNumber = (num) => {
+        if (num >= 1000000) return (num / 1000000).toFixed(1) + 'م';
+        if (num >= 1000) return (num / 1000).toFixed(1) + 'ألف';
+        return num;
+    };
+
+    return (
+        <div className="absolute bottom-4 right-4 bg-black/20 text-white text-xs px-3 py-2 rounded-lg z-10 text-center">
+            <div className="flex justify-center items-center space-x-4 rtl:space-x-reverse">
+                <div>
+                    <p className="font-bold text-lg">{formatNumber(stats.total_visits)}</p>
+                    <p className="text-purple-300">زيارة</p>
+                </div>
+                <div className="border-l border-white/20 h-8"></div>
+                <div>
+                    <p className="font-bold text-lg">{formatNumber(stats.total_listeners)}</p>
+                    <p className="text-purple-300">مستمع</p>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+
+
+  
 // --- Playlist & Radio Logic ---
 const ORIGINAL_PLAYLIST = [
     { url: "audio/xWalyastaafef01.mp3", duration: 2719, title: "الكورس الأساسي لقاء 1" },
@@ -318,11 +365,17 @@ function App() {
     return <div className="flex justify-center items-center h-screen text-white bg-gradient-to-br from-purple-900 to-blue-800">جارٍ التحميل...</div>;
   }
 
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-900 to-blue-800 p-4 relative">
+    return (
+    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-purple-900 to-blue-800 p-4 relative">
+      {/* --- Components in the corners --- */}
       <Listeners onlineCount={onlineUsers.length} />
       <CountryStats onlineUsers={onlineUsers} />
+      <TotalStats /> {/* <-- The new stats component */}
+
+      {/* --- Invisible Audio Player --- */}
       <audio ref={audioRef} />
+
+      {/* --- Main Player Card --- */}
       <div className="bg-white/10 backdrop-blur-lg p-6 rounded-2xl text-center w-full max-w-md shadow-lg">
         <h1 className="text-white text-3xl font-bold mb-2">راديو وليستعفف</h1>
         <p className="text-purple-200 mb-4">{currentTrack.title}</p>
@@ -358,8 +411,13 @@ function App() {
             </a>
         </div>
       </div>
+
+      {/* If you want to add the ChatBox later, it will go here */}
+      {/* <ChatBox /> */}
+
     </div>
-     );
+   );
+
 }
 
 ReactDOM.createRoot(document.getElementById('root')).render(<App />);
@@ -367,5 +425,6 @@ ReactDOM.createRoot(document.getElementById('root')).render(<App />);
 </script>
 </body>
 </html>
+
 
 
