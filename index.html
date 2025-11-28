@@ -226,12 +226,13 @@ function App() {
   const nextTrack = PLAYLIST[nextTrackIndex];
 
   // --- Presence and Stats Logic (Runs ONCE) ---
+    // --- Presence Logic (Runs ONCE) ---
   useEffect(() => {
     let sessionRef; 
 
     async function getCountry() {
         try {
-            const response = await fetch('https://ipapi.co/json/'  );
+            const response = await fetch('https://ipapi.co/json/' );
             const data = await response.json();
             return { countryCode: data.country_code, countryName: data.country_name };
         } catch (error) {
@@ -240,38 +241,19 @@ function App() {
         }
     }
 
-        async function setupPresence() {
-        // --- START: New Total Stats Logic ---
-        const statsRef = database.ref('/stats');
-
-        // Increment total visits on every single page load.
-        statsRef.child('total_visits').set(firebase.database.ServerValue.increment(1));
-
-        // Check if this is a unique listener.
-        if (!localStorage.getItem('hasVisitedRadio')) {
-            // If not, increment unique listeners count.
-            statsRef.child('total_listeners').set(firebase.database.ServerValue.increment(1));
-            
-            // And mark this browser as a returning visitor for the future.
-            localStorage.setItem('hasVisitedRadio', 'true');
-        }
-        // --- END: New Total Stats Logic ---
-
+    async function setupPresence() {
         const sessionId = Math.random().toString(36).substring(2);
         sessionRef = database.ref('/status/' + sessionId);
         const location = await getCountry();
-
         const initialData = { 
             state: 'online',
             countryCode: location.countryCode,
             countryName: location.countryName,
             last_seen: firebase.database.ServerValue.TIMESTAMP
         };
-
         await sessionRef.set(initialData);
         sessionRef.onDisconnect().remove();
     }
-
 
     setupPresence();
 
@@ -304,6 +286,24 @@ function App() {
         }
     };
   }, []);
+    // --- Total Stats Logic (Runs ONCE per page load) ---
+  useEffect(() => {
+    const statsRef = database.ref('/stats');
+
+    // Increment total visits on every single page load.
+    statsRef.child('total_visits').set(firebase.database.ServerValue.increment(1));
+
+    // Check if this is a unique listener.
+    if (!localStorage.getItem('hasVisitedRadio')) {
+        // If not, increment unique listeners count.
+        statsRef.child('total_listeners').set(firebase.database.ServerValue.increment(1));
+        
+        // And mark this browser as a returning visitor for the future.
+        localStorage.setItem('hasVisitedRadio', 'true');
+    }
+  }, []); // The empty array is correct here, it means "run once when the component mounts"
+
+
 
   // --- Audio Logic (The Core) ---
   useEffect(() => {
@@ -425,6 +425,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(<App />);
 </script>
 </body>
 </html>
+
 
 
 
