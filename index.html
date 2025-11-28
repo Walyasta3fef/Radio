@@ -215,6 +215,12 @@ function App() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [volume, setVolume] = useState(0.7);
   const [onlineUsers, setOnlineUsers] = useState([]);
+  const statsRef = database.ref('/stats');
+  statsRef.child('total_visits').set(firebase.database.ServerValue.increment(1));
+  if (!localStorage.getItem('hasVisitedRadio')) {
+      statsRef.child('total_listeners').set(firebase.database.ServerValue.increment(1));
+      localStorage.setItem('hasVisitedRadio', 'true');
+  }
   
   // --- Simplified State ---
   const [currentTrackIndex, setCurrentTrackIndex] = useState(getRadioState().currentIndex);
@@ -287,21 +293,9 @@ function App() {
     };
   }, []);
     // --- Total Stats Logic (Runs ONCE per page load) ---
-  useEffect(() => {
-    const statsRef = database.ref('/stats');
+    // --- Total Stats Logic (Runs on EVERY page load) ---
+  
 
-    // Increment total visits on every single page load.
-    statsRef.child('total_visits').set(firebase.database.ServerValue.increment(1));
-
-    // Check if this is a unique listener.
-    if (!localStorage.getItem('hasVisitedRadio')) {
-        // If not, increment unique listeners count.
-        statsRef.child('total_listeners').set(firebase.database.ServerValue.increment(1));
-        
-        // And mark this browser as a returning visitor for the future.
-        localStorage.setItem('hasVisitedRadio', 'true');
-    }
-  }, []); // The empty array is correct here, it means "run once when the component mounts"
 
 
 
@@ -425,6 +419,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(<App />);
 </script>
 </body>
 </html>
+
 
 
 
