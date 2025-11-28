@@ -216,11 +216,7 @@ function App() {
   const [volume, setVolume] = useState(0.7);
   const [onlineUsers, setOnlineUsers] = useState([]);
   const statsRef = database.ref('/stats');
-  statsRef.child('total_visits').set(firebase.database.ServerValue.increment(1));
-  if (!localStorage.getItem('hasVisitedRadio')) {
-      statsRef.child('total_listeners').set(firebase.database.ServerValue.increment(1));
-      localStorage.setItem('hasVisitedRadio', 'true');
-  }
+  
   
   // --- Simplified State ---
   const [currentTrackIndex, setCurrentTrackIndex] = useState(getRadioState().currentIndex);
@@ -233,7 +229,17 @@ function App() {
 
   // --- Presence and Stats Logic (Runs ONCE) ---
     // --- Presence Logic (Runs ONCE) ---
+    // --- Presence & Stats Logic (Runs ONCE) ---
   useEffect(() => {
+    // --- START: Total Stats Logic ---
+    const statsRef = database.ref('/stats');
+    statsRef.child('total_visits').set(firebase.database.ServerValue.increment(1));
+    if (!localStorage.getItem('hasVisitedRadio')) {
+        statsRef.child('total_listeners').set(firebase.database.ServerValue.increment(1));
+        localStorage.setItem('hasVisitedRadio', 'true');
+    }
+    // --- END: Total Stats Logic ---
+
     let sessionRef; 
 
     async function getCountry() {
@@ -292,6 +298,7 @@ function App() {
         }
     };
   }, []);
+
     // --- Total Stats Logic (Runs ONCE per page load) ---
     // --- Total Stats Logic (Runs on EVERY page load) ---
   
@@ -419,6 +426,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(<App />);
 </script>
 </body>
 </html>
+
 
 
 
