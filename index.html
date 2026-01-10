@@ -139,34 +139,34 @@ function TotalStats() {
   
 // --- Playlist & Radio Logic ---
 const ORIGINAL_PLAYLIST = [
-    { url: "https://dn720706.ca.archive.org/0/items/xWalyastaafefMp3/_xWalyastaafef01.mp3", duration: 2719, title: "الكورس الأساسي لقاء 1" },
-    { url: "https://dn720706.ca.archive.org/0/items/xWalyastaafefMp3/_xWalyastaafef02.mp3", duration: 2619, title: "الكورس الأساسي لقاء 2" },
-    { url: "https://dn720706.ca.archive.org/0/items/xWalyastaafefMp3/_xWalyastaafef03.mp3", duration: 3036, title: "الكورس الأساسي لقاء 3" },
-    { url: "https://dn720706.ca.archive.org/0/items/xWalyastaafefMp3/_xWalyastaafef04.mp3", duration: 2250, title: "الكورس الأساسي لقاء 4" },
-    { url: "https://dn720706.ca.archive.org/0/items/xWalyastaafefMp3/xWalyastaafef_LIVE01.mp3", duration: 2714, title: "لقاء 1 - محاور التغيير ( التحفيز - القرار - التغيير - التثبيت )" },
-    { url: "https://dn720706.ca.archive.org/0/items/xWalyastaafefMp3/xWalyastaafef_LIVE02.mp3", duration: 2510, title: "لقاء 2 - محور القرار - قرار الإقلاع عن الإباحية" },
-    { url: "https://dn720706.ca.archive.org/0/items/xWalyastaafefMp3/xWalyastaafef_LIVE03.mp3", duration: 2073, title: "لقاء 3 - بحس إن الإباحية فرصة صعب تتفوت" },
-    { url: "https://dn720706.ca.archive.org/0/items/xWalyastaafefMp3/xWalyastaafef_LIVE04.mp3", duration: 1859, title: "لقاء 4 - الأفكار مسيطرة عليا وبتوقعني" },
-    { url: "https://dn720706.ca.archive.org/0/items/xWalyastaafefMp3/xWalyastaafef_LIVE05.mp3", duration: 1828, title: "لقاء 5 - مغالطات الإدمان وعلاجه" },
-    { url: "https://dn720706.ca.archive.org/0/items/xWalyastaafefMp3/xWalyastaafef_LIVE06.mp3", duration: 1989, title: "لقاء 6 - بخاف تنزل عليا مصيبة بعد الوقوع" },
-    { url: "https://dn720706.ca.archive.org/0/items/xWalyastaafefMp3/xWalyastaafef_LIVE07.mp3", duration: 2193, title: "اللقاء 7 - التعامل مع الخواطر والتفكير الجنسي" },
-    { url: "https://dn720706.ca.archive.org/0/items/xWalyastaafefMp3/xWalyastaafef_LIVE08.mp3", duration: 2197, title: "لقاء 8 - هتفرج وابقى أتوب" },
-    { url: "https://dn720706.ca.archive.org/0/items/xWalyastaafefMp3/xWalyastaafef_LIVE09.mp3", duration: 2850, title: "اللقاء 9 - أنا هفضل أعاني بدون جنس كده كتير؟" },
-    { url: "https://dn720706.ca.archive.org/0/items/xWalyastaafefMp3/xWalyastaafef_LIVE10.mp3", duration: 1584, title: "لقاء 10 - العلاج الشمولي للإباحية" },
-    { url: "https://dn720706.ca.archive.org/0/items/xWalyastaafefMp3/xWalyastaafef_LIVE11.mp3", duration: 1434, title: "لقاء 11 - علاج اليأس وسرعة الإحباط خلال رحلة التعافي" },
-    { url: "https://dn720706.ca.archive.org/0/items/xWalyastaafefMp3/xWalyastaafef_LIVE12.mp3", duration: 2117, title: "لقاء 12 - كيف نتعامل مع الشعور بالشهوة" },
-    { url: "https://dn720706.ca.archive.org/0/items/xWalyastaafefMp3/xWalyastaafef_LIVE13.mp3", duration: 2063, title: "اللقاء 13 - ليه بتقدم فترة وبعدين بتراجع؟" },
-    { url: "https://dn720706.ca.archive.org/0/items/xWalyastaafefMp3/xWalyastaafef_LIVE14.mp3", duration: 2193, title: "لقاء 14 - الفرق بين الخوف والرعب من المعصية" },
-    { url: "https://dn720706.ca.archive.org/0/items/xWalyastaafefMp3/xWalyastaafef_LIVE15.mp3", duration: 2151, title: "لقاء 15 - ايه المشكلة؟ طاعة قصاد معصية والدنيا ماشية!" },
-    { url: "https://dn720706.ca.archive.org/0/items/xWalyastaafefMp3/xWalyastaafef_LIVE16.mp3", duration: 2345, title: "لقاء 16 - أنا عايز خطوات عملية لعلاج الإباحية" },
-    { url: "https://dn720706.ca.archive.org/0/items/xWalyastaafefMp3/xWalyastaafef_LIVE17.mp3", duration: 2121, title: "لقاء 17 - علاج الإباحية فن مش عن عن (مش بالعافية)" },
-    { url: "https://dn720706.ca.archive.org/0/items/xWalyastaafefMp3/xWalyastaafef_LIVE18.mp3", duration: 2251, title: "لقاء 18 - أتجوز ولا أستنى لما اتعافى؟" },
-    { url: "https://dn720706.ca.archive.org/0/items/xWalyastaafefMp3/xWalyastaafef_LIVE19.mp3", duration: 1955, title: "لقاء 19 - ازاي اتعامل مع أعراض الانسحاب؟" },
-    { url: "https://dn720706.ca.archive.org/0/items/xWalyastaafefMp3/xWalyastaafef_LIVE20.mp3", duration: 1978, title: "لقاء 20 - الفرق بين الزواج والإباحية" },
-    { url: "https://dn720706.ca.archive.org/0/items/xWalyastaafefMp3/xWalyastaafef_LIVE21.mp3", duration: 1586, title: "لقاء 21 - خايف أقاوم وفي الآخر أنفجر" },
-    { url: "https://dn720706.ca.archive.org/0/items/xWalyastaafefMp3/xWalyastaafef_LIVE22.mp3", duration: 1613, title: "لقاء 22 - الفرق بين التبطيل والتعافي" },
-    { url: "https://dn720706.ca.archive.org/0/items/xWalyastaafefMp3/xWalyastaafef_LIVE23.mp3", duration: 2091, title: "لقاء 23 - ليه لما بقع بستحلاها ومش بعرف أوقف؟" },
-    { url: "https://dn720706.ca.archive.org/0/items/xWalyastaafefMp3/xWalyastaafef_LIVE24.mp3", duration: 2002, title: "لقاء 24 - التعافي رحلة مش هدف" },
+    { url: "https://archive.org/download/xWalyastaafefMp3/_xWalyastaafef01.mp3", duration: 2719, title: "الكورس الأساسي لقاء 1" },
+    { url: "https://archive.org/download/xWalyastaafefMp3/_xWalyastaafef02.mp3", duration: 2619, title: "الكورس الأساسي لقاء 2" },
+    { url: "https://archive.org/download/xWalyastaafefMp3/_xWalyastaafef03.mp3", duration: 3036, title: "الكورس الأساسي لقاء 3" },
+    { url: "https://archive.org/download/xWalyastaafefMp3/_xWalyastaafef04.mp3", duration: 2250, title: "الكورس الأساسي لقاء 4" },
+    { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE01.mp3", duration: 2714, title: "لقاء 1 - محاور التغيير ( التحفيز - القرار - التغيير - التثبيت )" },
+    { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE02.mp3", duration: 2510, title: "لقاء 2 - محور القرار - قرار الإقلاع عن الإباحية" },
+    { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE03.mp3", duration: 2073, title: "لقاء 3 - بحس إن الإباحية فرصة صعب تتفوت" },
+    { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE04.mp3", duration: 1859, title: "لقاء 4 - الأفكار مسيطرة عليا وبتوقعني" },
+    { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE05.mp3", duration: 1828, title: "لقاء 5 - مغالطات الإدمان وعلاجه" },
+    { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE06.mp3", duration: 1989, title: "لقاء 6 - بخاف تنزل عليا مصيبة بعد الوقوع" },
+    { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE07.mp3", duration: 2193, title: "اللقاء 7 - التعامل مع الخواطر والتفكير الجنسي" },
+    { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE08.mp3", duration: 2197, title: "لقاء 8 - هتفرج وابقى أتوب" },
+    { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE09.mp3", duration: 2850, title: "اللقاء 9 - أنا هفضل أعاني بدون جنس كده كتير؟" },
+    { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE10.mp3", duration: 1584, title: "لقاء 10 - العلاج الشمولي للإباحية" },
+    { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE11.mp3", duration: 1434, title: "لقاء 11 - علاج اليأس وسرعة الإحباط خلال رحلة التعافي" },
+    { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE12.mp3", duration: 2117, title: "لقاء 12 - كيف نتعامل مع الشعور بالشهوة" },
+    { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE13.mp3", duration: 2063, title: "اللقاء 13 - ليه بتقدم فترة وبعدين بتراجع؟" },
+    { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE14.mp3", duration: 2193, title: "لقاء 14 - الفرق بين الخوف والرعب من المعصية" },
+    { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE15.mp3", duration: 2151, title: "لقاء 15 - ايه المشكلة؟ طاعة قصاد معصية والدنيا ماشية!" },
+    { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE16.mp3", duration: 2345, title: "لقاء 16 - أنا عايز خطوات عملية لعلاج الإباحية" },
+    { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE17.mp3", duration: 2121, title: "لقاء 17 - علاج الإباحية فن مش عن عن (مش بالعافية)" },
+    { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE18.mp3", duration: 2251, title: "لقاء 18 - أتجوز ولا أستنى لما اتعافى؟" },
+    { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE19.mp3", duration: 1955, title: "لقاء 19 - ازاي اتعامل مع أعراض الانسحاب؟" },
+    { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE20.mp3", duration: 1978, title: "لقاء 20 - الفرق بين الزواج والإباحية" },
+    { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE21.mp3", duration: 1586, title: "لقاء 21 - خايف أقاوم وفي الآخر أنفجر" },
+    { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE22.mp3", duration: 1613, title: "لقاء 22 - الفرق بين التبطيل والتعافي" },
+    { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE23.mp3", duration: 2091, title: "لقاء 23 - ليه لما بقع بستحلاها ومش بعرف أوقف؟" },
+    { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE24.mp3", duration: 2002, title: "لقاء 24 - التعافي رحلة مش هدف" },
 ];
 
 function seededShuffle(array, seed) {
@@ -427,6 +427,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(<App />);
 </script>
 </body>
 </html>
+
 
 
 
