@@ -495,7 +495,7 @@ function getRadioState() {
 // =====================
 function App() {
   const audioRef = useRef(null);
-  const [isPlaying, setIsPlaying] = useState(true);
+  const [isPlaying, setIsPlaying] = useState(false);
   const [volume, setVolume] = useState(0.7);
   const [onlineUsers, setOnlineUsers] = useState([]);
   const [currentTrackIndex, setCurrentTrackIndex] = useState(getRadioState().currentIndex);
