@@ -238,7 +238,7 @@ function ChatWindow({ myName, onEditName }) {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
-  const [expanded, setExpanded] = useState(true);
+  const [expanded, setExpanded] = useState(false);
   const bottomRef = useRef(null);
   const MAX_MESSAGES = 50;
   const MAX_CHARS = 200;
@@ -495,7 +495,7 @@ function getRadioState() {
 // =====================
 function App() {
   const audioRef = useRef(null);
-  const [isPlaying, setIsPlaying] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(true);
   const [volume, setVolume] = useState(0.7);
   const [onlineUsers, setOnlineUsers] = useState([]);
   const [currentTrackIndex, setCurrentTrackIndex] = useState(getRadioState().currentIndex);
