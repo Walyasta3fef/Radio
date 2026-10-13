@@ -4,21 +4,21 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>راديو وليستعفف</title>
-  <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
-  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone@7/babel.min.js"></script>
-  <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://www.gstatic.com/firebasejs/9.6.7/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.6.7/firebase-analytics-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.6.7/firebase-database-compat.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
+  <!-- تنسيقات Tailwind المستخدمة في الصفحة فقط، مبنية مسبقًا -->
+  <style>*,:after,:before{--tw-border-spacing-x:0;--tw-border-spacing-y:0;--tw-translate-x:0;--tw-translate-y:0;--tw-rotate:0;--tw-skew-x:0;--tw-skew-y:0;--tw-scale-x:1;--tw-scale-y:1;--tw-pan-x: ;--tw-pan-y: ;--tw-pinch-zoom: ;--tw-scroll-snap-strictness:proximity;--tw-gradient-from-position: ;--tw-gradient-via-position: ;--tw-gradient-to-position: ;--tw-ordinal: ;--tw-slashed-zero: ;--tw-numeric-figure: ;--tw-numeric-spacing: ;--tw-numeric-fraction: ;--tw-ring-inset: ;--tw-ring-offset-width:0px;--tw-ring-offset-color:#fff;--tw-ring-color:rgba(59,130,246,.5);--tw-ring-offset-shadow:0 0 #0000;--tw-ring-shadow:0 0 #0000;--tw-shadow:0 0 #0000;--tw-shadow-colored:0 0 #0000;--tw-blur: ;--tw-brightness: ;--tw-contrast: ;--tw-grayscale: ;--tw-hue-rotate: ;--tw-invert: ;--tw-saturate: ;--tw-sepia: ;--tw-drop-shadow: ;--tw-backdrop-blur: ;--tw-backdrop-brightness: ;--tw-backdrop-contrast: ;--tw-backdrop-grayscale: ;--tw-backdrop-hue-rotate: ;--tw-backdrop-invert: ;--tw-backdrop-opacity: ;--tw-backdrop-saturate: ;--tw-backdrop-sepia: ;--tw-contain-size: ;--tw-contain-layout: ;--tw-contain-paint: ;--tw-contain-style: }::backdrop{--tw-border-spacing-x:0;--tw-border-spacing-y:0;--tw-translate-x:0;--tw-translate-y:0;--tw-rotate:0;--tw-skew-x:0;--tw-skew-y:0;--tw-scale-x:1;--tw-scale-y:1;--tw-pan-x: ;--tw-pan-y: ;--tw-pinch-zoom: ;--tw-scroll-snap-strictness:proximity;--tw-gradient-from-position: ;--tw-gradient-via-position: ;--tw-gradient-to-position: ;--tw-ordinal: ;--tw-slashed-zero: ;--tw-numeric-figure: ;--tw-numeric-spacing: ;--tw-numeric-fraction: ;--tw-ring-inset: ;--tw-ring-offset-width:0px;--tw-ring-offset-color:#fff;--tw-ring-color:rgba(59,130,246,.5);--tw-ring-offset-shadow:0 0 #0000;--tw-ring-shadow:0 0 #0000;--tw-shadow:0 0 #0000;--tw-shadow-colored:0 0 #0000;--tw-blur: ;--tw-brightness: ;--tw-contrast: ;--tw-grayscale: ;--tw-hue-rotate: ;--tw-invert: ;--tw-saturate: ;--tw-sepia: ;--tw-drop-shadow: ;--tw-backdrop-blur: ;--tw-backdrop-brightness: ;--tw-backdrop-contrast: ;--tw-backdrop-grayscale: ;--tw-backdrop-hue-rotate: ;--tw-backdrop-invert: ;--tw-backdrop-opacity: ;--tw-backdrop-saturate: ;--tw-backdrop-sepia: ;--tw-contain-size: ;--tw-contain-layout: ;--tw-contain-paint: ;--tw-contain-style: }/*! tailwindcss v3.4.19 | MIT License | https://tailwindcss.com*/*,:after,:before{box-sizing:border-box;border:0 solid #e5e7eb}:after,:before{--tw-content:""}:host,html{line-height:1.5;-webkit-text-size-adjust:100%;-moz-tab-size:4;-o-tab-size:4;tab-size:4;font-family:ui-sans-serif,system-ui,sans-serif,Apple Color Emoji,Segoe UI Emoji,Segoe UI Symbol,Noto Color Emoji;font-feature-settings:normal;font-variation-settings:normal;-webkit-tap-highlight-color:transparent}body{margin:0;line-height:inherit}hr{height:0;color:inherit;border-top-width:1px}abbr:where([title]){-webkit-text-decoration:underline dotted;text-decoration:underline dotted}h1,h2,h3,h4,h5,h6{font-size:inherit;font-weight:inherit}a{color:inherit;text-decoration:inherit}b,strong{font-weight:bolder}code,kbd,pre,samp{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,Liberation Mono,Courier New,monospace;font-feature-settings:normal;font-variation-settings:normal;font-size:1em}small{font-size:80%}sub,sup{font-size:75%;line-height:0;position:relative;vertical-align:baseline}sub{bottom:-.25em}sup{top:-.5em}table{text-indent:0;border-color:inherit;border-collapse:collapse}button,input,optgroup,select,textarea{font-family:inherit;font-feature-settings:inherit;font-variation-settings:inherit;font-size:100%;font-weight:inherit;line-height:inherit;letter-spacing:inherit;color:inherit;margin:0;padding:0}button,select{text-transform:none}button,input:where([type=button]),input:where([type=reset]),input:where([type=submit]){-webkit-appearance:button;background-color:transparent;background-image:none}:-moz-focusring{outline:auto}:-moz-ui-invalid{box-shadow:none}progress{vertical-align:baseline}::-webkit-inner-spin-button,::-webkit-outer-spin-button{height:auto}[type=search]{-webkit-appearance:textfield;outline-offset:-2px}::-webkit-search-decoration{-webkit-appearance:none}::-webkit-file-upload-button{-webkit-appearance:button;font:inherit}summary{display:list-item}blockquote,dd,dl,figure,h1,h2,h3,h4,h5,h6,hr,p,pre{margin:0}fieldset{margin:0}fieldset,legend{padding:0}menu,ol,ul{list-style:none;margin:0;padding:0}dialog{padding:0}textarea{resize:vertical}input::-moz-placeholder,textarea::-moz-placeholder{opacity:1;color:#9ca3af}input::placeholder,textarea::placeholder{opacity:1;color:#9ca3af}[role=button],button{cursor:pointer}:disabled{cursor:default}audio,canvas,embed,iframe,img,object,svg,video{display:block;vertical-align:middle}img,video{max-width:100%;height:auto}[hidden]:where(:not([hidden=until-found])){display:none}.visible{visibility:visible}.fixed{position:fixed}.absolute{position:absolute}.relative{position:relative}.inset-0{inset:0}.left-4{left:1rem}.right-4{right:1rem}.top-12{top:3rem}.top-4{top:1rem}.z-10{z-index:10}.mx-auto{margin-left:auto;margin-right:auto}.mb-1{margin-bottom:.25rem}.mb-3{margin-bottom:.75rem}.mb-4{margin-bottom:1rem}.mt-1{margin-top:.25rem}.mt-2{margin-top:.5rem}.flex{display:flex}.hidden{display:none}.h-1\.5{height:.375rem}.h-10{height:2.5rem}.h-2{height:.5rem}.h-5{height:1.25rem}.h-6{height:1.5rem}.h-full{height:100%}.min-h-\[20px\]{min-height:20px}.w-1\.5{width:.375rem}.w-10{width:2.5rem}.w-2{width:.5rem}.w-5{width:1.25rem}.w-full{width:100%}.w-px{width:1px}.max-w-sm{max-width:24rem}.scale-110{--tw-scale-x:1.1;--tw-scale-y:1.1}.scale-110,.transform{transform:translate(var(--tw-translate-x),var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y))}.select-none{-webkit-user-select:none;-moz-user-select:none;user-select:none}.flex-col{flex-direction:column}.items-center{align-items:center}.justify-center{justify-content:center}.justify-between{justify-content:space-between}.gap-1{gap:.25rem}.gap-2{gap:.5rem}.gap-3{gap:.75rem}.space-y-1>:not([hidden])~:not([hidden]){--tw-space-y-reverse:0;margin-top:calc(.25rem*(1 - var(--tw-space-y-reverse)));margin-bottom:calc(.25rem*var(--tw-space-y-reverse))}.overflow-hidden{overflow:hidden}.rounded-2xl{border-radius:1rem}.rounded-3xl{border-radius:1.5rem}.rounded-full{border-radius:9999px}.rounded-lg{border-radius:.5rem}.rounded-sm{border-radius:.125rem}.rounded-xl{border-radius:.75rem}.border{border-width:1px}.border-white\/10{border-color:hsla(0,0%,100%,.1)}.border-white\/20{border-color:hsla(0,0%,100%,.2)}.bg-black\/30{background-color:rgba(0,0,0,.3)}.bg-purple-600\/20{background-color:rgba(147,51,234,.2)}.bg-red-400{--tw-bg-opacity:1;background-color:rgb(248 113 113/var(--tw-bg-opacity,1))}.bg-white{--tw-bg-opacity:1;background-color:rgb(255 255 255/var(--tw-bg-opacity,1))}.bg-white\/10{background-color:hsla(0,0%,100%,.1)}.bg-white\/20{background-color:hsla(0,0%,100%,.2)}.bg-white\/5{background-color:hsla(0,0%,100%,.05)}.p-2{padding:.5rem}.p-3{padding:.75rem}.p-6{padding:1.5rem}.px-3{padding-left:.75rem;padding-right:.75rem}.px-4{padding-left:1rem;padding-right:1rem}.py-1{padding-top:.25rem;padding-bottom:.25rem}.py-1\.5{padding-top:.375rem;padding-bottom:.375rem}.py-2{padding-top:.5rem;padding-bottom:.5rem}.pb-4{padding-bottom:1rem}.pt-16{padding-top:4rem}.text-center{text-align:center}.text-2xl{font-size:1.5rem;line-height:2rem}.text-3xl{font-size:1.875rem;line-height:2.25rem}.text-sm{font-size:.875rem;line-height:1.25rem}.text-xs{font-size:.75rem;line-height:1rem}.font-bold{font-weight:700}.font-extrabold{font-weight:800}.font-medium{font-weight:500}.leading-relaxed{line-height:1.625}.tracking-wide{letter-spacing:.025em}.text-pink-300{--tw-text-opacity:1;color:rgb(249 168 212/var(--tw-text-opacity,1))}.text-purple-300{--tw-text-opacity:1;color:rgb(216 180 254/var(--tw-text-opacity,1))}.text-purple-900{--tw-text-opacity:1;color:rgb(88 28 135/var(--tw-text-opacity,1))}.text-red-400{--tw-text-opacity:1;color:rgb(248 113 113/var(--tw-text-opacity,1))}.text-white{--tw-text-opacity:1;color:rgb(255 255 255/var(--tw-text-opacity,1))}.text-white\/40{color:hsla(0,0%,100%,.4)}.text-white\/50{color:hsla(0,0%,100%,.5)}.accent-purple-500{accent-color:#a855f7}.shadow-2xl{--tw-shadow:0 25px 50px -12px rgba(0,0,0,.25);--tw-shadow-colored:0 25px 50px -12px var(--tw-shadow-color);box-shadow:var(--tw-ring-offset-shadow,0 0 #0000),var(--tw-ring-shadow,0 0 #0000),var(--tw-shadow)}.blur-2xl{--tw-blur:blur(40px);filter:var(--tw-blur) var(--tw-brightness) var(--tw-contrast) var(--tw-grayscale) var(--tw-hue-rotate) var(--tw-invert) var(--tw-saturate) var(--tw-sepia) var(--tw-drop-shadow)}.backdrop-blur{--tw-backdrop-blur:blur(8px)}.backdrop-blur,.backdrop-blur-xl{-webkit-backdrop-filter:var(--tw-backdrop-blur) var(--tw-backdrop-brightness) var(--tw-backdrop-contrast) var(--tw-backdrop-grayscale) var(--tw-backdrop-hue-rotate) var(--tw-backdrop-invert) var(--tw-backdrop-opacity) var(--tw-backdrop-saturate) var(--tw-backdrop-sepia);backdrop-filter:var(--tw-backdrop-blur) var(--tw-backdrop-brightness) var(--tw-backdrop-contrast) var(--tw-backdrop-grayscale) var(--tw-backdrop-hue-rotate) var(--tw-backdrop-invert) var(--tw-backdrop-opacity) var(--tw-backdrop-saturate) var(--tw-backdrop-sepia)}.backdrop-blur-xl{--tw-backdrop-blur:blur(24px)}.transition-all{transition-property:all;transition-timing-function:cubic-bezier(.4,0,.2,1);transition-duration:.15s}.transition-colors{transition-property:color,background-color,border-color,text-decoration-color,fill,stroke;transition-timing-function:cubic-bezier(.4,0,.2,1);transition-duration:.15s}.duration-1000{transition-duration:1s}.duration-300{transition-duration:.3s}.ease-in-out{transition-timing-function:cubic-bezier(.4,0,.2,1)}.hover\:scale-105:hover{--tw-scale-x:1.05;--tw-scale-y:1.05;transform:translate(var(--tw-translate-x),var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y))}.hover\:bg-white\/20:hover{background-color:hsla(0,0%,100%,.2)}</style>
   <style>
     * { font-family: 'Tajawal', sans-serif; }
-    body { margin: 0; overflow: hidden; height: 100vh; }
+    html, body { margin: 0; overflow: hidden; height: 100vh; height: 100dvh; background: #0a1628; }
 
-    .chat-messages::-webkit-scrollbar { width: 4px; }
-    .chat-messages::-webkit-scrollbar-track { background: transparent; }
-    .chat-messages::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 4px; }
+    /* ارتفاع الشاشة الفعلي على الموبايل */
+    .app-h { height: 100vh; height: 100dvh; }
 
     @keyframes pulse-dot {
       0%, 100% { opacity: 1; transform: scale(1); }
@@ -26,32 +26,15 @@
     }
     .pulse-dot { animation: pulse-dot 1.5s ease-in-out infinite; }
 
-    @keyframes fadeInMsg {
-      from { opacity: 0; transform: translateY(8px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-    .msg-fade { animation: fadeInMsg 0.25s ease-out forwards; }
-
-    .play-btn-glow {
-      animation: glow-pulse 2s ease-in-out infinite;
-    }
+    .play-btn-glow { animation: glow-pulse 2s ease-in-out infinite; }
     @keyframes glow-pulse {
       0%, 100% { box-shadow: 0 0 0 0 rgba(168, 85, 247, 0.4); }
       50% { box-shadow: 0 0 0 16px rgba(168, 85, 247, 0); }
     }
 
-    .stars {
-      position: fixed;
-      inset: 0;
-      pointer-events: none;
-      overflow: hidden;
-      z-index: 0;
-    }
+    .stars { position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: 0; }
     .star {
-      position: absolute;
-      background: white;
-      border-radius: 50%;
-      opacity: 0;
+      position: absolute; background: white; border-radius: 50%; opacity: 0;
       animation: twinkle var(--dur) ease-in-out infinite var(--delay);
     }
     @keyframes twinkle {
@@ -59,19 +42,16 @@
       50% { opacity: var(--op); }
     }
 
-    /* Chat window toggle */
-    .chat-window {
-      transition: height 0.3s ease, opacity 0.3s ease;
+    .spinner {
+      width: 28px; height: 28px; border-radius: 50%;
+      border: 3px solid rgba(88, 28, 135, 0.25);
+      border-top-color: rgb(88, 28, 135);
+      animation: spin 0.9s linear infinite;
     }
-    .chat-window.collapsed {
-      height: 44px !important;
-    }
-    .chat-window.expanded {
-      height: 320px;
-    }
+    @keyframes spin { to { transform: rotate(360deg); } }
   </style>
 </head>
-<body class="bg-gray-950">
+<body>
 <div id="root"></div>
 
 <script type="text/babel" data-presets="react,env">
@@ -90,13 +70,158 @@ firebase.initializeApp(firebaseConfig);
 const analytics = firebase.analytics();
 const database = firebase.database();
 
-const { useState, useEffect, useRef } = React;
+const { useState, useEffect, useRef, useCallback, useMemo } = React;
 
 // =====================
-// STARS
+// أدوات مساعدة
+// =====================
+
+// تخزين محلي آمن لا يتعطل في وضع التصفح الخاص
+const storage = {
+  get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} },
+};
+
+// أجهزة آبل لا تسمح بالتحكم في مستوى الصوت من الصفحة
+const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+function logEvent(name) {
+  try { analytics.logEvent(name); } catch (e) {}
+}
+
+// =====================
+// تحديد الدولة
+// =====================
+
+// بديل احتياطي من المنطقة الزمنية للجهاز عند تعذّر الخدمة الخارجية
+const TZ_COUNTRY = {
+  'Africa/Cairo': 'EG', 'Asia/Riyadh': 'SA', 'Asia/Dubai': 'AE', 'Asia/Kuwait': 'KW',
+  'Asia/Qatar': 'QA', 'Asia/Bahrain': 'BH', 'Asia/Muscat': 'OM', 'Asia/Amman': 'JO',
+  'Asia/Baghdad': 'IQ', 'Asia/Damascus': 'SY', 'Asia/Beirut': 'LB', 'Asia/Gaza': 'PS',
+  'Asia/Hebron': 'PS', 'Asia/Aden': 'YE', 'Africa/Khartoum': 'SD', 'Africa/Tripoli': 'LY',
+  'Africa/Tunis': 'TN', 'Africa/Algiers': 'DZ', 'Africa/Casablanca': 'MA', 'Africa/El_Aaiun': 'MA',
+  'Africa/Nouakchott': 'MR', 'Africa/Mogadishu': 'SO', 'Africa/Djibouti': 'DJ',
+  'Europe/Istanbul': 'TR', 'Europe/London': 'GB', 'Europe/Berlin': 'DE', 'Europe/Paris': 'FR',
+  'Europe/Amsterdam': 'NL', 'Europe/Brussels': 'BE', 'Europe/Stockholm': 'SE', 'Europe/Rome': 'IT',
+  'Europe/Madrid': 'ES', 'America/New_York': 'US', 'America/Chicago': 'US', 'America/Denver': 'US',
+  'America/Los_Angeles': 'US', 'America/Toronto': 'CA', 'Australia/Sydney': 'AU',
+  'Asia/Kuala_Lumpur': 'MY', 'Asia/Jakarta': 'ID', 'Asia/Karachi': 'PK',
+};
+
+function countryFromTimezone() {
+  try {
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    return TZ_COUNTRY[tz] || 'XX';
+  } catch (e) { return 'XX'; }
+}
+
+// يحفظ الدولة يومًا كاملًا لتقليل الطلبات على الخدمة الخارجية
+async function getCountryCode() {
+  try {
+    const cached = JSON.parse(storage.get('radio_country') || 'null');
+    if (cached && cached.code && Date.now() - cached.at < 86400000) return cached.code;
+  } catch (e) {}
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 4000);
+    const r = await fetch('https://ipapi.co/json/', { signal: ctrl.signal });
+    clearTimeout(timer);
+    const d = await r.json();
+    if (d && typeof d.country_code === 'string' && /^[A-Z]{2}$/.test(d.country_code)) {
+      storage.set('radio_country', JSON.stringify({ code: d.country_code, at: Date.now() }));
+      return d.country_code;
+    }
+  } catch (e) {}
+  return countryFromTimezone();
+}
+
+// =====================
+// قائمة اللقاءات
+// =====================
+
+const MEDIA_BASES = {
+  c: atob('aHR0cHM6Ly9hcmNoaXZlLm9yZy9kb3dubG9hZC94V2FseWFzdGFhZmVmTXAzL194V2FseWFzdGFhZmVm'),
+  L: atob('aHR0cHM6Ly9hcmNoaXZlLm9yZy9kb3dubG9hZC94V2FseWFzdGFhZmVmTXAzL3hXYWx5YXN0YWFmZWZfTElWRQ=='),
+};
+const mediaUrl = (id) => MEDIA_BASES[id[0]] + id.slice(1) + '.mp3';
+
+const ORIGINAL_PLAYLIST = [
+  { id: "c01", duration: 2719, title: "الكورس الأساسي لقاء 1, الإباحية مشكلة ديناميكية الإباحية مشكلة نظامية" },
+  { id: "c02", duration: 2619, title: "الكورس الأساسي لقاء 2 تشوه التنبؤ و تشوه المثالية " },
+  { id: "c03", duration: 3036, title: "الكورس الأساسي لقاء 3 , تشوه التفكير بالتمني و تشوه التعريف " },
+  { id: "c04", duration: 2250, title: "الكورس الأساسي لقاء 4 , تشوه الينبغيات " },
+  { id: "L01", duration: 2714, title: "لقاء 1 - محاور التغيير" },
+  { id: "L02", duration: 2510, title: "لقاء 2 - قرار الإقلاع عن الإباحية" },
+  { id: "L03", duration: 2073, title: "لقاء 3 - بحس إن الإباحية فرصة صعب تتفوت" },
+  { id: "L04", duration: 1859, title: "لقاء 4 - الأفكار مسيطرة عليا وبتوقعني" },
+  { id: "L05", duration: 1828, title: "لقاء 5 - مغالطات الإدمان وعلاجه" },
+  { id: "L06", duration: 1989, title: "لقاء 6 - بخاف تنزل عليا مصيبة بعد الوقوع" },
+  { id: "L07", duration: 2193, title: "لقاء 7 - التعامل مع الخواطر والتفكير الجنسي" },
+  { id: "L08", duration: 2197, title: "لقاء 8 - هتفرج وابقى أتوب" },
+  { id: "L09", duration: 2850, title: "لقاء 9 - أنا هفضل أعاني بدون جنس كده كتير؟" },
+  { id: "L10", duration: 1584, title: "لقاء 10 - العلاج الشمولي للإباحية" },
+  { id: "L11", duration: 1434, title: "لقاء 11 - علاج اليأس وسرعة الإحباط" },
+  { id: "L12", duration: 2117, title: "لقاء 12 - كيف نتعامل مع الشعور بالشهوة" },
+  { id: "L13", duration: 2063, title: "لقاء 13 - ليه بتقدم فترة وبعدين بتراجع؟" },
+  { id: "L14", duration: 2193, title: "لقاء 14 - الفرق بين الخوف والرعب من المعصية" },
+  { id: "L15", duration: 2151, title: "لقاء 15 - طاعة قصاد معصية والدنيا ماشية!" },
+  { id: "L16", duration: 2345, title: "لقاء 16 - خطوات عملية لعلاج الإباحية" },
+  { id: "L17", duration: 2121, title: "لقاء 17 - علاج الإباحية فن مش بالعافية" },
+  { id: "L18", duration: 2251, title: "لقاء 18 - أتجوز ولا أستنى لما اتعافى؟" },
+  { id: "L19", duration: 1955, title: "لقاء 19 - ازاي اتعامل مع أعراض الانسحاب؟" },
+  { id: "L20", duration: 1978, title: "لقاء 20 - الفرق بين الزواج والإباحية" },
+  { id: "L21", duration: 1586, title: "لقاء 21 - خايف أقاوم وفي الآخر أنفجر" },
+  { id: "L22", duration: 1613, title: "لقاء 22 - الفرق بين التبطيل والتعافي" },
+  { id: "L23", duration: 2091, title: "لقاء 23 - ليه لما بقع بستحلاها ومش بعرف أوقف؟" },
+  { id: "L24", duration: 2002, title: "لقاء 24 - التعافي رحلة مش هدف" },
+  { id: "L25", duration: 2035, title: "لقاء 25 - مش مشكلة المرادي مانا كده كده بنتعافى" },
+  { id: "L26", duration: 2675, title: "لقاء 26 - الإباحية مش مشكلة إدمان" },
+  { id: "L27", duration: 2357, title: "لقاء 27 - الفرق بين الندم وجلد الذات" },
+  { id: "L28", duration: 2494, title: "لقاء 28 - التعافي زي بناء العضلات" },
+  { id: "L29", duration: 1883, title: "لقاء 29 - خدعوك فقالوا: الإباحية دمرت حياتك" },
+  { id: "L30", duration: 2066, title: "لقاء 30 - تقاوم ليه؟ مانت كده كده هتقع!" },
+  { id: "L31", duration: 1527, title: "لقاء 31 - هل المسار اللي بيتكون في المخ مش بيموت؟" },
+];
+
+function seededShuffle(array, seed) {
+  let ci = array.length, tv, ri;
+  const rnd = () => { const x = Math.sin(seed++) * 10000; return x - Math.floor(x); };
+  while (ci !== 0) { ri = Math.floor(rnd() * ci); ci--; tv = array[ci]; array[ci] = array[ri]; array[ri] = tv; }
+  return array;
+}
+
+// الترتيب اليومي يُحسب بالتوقيت العالمي ليكون موحّدًا لكل المستمعين في كل الدول
+const playlistCache = {};
+function getPlaylist(now) {
+  const d = new Date(now);
+  const seed = d.getUTCFullYear() * 10000 + (d.getUTCMonth() + 1) * 100 + d.getUTCDate();
+  if (!playlistCache[seed]) playlistCache[seed] = seededShuffle([...ORIGINAL_PLAYLIST], seed);
+  return playlistCache[seed];
+}
+
+const RADIO_EPOCH = 1672531200000;
+const TOTAL_DURATION = ORIGINAL_PLAYLIST.reduce((s, t) => s + t.duration, 0);
+
+// موضع البث الحي الآن: اللقاء الحالي والتالي والثانية داخل اللقاء
+function getRadioState(now = Date.now()) {
+  const playlist = getPlaylist(now);
+  const pos = Math.floor((now - RADIO_EPOCH) / 1000) % TOTAL_DURATION;
+  let acc = 0;
+  for (let i = 0; i < playlist.length; i++) {
+    if (pos < acc + playlist[i].duration) {
+      return { track: playlist[i], next: playlist[(i + 1) % playlist.length], position: pos - acc };
+    }
+    acc += playlist[i].duration;
+  }
+  return { track: playlist[0], next: playlist[1], position: 0 };
+}
+
+// =====================
+// النجوم
 // =====================
 function Stars() {
-  const stars = Array.from({ length: 60 }, (_, i) => ({
+  const stars = useMemo(() => Array.from({ length: 60 }, (_, i) => ({
     id: i,
     size: Math.random() * 2.5 + 0.5,
     top: Math.random() * 100,
@@ -104,7 +229,7 @@ function Stars() {
     dur: (Math.random() * 4 + 2).toFixed(1),
     delay: (Math.random() * 5).toFixed(1),
     op: (Math.random() * 0.5 + 0.1).toFixed(2),
-  }));
+  })), []);
   return (
     <div className="stars">
       {stars.map(s => (
@@ -119,7 +244,7 @@ function Stars() {
 }
 
 // =====================
-// LISTENERS BADGE
+// عدد المستمعين الآن
 // =====================
 function Listeners({ onlineCount }) {
   return (
@@ -131,18 +256,18 @@ function Listeners({ onlineCount }) {
 }
 
 // =====================
-// COUNTRY STATS
+// المستمعون حسب الدولة
 // =====================
 function CountryStats({ onlineUsers }) {
-  const [stats, setStats] = useState([]);
-  useEffect(() => {
+  const stats = useMemo(() => {
     const counts = onlineUsers.reduce((acc, u) => {
-      const c = u.countryCode || 'XX';
+      const c = /^[A-Z]{2}$/.test(u.countryCode || '') ? u.countryCode : 'XX';
       acc[c] = (acc[c] || 0) + 1;
       return acc;
     }, {});
-    setStats(Object.entries(counts).map(([code, count]) => ({ code, count })).sort((a, b) => b.count - a.count));
+    return Object.entries(counts).map(([code, count]) => ({ code, count })).sort((a, b) => b.count - a.count);
   }, [onlineUsers]);
+
   if (!stats.length) return null;
   return (
     <div className="absolute top-12 left-4 bg-black/30 backdrop-blur text-white text-xs p-2 rounded-xl z-10 border border-white/10">
@@ -160,7 +285,7 @@ function CountryStats({ onlineUsers }) {
 }
 
 // =====================
-// TOTAL STATS
+// الإحصائيات الكلية
 // =====================
 function TotalStats() {
   const [stats, setStats] = useState({ total_visits: 0, total_listeners: 0 });
@@ -172,7 +297,7 @@ function TotalStats() {
     });
     return () => ref.off('value', l);
   }, []);
-  const fmt = n => n >= 1000000 ? (n/1000000).toFixed(1)+'م' : n >= 1000 ? (n/1000).toFixed(1)+'ألف' : n;
+  const fmt = n => n >= 1000000 ? (n / 1000000).toFixed(1) + 'م' : n >= 1000 ? (n / 1000).toFixed(1) + 'ألف' : n;
   return (
     <div className="absolute top-4 right-4 bg-black/30 backdrop-blur text-white text-xs px-3 py-2 rounded-xl z-10 border border-white/10 text-center">
       <div className="flex items-center gap-3">
@@ -191,433 +316,302 @@ function TotalStats() {
 }
 
 // =====================
-// NAME SETUP MODAL (first visit)
+// تسجيل الحضور
+// كل زائر يسجّل نفسه فقط، ويُحذف تلقائيًا من الخادم عند انقطاع اتصاله
 // =====================
-function NameSetupModal({ onSave }) {
-  const [val, setVal] = useState('');
-  const suggested = useRef(`متعافي_${Math.floor(Math.random() * 9000) + 1000}`);
-
-  const handleSave = () => {
-    const name = val.trim() || suggested.current;
-    onSave(name);
-  };
-
-  return (
-    <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/60 backdrop-blur-sm">
-      <div className="bg-gray-900 border border-white/10 rounded-t-3xl p-6 w-full max-w-md">
-        <p className="text-white font-bold text-lg text-center mb-1">مرحباً بك 👋</p>
-        <p className="text-white/50 text-sm text-center mb-5">اختر اسماً للشات — مجهول تماماً</p>
-
-        <input
-          type="text"
-          value={val}
-          onChange={e => setVal(e.target.value.slice(0, 30))}
-          placeholder={suggested.current}
-          className="w-full bg-white/10 text-white placeholder-white/30 rounded-xl px-4 py-3 text-sm outline-none border border-white/10 focus:border-purple-500/60 transition-colors mb-3 text-center"
-          maxLength={30}
-        />
-        <p className="text-white/30 text-xs text-center mb-4">
-          اتركه فارغاً للاسم العشوائي: <span className="text-white/50">{suggested.current}</span>
-        </p>
-
-        <button
-          onClick={handleSave}
-          className="w-full bg-purple-600 hover:bg-purple-500 text-white py-3 rounded-xl font-bold transition-colors"
-        >
-          دخول الشات ✓
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// =====================
-// INLINE CHAT WINDOW (always visible at bottom)
-// =====================
-function ChatWindow({ myName, onEditName }) {
-  const [messages, setMessages] = useState([]);
-  const [input, setInput] = useState('');
-  const [sending, setSending] = useState(false);
-  const [expanded, setExpanded] = useState(false);
-  const bottomRef = useRef(null);
-  const MAX_MESSAGES = 50;
-  const MAX_CHARS = 200;
+function usePresence() {
+  const [users, setUsers] = useState([]);
 
   useEffect(() => {
-    const ref = database.ref('/chat/messages').limitToLast(MAX_MESSAGES);
-    const l = ref.on('value', snap => {
-      const data = snap.val();
-      if (!data) { setMessages([]); return; }
-      const msgs = Object.entries(data).map(([k, v]) => ({ id: k, ...v }));
-      msgs.sort((a, b) => a.timestamp - b.timestamp);
-      setMessages(msgs);
+    let myRef = null;
+    let code = null;
+    let connected = false;
+    let disposed = false;
+
+    const register = () => {
+      if (disposed || !connected || !code || myRef) return;
+      const ref = database.ref('/status').push();
+      myRef = ref;
+      ref.onDisconnect().remove()
+        .then(() => ref.set({ countryCode: code, since: firebase.database.ServerValue.TIMESTAMP }))
+        .catch(console.error);
+    };
+
+    getCountryCode().then(c => { code = c; register(); });
+
+    const connRef = database.ref('.info/connected');
+    const onConn = connRef.on('value', snap => {
+      connected = snap.val() === true;
+      // عند انقطاع الاتصال يحذف الخادم السجل القديم، وعند العودة يُسجَّل من جديد
+      if (!connected) { myRef = null; return; }
+      register();
     });
-    return () => ref.off('value', l);
+
+    const statusRef = database.ref('/status');
+    const onStatus = statusRef.on('value', snap => {
+      const list = [];
+      snap.forEach(child => { const v = child.val(); if (v) list.push(v); });
+      setUsers(list);
+    });
+
+    return () => {
+      disposed = true;
+      connRef.off('value', onConn);
+      statusRef.off('value', onStatus);
+      if (myRef) myRef.remove().catch(() => {});
+    };
   }, []);
 
-  useEffect(() => {
-    if (expanded) {
-      setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
-    }
-  }, [messages, expanded]);
-
-  const sendMessage = async () => {
-    const text = input.trim();
-    if (!text || sending) return;
-    setSending(true);
-    try {
-      await database.ref('/chat/messages').push({
-        name: myName,
-        text,
-        timestamp: firebase.database.ServerValue.TIMESTAMP,
-      });
-      setInput('');
-    } catch(e) { console.error(e); }
-    setSending(false);
-  };
-
-  const handleKey = (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
-  };
-
-  const formatTime = (ts) => {
-    if (!ts) return '';
-    const d = new Date(ts);
-    return `${d.getHours()}:${String(d.getMinutes()).padStart(2,'0')}`;
-  };
-
-  // unread count when collapsed
-  const [lastSeenCount, setLastSeenCount] = useState(0);
-  const unread = expanded ? 0 : Math.max(0, messages.length - lastSeenCount);
-  useEffect(() => {
-    if (expanded) setLastSeenCount(messages.length);
-  }, [expanded, messages.length]);
-
-  return (
-    <div
-      className="fixed bottom-0 left-0 right-0 z-40 flex flex-col"
-      style={{
-        height: expanded ? '300px' : '44px',
-        transition: 'height 0.3s ease',
-        background: 'linear-gradient(180deg, rgba(15,5,30,0.97) 0%, rgba(10,5,25,0.99) 100%)',
-        borderTop: '1px solid rgba(255,255,255,0.08)',
-      }}
-    >
-      {/* Header bar — always visible, click to toggle */}
-      <div
-        className="flex items-center justify-between px-4 cursor-pointer flex-shrink-0"
-        style={{ height: '44px' }}
-        onClick={() => setExpanded(e => !e)}
-      >
-        <div className="flex items-center gap-2">
-          <span className="text-white text-sm">💬</span>
-          <span className="text-white text-sm font-bold">شات التعافي</span>
-          {unread > 0 && (
-            <span className="bg-purple-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">
-              {unread}
-            </span>
-          )}
-        </div>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={e => { e.stopPropagation(); onEditName(); }}
-            className="text-white/40 hover:text-white text-xs border border-white/10 px-2 py-0.5 rounded-lg transition-colors"
-          >
-            {myName}
-          </button>
-          <span className="text-white/40 text-xs">{expanded ? '▼' : '▲'}</span>
-        </div>
-      </div>
-
-      {/* Messages area */}
-      {expanded && (
-        <div className="flex flex-col flex-1 overflow-hidden">
-          <div className="chat-messages flex-1 overflow-y-auto px-4 py-2 space-y-2">
-            {messages.length === 0 && (
-              <div className="text-center text-white/25 text-xs mt-4">
-                <p>كن أول من يكتب... الشات مجهول وآمن 🌙</p>
-              </div>
-            )}
-            {messages.map((msg, i) => {
-              const isMe = msg.name === myName;
-              return (
-                <div key={msg.id || i} className={`msg-fade flex items-end gap-1.5 ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
-                  {!isMe && (
-                    <span className="text-purple-300 text-xs font-bold flex-shrink-0 mb-1">{msg.name}</span>
-                  )}
-                  <div className={`max-w-[70%] px-3 py-1.5 rounded-2xl text-xs text-white leading-relaxed ${
-                    isMe ? 'bg-purple-600/80 rounded-tr-sm' : 'bg-white/10 rounded-tl-sm'
-                  }`}>
-                    {msg.text}
-                    <span className="text-white/30 text-xs mr-2">{formatTime(msg.timestamp)}</span>
-                  </div>
-                </div>
-              );
-            })}
-            <div ref={bottomRef} />
-          </div>
-
-          {/* Input */}
-          <div className="px-3 py-2 border-t border-white/5 flex gap-2 items-center flex-shrink-0">
-            <input
-              type="text"
-              value={input}
-              onChange={e => setInput(e.target.value.slice(0, MAX_CHARS))}
-              onKeyDown={handleKey}
-              placeholder="اكتب رسالتك..."
-              className="flex-1 bg-white/8 text-white placeholder-white/25 rounded-xl px-3 py-2 text-xs outline-none border border-white/10 focus:border-purple-500/40 transition-colors"
-              style={{background: 'rgba(255,255,255,0.06)'}}
-            />
-            <button
-              onClick={sendMessage}
-              disabled={!input.trim() || sending}
-              className="w-9 h-9 rounded-full bg-purple-600 hover:bg-purple-500 disabled:opacity-30 transition-all flex items-center justify-center text-white flex-shrink-0 text-sm"
-            >
-              {sending ? '…' : '↑'}
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
+  return users;
 }
 
 // =====================
-// NAME EDIT MODAL
+// التطبيق الرئيسي
 // =====================
-function NameEditModal({ currentName, onSave, onClose }) {
-  const [val, setVal] = useState('');
-  const generate = () => {
-    onSave(`متعافي_${Math.floor(Math.random() * 9000) + 1000}`);
-  };
-  const handleSave = () => {
-    const name = val.trim();
-    if (name) onSave(name);
-  };
-  return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm px-6">
-      <div className="bg-gray-900 border border-white/10 rounded-2xl p-6 w-full max-w-sm text-center">
-        <p className="text-white font-bold mb-1">تغيير الاسم</p>
-        <p className="text-white/40 text-xs mb-4">اسمك الحالي: <span className="text-white">{currentName}</span></p>
-        <input
-          type="text"
-          value={val}
-          onChange={e => setVal(e.target.value.slice(0, 30))}
-          placeholder="اكتب اسماً جديداً..."
-          className="w-full bg-white/10 text-white placeholder-white/30 rounded-xl px-4 py-2.5 text-sm outline-none border border-white/10 focus:border-purple-500/60 transition-colors mb-3 text-center"
-        />
-        <button
-          onClick={handleSave}
-          disabled={!val.trim()}
-          className="w-full bg-purple-600 hover:bg-purple-500 disabled:opacity-30 text-white py-2.5 rounded-xl font-bold transition-colors mb-2 text-sm"
-        >
-          حفظ الاسم
-        </button>
-        <button
-          onClick={generate}
-          className="w-full text-white/40 hover:text-white text-xs py-2 transition-colors border border-white/10 rounded-xl mb-2"
-        >
-          🎲 اسم عشوائي
-        </button>
-        <button onClick={onClose} className="w-full text-white/25 hover:text-white/50 text-xs py-1 transition-colors">
-          إلغاء
-        </button>
-      </div>
-    </div>
-  );
-}
+const STATUS_TEXT = {
+  loading: 'جارٍ تجهيز البث...',
+  next: 'جارٍ الانتقال إلى اللقاء التالي...',
+  blocked: 'توقف البث، اضغط زر التشغيل للمتابعة',
+  error: 'تعذّر تشغيل الصوت، ستُعاد المحاولة تلقائيًا',
+};
 
-// =====================
-// PLAYLIST
-// =====================
-const ORIGINAL_PLAYLIST = [
-  { url: "https://archive.org/download/xWalyastaafefMp3/_xWalyastaafef01.mp3", duration: 2719, title: "الكورس الأساسي لقاء 1, الإباحية مشكلة ديناميكية الإباحية مشكلة نظامية" },
-  { url: "https://archive.org/download/xWalyastaafefMp3/_xWalyastaafef02.mp3", duration: 2619, title: "الكورس الأساسي لقاء 2 تشوه التنبؤ و تشوه المثالية " },
-  { url: "https://archive.org/download/xWalyastaafefMp3/_xWalyastaafef03.mp3", duration: 3036, title: "الكورس الأساسي لقاء 3 , تشوه التفكير بالتمني و تشوه التعريف " },
-  { url: "https://archive.org/download/xWalyastaafefMp3/_xWalyastaafef04.mp3", duration: 2250, title: "الكورس الأساسي لقاء 4 , تشوه الينبغيات " },
-  { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE01.mp3", duration: 2714, title: "لقاء 1 - محاور التغيير" },
-  { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE02.mp3", duration: 2510, title: "لقاء 2 - قرار الإقلاع عن الإباحية" },
-  { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE03.mp3", duration: 2073, title: "لقاء 3 - بحس إن الإباحية فرصة صعب تتفوت" },
-  { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE04.mp3", duration: 1859, title: "لقاء 4 - الأفكار مسيطرة عليا وبتوقعني" },
-  { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE05.mp3", duration: 1828, title: "لقاء 5 - مغالطات الإدمان وعلاجه" },
-  { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE06.mp3", duration: 1989, title: "لقاء 6 - بخاف تنزل عليا مصيبة بعد الوقوع" },
-  { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE07.mp3", duration: 2193, title: "لقاء 7 - التعامل مع الخواطر والتفكير الجنسي" },
-  { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE08.mp3", duration: 2197, title: "لقاء 8 - هتفرج وابقى أتوب" },
-  { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE09.mp3", duration: 2850, title: "لقاء 9 - أنا هفضل أعاني بدون جنس كده كتير؟" },
-  { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE10.mp3", duration: 1584, title: "لقاء 10 - العلاج الشمولي للإباحية" },
-  { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE11.mp3", duration: 1434, title: "لقاء 11 - علاج اليأس وسرعة الإحباط" },
-  { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE12.mp3", duration: 2117, title: "لقاء 12 - كيف نتعامل مع الشعور بالشهوة" },
-  { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE13.mp3", duration: 2063, title: "لقاء 13 - ليه بتقدم فترة وبعدين بتراجع؟" },
-  { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE14.mp3", duration: 2193, title: "لقاء 14 - الفرق بين الخوف والرعب من المعصية" },
-  { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE15.mp3", duration: 2151, title: "لقاء 15 - طاعة قصاد معصية والدنيا ماشية!" },
-  { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE16.mp3", duration: 2345, title: "لقاء 16 - خطوات عملية لعلاج الإباحية" },
-  { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE17.mp3", duration: 2121, title: "لقاء 17 - علاج الإباحية فن مش بالعافية" },
-  { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE18.mp3", duration: 2251, title: "لقاء 18 - أتجوز ولا أستنى لما اتعافى؟" },
-  { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE19.mp3", duration: 1955, title: "لقاء 19 - ازاي اتعامل مع أعراض الانسحاب؟" },
-  { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE20.mp3", duration: 1978, title: "لقاء 20 - الفرق بين الزواج والإباحية" },
-  { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE21.mp3", duration: 1586, title: "لقاء 21 - خايف أقاوم وفي الآخر أنفجر" },
-  { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE22.mp3", duration: 1613, title: "لقاء 22 - الفرق بين التبطيل والتعافي" },
-  { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE23.mp3", duration: 2091, title: "لقاء 23 - ليه لما بقع بستحلاها ومش بعرف أوقف؟" },
-  { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE24.mp3", duration: 2002, title: "لقاء 24 - التعافي رحلة مش هدف" },
-  { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE25.mp3", duration: 2035, title: "لقاء 25 - مش مشكلة المرادي مانا كده كده بنتعافى" },
-  { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE26.mp3", duration: 2675, title: "لقاء 26 - الإباحية مش مشكلة إدمان" },
-  { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE27.mp3", duration: 2357, title: "لقاء 27 - الفرق بين الندم وجلد الذات" },
-  { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE28.mp3", duration: 2494, title: "لقاء 28 - التعافي زي بناء العضلات" },
-  { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE29.mp3", duration: 1883, title: "لقاء 29 - خدعوك فقالوا: الإباحية دمرت حياتك" },
-  { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE30.mp3", duration: 2066, title: "لقاء 30 - تقاوم ليه؟ مانت كده كده هتقع!" },
-  { url: "https://archive.org/download/xWalyastaafefMp3/xWalyastaafef_LIVE30.mp3", duration: 1527, title: "لقاء 31 - هل المسار اللي بيتكون في المخ مش بيموت؟" },
-];
-
-function seededShuffle(array, seed) {
-  let ci = array.length, tv, ri;
-  const rnd = () => { var x = Math.sin(seed++) * 10000; return x - Math.floor(x); };
-  while (ci !== 0) { ri = Math.floor(rnd() * ci); ci--; tv = array[ci]; array[ci] = array[ri]; array[ri] = tv; }
-  return array;
-}
-const today = new Date();
-const dateSeed = today.getFullYear() * 10000 + (today.getMonth() + 1) * 100 + today.getDate();
-const PLAYLIST = seededShuffle([...ORIGINAL_PLAYLIST], dateSeed);
-const RADIO_EPOCH = 1672531200000;
-const totalPlaylistDuration = PLAYLIST.reduce((s, t) => s + t.duration, 0);
-
-function getRadioState() {
-  const now = Date.now();
-  const elapsed = Math.floor((now - RADIO_EPOCH) / 1000);
-  const pos = elapsed % totalPlaylistDuration;
-  let acc = 0;
-  for (let i = 0; i < PLAYLIST.length; i++) {
-    if (pos < acc + PLAYLIST[i].duration) return { currentTrack: PLAYLIST[i], currentIndex: i, positionInTrack: pos - acc };
-    acc += PLAYLIST[i].duration;
-  }
-  return { currentTrack: PLAYLIST[0], currentIndex: 0, positionInTrack: 0 };
-}
-
-// =====================
-// MAIN APP
-// =====================
 function App() {
   const audioRef = useRef(null);
+  const wantPlayRef = useRef(false);     // هل يريد المستخدم الاستماع الآن
+  const trackIdRef = useRef(null);       // اللقاء المحمّل حاليًا في المشغّل
+  const statusRef = useRef('idle');
+  const endedRef = useRef(false);
+  const pendingSeekRef = useRef(false);
+  const lastProgressRef = useRef(0);
+  const lastAttemptRef = useRef(0);
+
+  const [initial] = useState(() => getRadioState());
   const [isPlaying, setIsPlaying] = useState(false);
-  const [volume, setVolume] = useState(0.7);
-  const [onlineUsers, setOnlineUsers] = useState([]);
-  const [currentTrackIndex, setCurrentTrackIndex] = useState(getRadioState().currentIndex);
-  const [currentTime, setCurrentTime] = useState(getRadioState().positionInTrack);
-  const [showNameModal, setShowNameModal] = useState(false);
+  const [status, setStatus] = useState('idle');
+  const [track, setTrack] = useState(initial.track);
+  const [nextTrack, setNextTrack] = useState(initial.next);
+  const [currentTime, setCurrentTime] = useState(initial.position);
+  const [volume, setVolume] = useState(() => {
+    const v = parseFloat(storage.get('radio_volume'));
+    return isNaN(v) ? 0.7 : Math.min(1, Math.max(0, v));
+  });
 
-  // Name logic — show setup only on first visit
-  const [myName, setMyName] = useState(() => localStorage.getItem('radio_username') || null);
-  const [showNameSetup, setShowNameSetup] = useState(() => !localStorage.getItem('radio_username'));
+  const onlineUsers = usePresence();
 
-  const handleFirstSave = (name) => {
-    setMyName(name);
-    localStorage.setItem('radio_username', name);
-    setShowNameSetup(false);
-  };
-
-  const handleEditSave = (name) => {
-    setMyName(name);
-    localStorage.setItem('radio_username', name);
-    setShowNameModal(false);
-  };
-
-  const currentTrack = PLAYLIST[currentTrackIndex];
-  const nextTrack = PLAYLIST[(currentTrackIndex + 1) % PLAYLIST.length];
-
-  // Presence + Stats
-  useEffect(() => {
-    const statsRef = database.ref('/stats');
-    statsRef.child('total_visits').set(firebase.database.ServerValue.increment(1));
-    if (!localStorage.getItem('hasVisitedRadio')) {
-      statsRef.child('total_listeners').set(firebase.database.ServerValue.increment(1));
-      localStorage.setItem('hasVisitedRadio', 'true');
-    }
-    let sessionRef;
-    async function getCountry() {
-      try {
-        const r = await fetch('https://ipapi.co/json/');
-        const d = await r.json();
-        return { countryCode: d.country_code, countryName: d.country_name };
-      } catch { return { countryCode: 'XX', countryName: 'Unknown' }; }
-    }
-    async function setupPresence() {
-      const id = Math.random().toString(36).substring(2);
-      sessionRef = database.ref('/status/' + id);
-      const loc = await getCountry();
-      await sessionRef.set({ state: 'online', ...loc, last_seen: firebase.database.ServerValue.TIMESTAMP });
-      sessionRef.onDisconnect().remove();
-    }
-    setupPresence();
-    const hb = setInterval(() => {
-      sessionRef?.child('last_seen').set(firebase.database.ServerValue.TIMESTAMP);
-    }, 15000);
-    const statusRef = database.ref('/status');
-    const l = statusRef.on('value', snap => {
-      const now = Date.now(), users = [];
-      snap.forEach(c => {
-        const u = c.val();
-        if (u?.last_seen && now - u.last_seen < 35000) users.push(u);
-        else if (u?.last_seen && now - u.last_seen > 60000) c.ref.remove();
-      });
-      setOnlineUsers(users);
-    });
-    return () => { clearInterval(hb); statusRef.off('value', l); sessionRef?.remove(); };
+  const updateStatus = useCallback((s) => {
+    statusRef.current = s;
+    setStatus(s);
   }, []);
 
-  // Audio logic
+  // الإحصائيات الكلية
   useEffect(() => {
+    const statsRef = database.ref('/stats');
+    statsRef.child('total_visits').set(firebase.database.ServerValue.increment(1)).catch(() => {});
+    if (!storage.get('hasVisitedRadio')) {
+      statsRef.child('total_listeners').set(firebase.database.ServerValue.increment(1)).catch(() => {});
+      storage.set('hasVisitedRadio', 'true');
+    }
+  }, []);
+
+  // ضبط المشغّل على موضع البث الحي ثم التشغيل
+  const syncAndPlay = useCallback((forceReload = false) => {
     const audio = audioRef.current;
-    if (!audio || !currentTrack) return;
-    const onTime = () => setCurrentTime(audio.currentTime);
-    const onEnd = () => setCurrentTrackIndex(p => (p + 1) % PLAYLIST.length);
-    audio.addEventListener('timeupdate', onTime);
-    audio.addEventListener('ended', onEnd);
-    if (audio.src !== new URL(currentTrack.url, window.location.href).href) audio.src = currentTrack.url;
-    if (isPlaying) audio.play().catch(console.error);
-    else audio.pause();
-    return () => { audio.removeEventListener('timeupdate', onTime); audio.removeEventListener('ended', onEnd); };
-  }, [currentTrack, isPlaying]);
+    if (!audio) return;
+    const s = getRadioState();
+    setTrack(s.track);
+    setNextTrack(s.next);
+    endedRef.current = false;
+    lastAttemptRef.current = Date.now();
+    lastProgressRef.current = Date.now();
+    updateStatus('loading');
+
+    if (forceReload || trackIdRef.current !== s.track.id) {
+      trackIdRef.current = s.track.id;
+      pendingSeekRef.current = true;
+      audio.src = mediaUrl(s.track.id);
+      audio.load();
+    } else if (audio.readyState >= 1) {
+      audio.currentTime = s.position;
+    } else {
+      pendingSeekRef.current = true;
+    }
+
+    const p = audio.play();
+    if (p && p.catch) {
+      p.catch(err => {
+        if (!wantPlayRef.current) return;
+        const name = err && err.name;
+        if (name === 'AbortError') return; // تغيّر المصدر أثناء التحميل
+        updateStatus(name === 'NotAllowedError' ? 'blocked' : 'error');
+      });
+    }
+  }, [updateStatus]);
+
+  const start = useCallback(() => {
+    wantPlayRef.current = true;
+    setIsPlaying(true);
+    syncAndPlay();
+    logEvent('playback_started');
+  }, [syncAndPlay]);
+
+  const stop = useCallback(() => {
+    wantPlayRef.current = false;
+    setIsPlaying(false);
+    updateStatus('idle');
+    if (audioRef.current) audioRef.current.pause();
+    logEvent('playback_stopped');
+  }, [updateStatus]);
 
   const togglePlay = () => {
-    if (!isPlaying) {
-      const state = getRadioState();
-      setCurrentTrackIndex(state.currentIndex);
-      audioRef.current.currentTime = state.positionInTrack;
-      analytics.logEvent('playback_started', { track_title: PLAYLIST[state.currentIndex].title });
-    } else {
-      analytics.logEvent('playback_stopped');
-    }
-    setIsPlaying(p => !p);
+    if (isPlaying && statusRef.current === 'blocked') return syncAndPlay();
+    if (isPlaying) stop(); else start();
   };
+
+  // أحداث المشغّل
+  useEffect(() => {
+    const audio = audioRef.current;
+    audio.volume = volume;
+
+    const onTime = () => {
+      lastProgressRef.current = Date.now();
+      setCurrentTime(audio.currentTime);
+    };
+    const onPlaying = () => { if (wantPlayRef.current) updateStatus('playing'); };
+    const onWaiting = () => { if (wantPlayRef.current && statusRef.current !== 'next') updateStatus('loading'); };
+    const onMeta = () => {
+      if (!pendingSeekRef.current) return;
+      pendingSeekRef.current = false;
+      const s = getRadioState();
+      if (s.track.id === trackIdRef.current) audio.currentTime = s.position;
+    };
+    const onEnded = () => {
+      if (!wantPlayRef.current) return;
+      const s = getRadioState();
+      if (s.track.id !== trackIdRef.current) {
+        syncAndPlay();
+      } else {
+        // انتهى الملف قبل موعده في البث؛ ننتظر بدء اللقاء التالي
+        endedRef.current = true;
+        updateStatus('next');
+      }
+    };
+    // إيقاف من النظام (مكالمة، تطبيق آخر، شاشة القفل) يُحترم ولا يُستأنف تلقائيًا
+    const onPause = () => {
+      if (!wantPlayRef.current || audio.ended) return;
+      if (Date.now() - lastAttemptRef.current < 1500) return;
+      wantPlayRef.current = false;
+      setIsPlaying(false);
+      updateStatus('idle');
+    };
+    const onError = () => { if (wantPlayRef.current && audio.getAttribute('src')) updateStatus('error'); };
+
+    audio.addEventListener('timeupdate', onTime);
+    audio.addEventListener('playing', onPlaying);
+    audio.addEventListener('waiting', onWaiting);
+    audio.addEventListener('loadedmetadata', onMeta);
+    audio.addEventListener('ended', onEnded);
+    audio.addEventListener('pause', onPause);
+    audio.addEventListener('error', onError);
+    return () => {
+      audio.removeEventListener('timeupdate', onTime);
+      audio.removeEventListener('playing', onPlaying);
+      audio.removeEventListener('waiting', onWaiting);
+      audio.removeEventListener('loadedmetadata', onMeta);
+      audio.removeEventListener('ended', onEnded);
+      audio.removeEventListener('pause', onPause);
+      audio.removeEventListener('error', onError);
+    };
+  }, [syncAndPlay, updateStatus]);
+
+  // المراقب: يعيد المشغّل لموضع البث إذا توقف أو علّق أو تأخر
+  useEffect(() => {
+    const tick = () => {
+      const audio = audioRef.current;
+      const s = getRadioState();
+
+      // أثناء الإيقاف: عرض ما يُبث الآن
+      if (!wantPlayRef.current) {
+        setTrack(s.track);
+        setNextTrack(s.next);
+        setCurrentTime(s.position);
+        return;
+      }
+      if (!audio) return;
+
+      const sinceAttempt = Date.now() - lastAttemptRef.current;
+      const st = statusRef.current;
+
+      if (st === 'blocked') return;
+      if (s.track.id !== trackIdRef.current) return syncAndPlay();
+      if (endedRef.current) return;
+      if (st === 'error') { if (sinceAttempt > 8000) syncAndPlay(true); return; }
+      if (audio.paused) { if (sinceAttempt > 6000) syncAndPlay(); return; }
+      if (Date.now() - lastProgressRef.current > 15000 && sinceAttempt > 15000) return syncAndPlay(true);
+      if (audio.readyState >= 3 && Math.abs(audio.currentTime - s.position) > 15) {
+        audio.currentTime = s.position;
+      }
+    };
+
+    const id = setInterval(tick, 1000);
+    const onVisible = () => { if (document.visibilityState === 'visible') tick(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => { clearInterval(id); document.removeEventListener('visibilitychange', onVisible); };
+  }, [syncAndPlay]);
+
+  // شاشة القفل وأزرار التحكم الخارجية
+  useEffect(() => {
+    if (!('mediaSession' in navigator)) return;
+    try {
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: track.title,
+        artist: 'راديو وليستعفف',
+        album: 'بث مباشر',
+      });
+    } catch (e) {}
+  }, [track.id]);
+
+  useEffect(() => {
+    if (!('mediaSession' in navigator)) return;
+    const set = (action, handler) => {
+      try { navigator.mediaSession.setActionHandler(action, handler); } catch (e) {}
+    };
+    set('play', () => start());
+    set('pause', () => stop());
+    set('stop', () => stop());
+    ['seekbackward', 'seekforward', 'seekto', 'previoustrack', 'nexttrack'].forEach(a => set(a, null));
+  }, [start, stop]);
+
+  useEffect(() => {
+    if ('mediaSession' in navigator) {
+      try { navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused'; } catch (e) {}
+    }
+  }, [isPlaying]);
 
   const handleVolume = (e) => {
     const v = parseFloat(e.target.value);
     setVolume(v);
     if (audioRef.current) audioRef.current.volume = v;
+    storage.set('radio_volume', String(v));
   };
 
-  const fmt = s => isNaN(s) ? '0:00' : `${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}`;
-  const progress = (currentTime / currentTrack?.duration) * 100 || 0;
+  const fmt = s => isNaN(s) ? '0:00' : `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+  const progress = Math.min(100, (currentTime / track.duration) * 100 || 0);
+  const busy = isPlaying && (status === 'loading' || status === 'next');
+  const showPause = isPlaying && status !== 'blocked';
 
-  if (!currentTrack) return (
-    <div className="flex justify-center items-center h-screen text-white" style={{background:'linear-gradient(135deg,#1a0533,#0d1b4b)'}}>
-      جارٍ التحميل...
-    </div>
-  );
-
-  // Bottom padding = chat window height (44px collapsed or 300px expanded)
   return (
-    <div className="h-screen flex flex-col items-center justify-center p-4 relative overflow-hidden"
-         style={{background: 'linear-gradient(135deg, #1a0533 0%, #0d1b4b 50%, #0a1628 100%)'}}>
+    <div className="app-h flex flex-col items-center justify-center px-4 pt-16 pb-4 relative overflow-hidden select-none"
+         style={{ background: 'linear-gradient(135deg, #1a0533 0%, #0d1b4b 50%, #0a1628 100%)' }}
+         onContextMenu={e => e.preventDefault()}>
       <Stars />
 
       <Listeners onlineCount={onlineUsers.length} />
       <CountryStats onlineUsers={onlineUsers} />
       <TotalStats />
 
-      <audio ref={audioRef} />
+      <audio ref={audioRef} preload="none" controlsList="nodownload" />
 
-      {/* Main Card — sits above chat window */}
-      <div className="relative z-10 w-full max-w-sm" style={{marginBottom: '60px'}}>
+      <div className="relative z-10 w-full max-w-sm">
         <div className="absolute inset-0 bg-purple-600/20 rounded-3xl blur-2xl transform scale-110"></div>
         <div className="relative bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-6 text-center shadow-2xl">
 
@@ -630,7 +624,7 @@ function App() {
           </div>
 
           <div className="bg-white/5 rounded-2xl p-3 mb-4 border border-white/10">
-            <p className="text-white font-bold text-sm leading-relaxed">{currentTrack.title}</p>
+            <p className="text-white font-bold text-sm leading-relaxed">{track.title}</p>
             {nextTrack && (
               <p className="text-white/40 text-xs mt-1">التالي: {nextTrack.title}</p>
             )}
@@ -638,16 +632,36 @@ function App() {
 
           <button
             onClick={togglePlay}
-            className={`w-18 h-18 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl transition-all duration-300 bg-white text-purple-900 ${isPlaying ? 'play-btn-glow' : 'hover:scale-105'}`}
-            style={{width:'72px', height:'72px'}}
+            aria-label={showPause ? 'إيقاف البث' : 'تشغيل البث'}
+            className={`rounded-full flex items-center justify-center mx-auto mb-3 text-3xl transition-all duration-300 bg-white text-purple-900 ${showPause && !busy ? 'play-btn-glow' : 'hover:scale-105'}`}
+            style={{ width: '72px', height: '72px' }}
           >
-            {isPlaying ? '⏸' : '▶'}
+            {busy ? <span className="spinner"></span> : (showPause ? '⏸' : '▶')}
           </button>
+
+          <div className="min-h-[20px] mb-3">
+            {isPlaying && STATUS_TEXT[status] && (
+              <p className={`text-xs ${status === 'error' || status === 'blocked' ? 'text-pink-300' : 'text-white/50'}`}>
+                {STATUS_TEXT[status]}
+              </p>
+            )}
+            {!isPlaying && (
+              <p className="text-white/40 text-xs">اضغط للاستماع إلى البث المباشر</p>
+            )}
+            {isPlaying && status === 'error' && (
+              <button
+                onClick={() => syncAndPlay(true)}
+                className="mt-2 text-xs text-white bg-white/10 hover:bg-white/20 border border-white/20 px-3 py-1 rounded-lg transition-colors"
+              >
+                إعادة المحاولة
+              </button>
+            )}
+          </div>
 
           <div className="mb-3">
             <div className="flex justify-between text-xs text-white/40 mb-1">
               <span>{fmt(currentTime)}</span>
-              <span>{fmt(currentTrack.duration)}</span>
+              <span>{fmt(track.duration)}</span>
             </div>
             <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
               <div className="h-full rounded-full transition-all duration-1000"
@@ -655,12 +669,15 @@ function App() {
             </div>
           </div>
 
-          <input type="range" min="0" max="1" step="0.01" value={volume}
-            onChange={handleVolume} className="w-full accent-purple-500 mb-4" />
+          {!IS_IOS && (
+            <input type="range" min="0" max="1" step="0.01" value={volume}
+              onChange={handleVolume} aria-label="مستوى الصوت"
+              className="w-full accent-purple-500 mb-4" />
+          )}
 
-          {/* Facebook only */}
           <div className="flex justify-center">
             <a href="https://www.facebook.com/groups/1594701261071238" target="_blank" rel="noopener noreferrer"
+              aria-label="مجموعة فيسبوك"
               className="flex items-center justify-center bg-white/10 hover:bg-white/20 border border-white/20 text-white w-10 h-10 rounded-xl transition-all">
               <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
                 <path fillRule="evenodd" d="M22 12c0-5.523-4.477-10-10-10S2 6.477 2 12c0 4.991 3.657 9.128 8.438 9.878v-6.987h-2.54V12h2.54V9.797c0-2.506 1.492-3.89 3.777-3.89 1.094 0 2.238.195 2.238.195v2.46h-1.26c-1.243 0-1.63.771-1.63 1.562V12h2.773l-.443 2.89h-2.33v6.988C18.343 21.128 22 16.991 22 12z" clipRule="evenodd"/>
@@ -669,25 +686,6 @@ function App() {
           </div>
         </div>
       </div>
-
-      {/* Chat Window — always at bottom, only shown after name setup */}
-      {myName && (
-        <ChatWindow myName={myName} onEditName={() => setShowNameModal(true)} />
-      )}
-
-      {/* First visit name setup */}
-      {showNameSetup && (
-        <NameSetupModal onSave={handleFirstSave} />
-      )}
-
-      {/* Edit name modal */}
-      {showNameModal && (
-        <NameEditModal
-          currentName={myName}
-          onSave={handleEditSave}
-          onClose={() => setShowNameModal(false)}
-        />
-      )}
     </div>
   );
 }
