@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>راديو وليستعفف</title>
+  <title>راديو العفة</title>
   <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone@7/babel.min.js"></script>
@@ -145,6 +145,9 @@ const MEDIA_BASES = {
   L: atob('aHR0cHM6Ly9hcmNoaXZlLm9yZy9kb3dubG9hZC94V2FseWFzdGFhZmVmTXAzL3hXYWx5YXN0YWFmZWZfTElWRQ=='),
 };
 const mediaUrl = (id) => MEDIA_BASES[id[0]] + id.slice(1) + '.mp3';
+
+// الاسم المختصر من رمز اللقاء: c01 ← الكورس الأساسي 1، L05 ← لقاء 5
+const shortTitle = (id) => (id[0] === 'c' ? 'الكورس الأساسي ' : 'لقاء ') + parseInt(id.slice(1), 10);
 
 const ORIGINAL_PLAYLIST = [
   { id: "c01", duration: 2719, title: "الكورس الأساسي لقاء 1, الإباحية مشكلة ديناميكية الإباحية مشكلة نظامية" },
@@ -558,14 +561,14 @@ function App() {
     return () => { clearInterval(id); document.removeEventListener('visibilitychange', onVisible); };
   }, [syncAndPlay]);
 
-  // شاشة القفل وأزرار التحكم الخارجية
+  // شاشة القفل والإشعارات: اسم مختصر محايد مراعاةً لخصوصية المستمع
   useEffect(() => {
     if (!('mediaSession' in navigator)) return;
     try {
       navigator.mediaSession.metadata = new MediaMetadata({
-        title: track.title,
-        artist: 'راديو وليستعفف',
-        album: 'بث مباشر',
+        title: shortTitle(track.id),
+        artist: 'راديو',
+        album: '',
       });
     } catch (e) {}
   }, [track.id]);
@@ -616,7 +619,7 @@ function App() {
         <div className="relative bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-6 text-center shadow-2xl">
 
           <div className="mb-4">
-            <h1 className="text-white text-2xl font-extrabold tracking-wide">راديو وليستعفف</h1>
+            <h1 className="text-white text-2xl font-extrabold tracking-wide">راديو العفة</h1>
             <div className="flex items-center justify-center gap-1 mt-1">
               <span className="w-1.5 h-1.5 bg-red-400 rounded-full pulse-dot"></span>
               <span className="text-red-400 text-xs font-medium">بث مباشر</span>
