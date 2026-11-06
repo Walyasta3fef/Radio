@@ -4,6 +4,9 @@
 // =====================
 const STRINGS = {
   appName: 'وليستعفف - مصطفى حسان',
+  appShortName: 'برنامج',
+  installApp: 'ثبّت البرنامج',
+  installIos: 'من زر المشاركة في المتصفح اختر «إضافة إلى الشاشة الرئيسية».',
   live: 'بث مباشر',
   behindLive: 'متأخر عن البث',
   goLive: 'ارجع للبث المباشر',
@@ -103,6 +106,31 @@ const STRINGS = {
   logoutConfirm: 'سيُمسح التقدّم من هذا الجهاز فقط، ويبقى محفوظًا باسمك. تأكد أنك تتذكر الاسم قبل الخروج.',
   logoutYes: 'نعم، اخرج',
   cancel: 'إلغاء',
+
+  // التقرير
+  report: 'تقرير',
+  period_day: 'اليوم',
+  period_week: 'الأسبوع',
+  period_month: 'الشهر',
+  period_year: 'السنة',
+  prev_day: 'أمس',
+  prev_week: 'الأسبوع الماضي',
+  prev_month: 'الشهر الماضي',
+  prev_year: 'السنة الماضية',
+  moreThanPrev: '{n}% أكثر من {p}',
+  lessThanPrev: '{n}% أقل من {p}',
+  empty_day: 'يوم جديد، نكمل معًا.',
+  empty_week: 'أسبوع جديد، نكمل معًا.',
+  empty_month: 'شهر جديد، نكمل معًا.',
+  empty_year: 'سنة جديدة، نكمل معًا.',
+  weekdays: 'سبت,أحد,إثنين,ثلاثاء,أربعاء,خميس,جمعة',
+  sourceCourse: 'الكورس',
+  sourceNormal: 'الراديو العادي',
+  sourceFast: 'الراديو السريع',
+  chartLabel: 'وقت الاستماع في كل فترة',
+  completedInPeriod: 'لقاءات اكتملت',
+  mostListened: 'أكثر لقاء استمعت إليه',
+  legacyNote: 'إضافةً إلى {t} استمعت إليها قبل بدء التقرير اليومي.',
 
   // التعليقات
   comments: 'التعليقات',
