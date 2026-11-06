@@ -257,6 +257,52 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--accent-soft); o
 .now-link { margin-top: 8px; font-size: 12px; color: var(--accent-soft); text-decoration: underline; text-underline-offset: 3px; }
 
 /* =====================
+   الاسم الخاص
+   ===================== */
+.name-bar {
+  display: flex; align-items: center; gap: 6px;
+  background: var(--glass); border: 1px solid var(--line); border-radius: 14px;
+  padding: 4px 4px 4px 8px; margin: 4px 0 6px; font-size: 13px;
+}
+.name-bar-cta { width: 100%; justify-content: space-between; padding: 10px 14px; color: var(--accent-soft); font-weight: 700; text-align: right; }
+.name-main { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; padding: 6px 8px; text-align: right; }
+.name-label { color: var(--muted); }
+.name-value { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; letter-spacing: .03em; }
+.eye { width: 36px; height: 36px; border-radius: 10px; flex-shrink: 0; font-size: 16px; }
+.eye:hover { background: var(--glass-2); }
+.sync-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; display: inline-block; background: var(--faint); }
+.sync-synced { background: #4ade80; }
+.sync-syncing { background: #facc15; }
+.sync-error { background: var(--live); }
+
+.acc-title { font-size: 22px; font-weight: 800; margin-bottom: 10px; }
+.acc-name { display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 10px; }
+.acc-name b { font-size: 22px; letter-spacing: .04em; }
+.acc-line { font-size: 13px; color: var(--muted); line-height: 1.8; margin-bottom: 10px; display: flex; align-items: center; justify-content: center; gap: 6px; flex-wrap: wrap; }
+.acc-out { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line); }
+.name-warn {
+  font-size: 12px; line-height: 1.8; color: var(--warn);
+  background: rgba(249, 168, 212, .08); border: 1px solid rgba(249, 168, 212, .25);
+  border-radius: 12px; padding: 8px 10px; margin: 10px 0;
+}
+.tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; background: rgba(0, 0, 0, .25); border-radius: 12px; padding: 4px; margin: 6px 0 14px; }
+.tabs button { padding: 8px; border-radius: 9px; font-size: 13px; font-weight: 700; color: var(--muted); }
+.tabs .on { background: var(--glass-2); color: var(--text); }
+.name-input {
+  width: 100%; padding: 12px 14px; border-radius: 12px; font-size: 16px; text-align: center;
+  background: rgba(0, 0, 0, .3); color: var(--text); border: 1px solid var(--line-2); outline: none;
+  user-select: text; -webkit-user-select: text;
+}
+.name-input:focus { border-color: var(--accent); }
+.name-tools { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 8px; }
+.hint { font-size: 12px; color: var(--faint); }
+.center-text { text-align: center; margin-top: 10px; display: block; }
+.link-btn { font-size: 12px; color: var(--accent-soft); text-decoration: underline; text-underline-offset: 3px; }
+.form-error { font-size: 13px; color: var(--warn); margin-top: 10px; }
+.cta:disabled { opacity: .5; cursor: default; }
+.small-btn.danger { border-color: rgba(248, 113, 113, .5); color: var(--live); }
+
+/* =====================
    المشغّل المصغّر
    ===================== */
 .mini {
