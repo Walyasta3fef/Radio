@@ -35,7 +35,7 @@ const STRINGS = {
   hoursMinutes: '{h} س {m} د',
   minutesOnly: '{m} د',
   heardLabel: 'استمعت إلى',
-  openInCourse: 'افتحه في الكورس',
+  heardMap: 'الأجزاء التي استمعت إليها',
   lectureDone: 'مكتمل',
   seek: 'موضع الاستماع',
   back15: 'رجوع 15 ثانية',
