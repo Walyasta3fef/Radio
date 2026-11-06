@@ -42,6 +42,7 @@ function parseRoute() {
   if (m) return { page: 'radio', mode: m[1] };
   if (h === '#/course') return { page: 'course' };
   if (h === '#/account') return { page: 'account' };
+  if (h === '#/report') return { page: 'report' };
   m = /^#\/lecture\/(\w+)$/.exec(h);
   if (m && LECTURE_BY_ID[m[1]]) return { page: 'lecture', id: m[1] };
   return { page: 'home' };
@@ -322,11 +323,17 @@ function usePlayer(volume) {
       const ct = audio.currentTime;
       setCurrentTime(ct);
       const id = trackedId();
-      if (id && !audio.paused && !audio.seeking) {
+      if (!audio.paused && !audio.seeking) {
         const prev = lastSampleRef.current;
         if (prev != null) {
           const d = ct - prev;
-          if (d > 0 && d <= 3) progress.record(id, prev, ct);
+          if (d > 0 && d <= 3) {
+            // وقت الاستماع الفعلي من كل المصادر، والأجزاء المسموعة من العادي فقط
+            const k = loadedKeyRef.current || '';
+            const src = modeRef.current === 'lecture' ? 'c' : modeRef.current === 'fast' ? 'f' : 'n';
+            progress.addTime(src, k.split(':')[1], d);
+            if (id) progress.record(id, prev, ct);
+          }
         }
         lastSampleRef.current = ct;
       }
@@ -579,6 +586,10 @@ const ICON_PATHS = {
   user: html`<g><circle cx="12" cy="8" r="4"></circle><path d="M4 21c0-4 4-6 8-6s8 2 8 6"></path></g>`,
   check: html`<path d="M5 12l5 5L20 7"></path>`,
   back: html`<path d="M9 6l6 6-6 6"></path>`,
+  book: html`<g><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"></path><path d="M4 19V5"></path><path d="M9 7h6"></path></g>`,
+  radio: html`<g><circle cx="12" cy="12" r="2"></circle><path d="M8.5 8.5a5 5 0 0 0 0 7"></path><path d="M15.5 8.5a5 5 0 0 1 0 7"></path><path d="M5.6 5.6a9 9 0 0 0 0 12.8"></path><path d="M18.4 5.6a9 9 0 0 1 0 12.8"></path></g>`,
+  chart: html`<g><path d="M4 20V10"></path><path d="M10 20V4"></path><path d="M16 20v-7"></path><path d="M22 20H2"></path></g>`,
+  download: html`<g><path d="M12 3v12"></path><path d="M7 10l5 5 5-5"></path><path d="M5 21h14"></path></g>`,
 };
 function Icon({ name, size = 18 }) {
   return html`<svg width=${size} height=${size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -909,10 +920,10 @@ function HomePage({ player, now, users }) {
     </header>
 
     <section className="section">
-      <div className=${'card course-card' + (player.isPlaying && player.mode === 'lecture' ? ' card-active' : '')}>
+      <div className=${'card course-card tint-course' + (player.isPlaying && player.mode === 'lecture' ? ' card-active' : '')}>
         <button className="card-main" onClick=${() => go('#/course')}>
           <div className="card-head">
-            <span className="card-title">${t('course')}</span>
+            <span className="card-title"><span className="title-icon"><${Icon} name="book" size=${18} /></span>${t('course')}</span>
             <span className="pct"><${Pct} value=${sum.percent} /></span>
           </div>
           <${MiniBar} value=${sum.percent} />
@@ -929,12 +940,11 @@ function HomePage({ player, now, users }) {
     </section>
 
     <section className="section">
-      <div className=${'card radio-card' + (rv.active ? ' card-active' : '')}>
+      <div className=${'card radio-card tint-radio' + (rv.active ? ' card-active' : '')}>
         <div className="card-head">
-          <span className="card-title">${t('radioSection')}</span>
-          <span className="card-count">${t('listeners', { n: count })}</span>
+          <span className="card-title"><span className="title-icon"><${Icon} name="radio" size=${18} /></span>${t('radioSection')}</span>
+          <${LiveBadge} behind=${rv.behind} onGoLive=${player.goLive} />
         </div>
-        <${LiveBadge} behind=${rv.behind} onGoLive=${player.goLive} />
 
         <div className="seg" role="tablist" aria-label=${t('radioSpeed')}>
           ${MODES.map(m => html`<button key=${m} role="tab" aria-selected=${mode === m}
@@ -953,11 +963,17 @@ function HomePage({ player, now, users }) {
         <${PlayButton} active=${rv.active} status=${rv.status} onClick=${() => player.toggleRadio(mode)} />
         <${StatusLine} active=${rv.active} status=${rv.status} onRetry=${player.retry} />
 
-        <button className="link-btn center-self" onClick=${() => go('#/radio/' + mode)}>${t('radioDetails')}</button>
+        <div className="radio-foot">
+          <span className="card-count">${t('listeners', { n: count })}</span>
+          <button className="link-btn" onClick=${() => go('#/radio/' + mode)}>${t('radioDetails')}</button>
+        </div>
       </div>
     </section>
 
-    <footer className="foot"><${FacebookLink} /></footer>
+    <footer className="foot">
+      <${InstallButton} />
+      <${FacebookLink} />
+    </footer>
   </div>`;
 }
 
@@ -1047,10 +1063,9 @@ function CoursePage({ player, users }) {
       </h1>
       <div className="big-pct"><${Pct} value=${sum.percent} /></div>
       <${MiniBar} value=${sum.percent} />
-      <div className="stat-row">
-        <div><b>${sum.done}/${sum.count}</b><small>${t('lecturesDone')}</small></div>
-        <div><b>${fmtHours(sum.seconds)}</b><small>${t('listenTime')}</small></div>
-        <div><b>${sum.days}</b><small>${t('listenDays')}</small></div>
+      <div className="summary-foot">
+        <span className="hint">${t('doneOf', { done: sum.done, count: sum.count })}</span>
+        <button className="report-btn" onClick=${() => go('#/report')}><${Icon} name="chart" size=${15} />${t('report')}</button>
       </div>
       ${contId && html`<button className="cta" onClick=${() => go('#/lecture/' + contId)}>
         ${progress.hasAny() ? t('continueFrom') : t('startCourse')}
@@ -1160,6 +1175,169 @@ function LecturePage({ id, player, volume, onVolume }) {
     <${CommentsBox} lectureId=${id} list=${comments}
       getTime=${() => (current ? player.currentTime : progress.position(id))} onTime=${jumpTo} />
   </div>`;
+}
+
+// =====================
+// التقرير
+// =====================
+const PERIODS = ['day', 'week', 'month', 'year'];
+const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
+const atMidnight = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+
+// حدود الفترة وأعمدتها، والأسبوع يبدأ يوم السبت
+function periodRange(period, offset = 0) {
+  const today = atMidnight(new Date());
+  if (period === 'day') {
+    const d = addDays(today, -offset);
+    return { from: d, to: d, buckets: [] };
+  }
+  if (period === 'week') {
+    const start = addDays(today, -((today.getDay() + 1) % 7) - 7 * offset);
+    const buckets = Array.from({ length: 7 }, (_, i) => {
+      const d = addDays(start, i);
+      return { from: d, to: d, label: t('weekdays').split(',')[i], today: +d === +today };
+    });
+    return { from: start, to: addDays(start, 6), buckets };
+  }
+  if (period === 'month') {
+    const start = new Date(today.getFullYear(), today.getMonth() - offset, 1);
+    const end = new Date(start.getFullYear(), start.getMonth() + 1, 0);
+    const buckets = Array.from({ length: end.getDate() }, (_, i) => {
+      const d = addDays(start, i);
+      return { from: d, to: d, label: String(i + 1), today: +d === +today };
+    });
+    return { from: start, to: end, buckets };
+  }
+  const y = today.getFullYear() - offset;
+  const buckets = Array.from({ length: 12 }, (_, i) => ({
+    from: new Date(y, i, 1), to: new Date(y, i + 1, 0), label: String(i + 1),
+    today: y === today.getFullYear() && i === today.getMonth(),
+  }));
+  return { from: new Date(y, 0, 1), to: new Date(y, 11, 31), buckets };
+}
+
+const SOURCES = [
+  { key: 'c', label: 'sourceCourse', cls: 'src-c' },
+  { key: 'n', label: 'sourceNormal', cls: 'src-n' },
+  { key: 'f', label: 'sourceFast', cls: 'src-f' },
+];
+
+function ReportPage() {
+  useProgressVersion();
+  const [period, setPeriod] = useState('week');
+  const r = periodRange(period);
+  const st = progress.stats(dayKey(r.from), dayKey(r.to));
+  const pr = periodRange(period, 1);
+  const prev = progress.stats(dayKey(pr.from), dayKey(pr.to));
+  const legacy = period === 'year' ? progress.legacySeconds() : 0;
+  const total = st.total;
+
+  const bars = r.buckets.map(b => {
+    const from = dayKey(b.from), to = dayKey(b.to);
+    let s = 0;
+    Object.entries(st.byDay).forEach(([k, v]) => { if (k >= from && k <= to) s += v; });
+    return { ...b, s };
+  });
+  const maxBar = Math.max(1, ...bars.map(b => b.s));
+
+  let compare = null;
+  if (prev.total > 60 && total > 0) {
+    const diff = Math.round((total - prev.total) / prev.total * 100);
+    compare = { up: diff >= 0, text: t(diff >= 0 ? 'moreThanPrev' : 'lessThanPrev', { n: Math.abs(diff), p: t('prev_' + period) }) };
+  }
+
+  return html`<div className="page report">
+    <div className="topbar">
+      <${BackButton} to="#/course" />
+      <div className="top-left"><${NameChip} /></div>
+    </div>
+
+    <div className="panel">
+      <h1 className="acc-title">${t('report')}</h1>
+      <div className="seg seg-4" role="tablist">
+        ${PERIODS.map(p => html`<button key=${p} role="tab" aria-selected=${period === p}
+          className=${period === p ? 'on' : ''} onClick=${() => setPeriod(p)}>${t('period_' + p)}</button>`)}
+      </div>
+
+      ${total < 1
+        ? html`<div className="empty-report">
+            <span className="title-icon big"><${Icon} name="chart" size=${26} /></span>
+            <p>${t('empty_' + period)}</p>
+          </div>`
+        : html`<div>
+            <div className="rep-total">
+              <small>${t('listenTime')}</small>
+              <b>${fmtHours(total)}</b>
+              ${compare && html`<span className=${'rep-compare' + (compare.up ? ' up' : '')}>${compare.up ? '↑' : '↓'} ${compare.text}</span>`}
+            </div>
+
+            <div className="src-bar" aria-hidden="true">
+              ${SOURCES.map(s => st[s.key] > 0 && html`<span key=${s.key} className=${s.cls} style=${{ width: (st[s.key] / total * 100) + '%' }}></span>`)}
+            </div>
+            <ul className="src-legend">
+              ${SOURCES.map(s => html`<li key=${s.key}><span className=${'dot ' + s.cls}></span>${t(s.label)}<b>${fmtHours(st[s.key])}</b></li>`)}
+            </ul>
+
+            ${bars.length > 0 && html`<div className=${'chart chart-' + period} role="img" aria-label=${t('chartLabel')}>
+              ${bars.map((b, i) => html`<div key=${i} className=${'col' + (b.today ? ' col-today' : '')}>
+                <div className="col-bar"><span style=${{ height: (b.s / maxBar * 100) + '%' }}></span></div>
+                ${(period !== 'month' || i % 5 === 0 || b.today) && html`<small>${b.label}</small>`}
+              </div>`)}
+            </div>`}
+
+            <div className="rep-grid">
+              <div><b>${st.completed}</b><small>${t('completedInPeriod')}</small></div>
+              <div><b>${st.activeDays}</b><small>${t('listenDays')}</small></div>
+            </div>
+            ${st.top && html`<div className="rep-top">
+              <small>${t('mostListened')}</small>
+              <b>${LECTURE_BY_ID[st.top.id].title}</b>
+              <span className="hint">${fmtHours(st.top.sec)}</span>
+            </div>`}
+          </div>`}
+
+      ${legacy > 60 && html`<p className="hint center-text">${t('legacyNote', { t: fmtHours(legacy) })}</p>`}
+    </div>
+  </div>`;
+}
+
+// =====================
+// تثبيت الموقع كتطبيق على الشاشة الرئيسية
+// =====================
+const IS_STANDALONE = (() => {
+  try { return window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true; }
+  catch (e) { return false; }
+})();
+let installPrompt = null;
+const installListeners = new Set();
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  installPrompt = e;
+  installListeners.forEach(fn => fn());
+});
+window.addEventListener('appinstalled', () => { installPrompt = null; installListeners.forEach(fn => fn()); });
+
+function InstallButton() {
+  const [, setV] = useState(0);
+  useEffect(() => {
+    const fn = () => setV(x => x + 1);
+    installListeners.add(fn);
+    return () => installListeners.delete(fn);
+  }, []);
+  if (IS_STANDALONE) return null;
+  if (installPrompt) {
+    return html`<button className="install-btn" onClick=${async () => {
+      const p = installPrompt;
+      installPrompt = null;
+      try { p.prompt(); await p.userChoice; } catch (e) {}
+      setV(x => x + 1);
+    }}><${Icon} name="download" size=${16} />${t('installApp')}</button>`;
+  }
+  if (IS_IOS) {
+    return html`<span className="install-btn ghost">${t('installApp')}
+      <${InfoTip} label=${t('installApp')} text=${t('installIos')} /></span>`;
+  }
+  return null;
 }
 
 // =====================
@@ -1317,7 +1495,7 @@ function App() {
   if (route.page !== 'account') returnRef.current = location.hash || '#/';
 
   const pageAt = route.page === 'radio' ? route.mode
-    : (route.page === 'course' || route.page === 'lecture') ? 'course' : 'home';
+    : (route.page === 'course' || route.page === 'lecture' || route.page === 'report') ? 'course' : 'home';
   const at = player.isPlaying ? (player.mode === 'lecture' ? 'course' : player.mode) : pageAt;
   const users = usePresence(at);
 
@@ -1336,8 +1514,9 @@ function App() {
     document.title = route.page === 'radio' ? t(MODE_LABEL[route.mode])
       : route.page === 'course' ? t('coursePageTitle')
       : route.page === 'account' ? t('accountTitle')
+      : route.page === 'report' ? t('report')
       : route.page === 'lecture' ? shortTitle(route.id)
-      : t('appName');
+      : IS_STANDALONE ? t('appShortName') : t('appName');
   }, [route]);
 
   const onVolume = (e) => {
@@ -1354,6 +1533,8 @@ function App() {
     page = html`<${CoursePage} player=${player} users=${users} />`;
   } else if (route.page === 'account') {
     page = html`<${AccountPage} returnTo=${returnRef.current} />`;
+  } else if (route.page === 'report') {
+    page = html`<${ReportPage} />`;
   } else if (route.page === 'lecture') {
     page = html`<${LecturePage} key=${route.id} id=${route.id} player=${player} volume=${volume} onVolume=${onVolume} />`;
   } else {
@@ -1369,3 +1550,8 @@ function App() {
 }
 
 ReactDOM.createRoot(document.getElementById('root')).render(html`<${App} />`);
+
+// تسجيل ملف التطبيق (يحفظ واجهة الموقع لتفتح أسرع)
+if ('serviceWorker' in navigator && location.protocol === 'https:') {
+  window.addEventListener('load', () => { navigator.serviceWorker.register('sw.js').catch(() => {}); });
+}
