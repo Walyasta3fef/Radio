@@ -709,14 +709,138 @@ function MiniBar({ value }) {
 }
 
 // شريط الأجزاء المسموعة: تتلون الأجزاء التي سُمعت فعلًا فقط
-function HeardBar({ id, position, duration }) {
+// marks: أماكن التعليقات التي فيها وقت
+function HeardBar({ id, position, duration, marks }) {
   const segs = progress.segments(id);
-  return html`<div className="bar heard-bar">
-    ${segs.map(([a, b], i) => html`<span key=${i} className="heard-seg"
-      style=${{ insetInlineStart: a + '%', width: Math.max(0.6, b - a) + '%' }}></span>`)}
-    ${position != null && duration > 0 && html`<span className="heard-cursor"
-      style=${{ insetInlineStart: Math.min(100, position / duration * 100) + '%' }}></span>`}
+  const dur = duration || (LECTURE_BY_ID[id] && LECTURE_BY_ID[id].normal);
+  return html`<div className="heard-wrap">
+    <div className="bar heard-bar">
+      ${segs.map(([a, b], i) => html`<span key=${i} className="heard-seg"
+        style=${{ insetInlineStart: a + '%', width: Math.max(0.6, b - a) + '%' }}></span>`)}
+      ${position != null && dur > 0 && html`<span className="heard-cursor"
+        style=${{ insetInlineStart: Math.min(100, position / dur * 100) + '%' }}></span>`}
+    </div>
+    ${marks && marks.length > 0 && html`<div className="marks" aria-hidden="true">
+      ${marks.map((s, i) => html`<span key=${i} className="mark" style=${{ insetInlineStart: Math.min(100, s / dur * 100) + '%' }}></span>`)}
+    </div>`}
   </div>`;
+}
+
+// =====================
+// التعليقات
+// =====================
+function useComments(lectureId) {
+  const [list, setList] = useState([]);
+  useEffect(() => {
+    if (!lectureId) return;
+    setList([]);
+    return commentsApi.subscribe(lectureId, setList);
+  }, [lectureId]);
+  return list;
+}
+
+const relTime = (() => {
+  let rtf = null;
+  try { rtf = new Intl.RelativeTimeFormat('ar', { numeric: 'auto' }); } catch (e) {}
+  return (ts) => {
+    if (!rtf || !ts) return '';
+    const diff = (ts - Date.now()) / 1000;
+    const steps = [[60, 'second'], [3600, 'minute'], [86400, 'hour'], [2592000, 'day'], [31536000, 'month'], [Infinity, 'year']];
+    const div = { second: 1, minute: 60, hour: 3600, day: 86400, month: 2592000, year: 31536000 };
+    for (const [lim, unit] of steps) {
+      if (Math.abs(diff) < lim) return rtf.format(Math.round(diff / div[unit]), unit);
+    }
+    return '';
+  };
+})();
+
+function CommentText({ text, maxSec, onTime }) {
+  const parts = splitTimes(text, maxSec);
+  return html`<p className="c-text">
+    ${parts.map((p, i) => p.time != null
+      ? html`<button key=${i} className="time-chip" dir="ltr" onClick=${() => onTime(p.time)}
+          aria-label=${t('jumpTo', { t: p.text })}>${p.text}</button>`
+      : html`<span key=${i}>${p.text}</span>`)}
+  </p>`;
+}
+
+// صندوق التعليقات: مطويّ افتراضيًا حتى تبقى الصفحة نظيفة
+function CommentsBox({ lectureId, list, getTime, onTime }) {
+  useAccountVersion();
+  const [open, setOpen] = useState(false);
+  const [sort, setSort] = useState('new');
+  const [text, setText] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+  const [sent, setSent] = useState(false);
+  const maxSec = LECTURE_BY_ID[lectureId].normal;
+
+  const sorted = useMemo(() => {
+    const l = [...list];
+    if (sort === 'time') l.sort((a, b) => (a.s ?? Infinity) - (b.s ?? Infinity) || (b.ts || 0) - (a.ts || 0));
+    else l.sort((a, b) => (b.ts || 0) - (a.ts || 0));
+    return l;
+  }, [list, sort]);
+
+  const addTime = () => {
+    const stamp = fmtTime(getTime ? getTime() : 0);
+    setText(v => (v && !/\s$/.test(v) ? v + ' ' : v) + stamp + ' ');
+  };
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setBusy(true); setError(null); setSent(false);
+    const res = await commentsApi.add(lectureId, text);
+    setBusy(false);
+    if (res.error) {
+      const wait = Math.ceil(commentsApi.cooldownLeft() / 1000);
+      setError(t(res.error, { s: wait }));
+    } else { setText(''); setSent(true); setSort('new'); }
+  };
+
+  return html`<section className="comments">
+    <button className="c-toggle" onClick=${() => setOpen(o => !o)} aria-expanded=${open}>
+      <span>${t('comments')}</span>
+      <span className="c-count">${list.length}</span>
+      <span className=${'chev' + (open ? ' chev-open' : '')} aria-hidden="true">⌄</span>
+    </button>
+
+    ${open && html`<div className="c-body">
+      ${account.loggedIn && account.nick
+        ? html`<form className="c-form" onSubmit=${submit}>
+            <div className="c-as">${t('commentAs')} <b>${t('nickName', { n: account.nick })}</b></div>
+            <textarea value=${text} maxLength=${COMMENT_MAX} rows="3"
+              placeholder=${t('commentPlaceholder')} aria-label=${t('commentPlaceholder')}
+              onInput=${e => { setText(e.target.value); setSent(false); }}></textarea>
+            <div className="c-tools">
+              ${getTime && html`<button type="button" className="link-btn" onClick=${addTime}>${t('addCurrentTime')}</button>`}
+              <span className="hint">${text.length}/${COMMENT_MAX}</span>
+            </div>
+            ${error && html`<p className="form-error">${error}</p>`}
+            ${sent && html`<p className="c-sent">${t('commentSent')}</p>`}
+            <button className="small-btn c-send" type="submit" disabled=${busy || !text.trim()}>
+              ${busy ? t('pleaseWait') : t('sendComment')}
+            </button>
+          </form>`
+        : html`<div className="c-login">
+            <p>${account.loggedIn ? t('commentPreparing') : t('commentNeedName')}</p>
+            ${!account.loggedIn && html`<button className="small-btn" onClick=${() => go('#/account')}>${t('createNameShort')}</button>`}
+          </div>`}
+
+      ${list.length > 1 && html`<div className="c-sort">
+        <button className=${sort === 'new' ? 'on' : ''} onClick=${() => setSort('new')}>${t('sortNewest')}</button>
+        <button className=${sort === 'time' ? 'on' : ''} onClick=${() => setSort('time')}>${t('sortByTime')}</button>
+      </div>`}
+
+      ${list.length === 0 && html`<p className="hint center-text">${t('noComments')}</p>`}
+      <ul className="c-list">
+        ${sorted.map(c => html`<li key=${c.id} className="c-item">
+          <div className="c-meta"><b>${t('nickName', { n: c.n })}</b><span>${relTime(c.ts)}</span></div>
+          <${CommentText} text=${c.t} maxSec=${maxSec} onTime=${onTime} />
+        </li>`)}
+      </ul>
+    </div>`}
+  </section>`;
 }
 
 const STATUS_KEY = {
@@ -785,7 +909,6 @@ function HomePage({ player, now, users }) {
     </header>
 
     <section className="section">
-      <h2 className="section-title">${t('courseSection')}</h2>
       <div className=${'card course-card' + (player.isPlaying && player.mode === 'lecture' ? ' card-active' : '')}>
         <button className="card-main" onClick=${() => go('#/course')}>
           <div className="card-head">
@@ -806,12 +929,12 @@ function HomePage({ player, now, users }) {
     </section>
 
     <section className="section">
-      <h2 className="section-title">${t('radioSection')}</h2>
       <div className=${'card radio-card' + (rv.active ? ' card-active' : '')}>
         <div className="card-head">
-          <${LiveBadge} behind=${rv.behind} onGoLive=${player.goLive} />
+          <span className="card-title">${t('radioSection')}</span>
           <span className="card-count">${t('listeners', { n: count })}</span>
         </div>
+        <${LiveBadge} behind=${rv.behind} onGoLive=${player.goLive} />
 
         <div className="seg" role="tablist" aria-label=${t('radioSpeed')}>
           ${MODES.map(m => html`<button key=${m} role="tab" aria-selected=${mode === m}
@@ -845,6 +968,14 @@ function RadioPage({ mode, player, now, users, volume, onVolume }) {
   const modeUsers = users.filter(u => u.at === mode);
   const rv = radioView(player, mode, now);
   const { s, time } = rv;
+  const comments = useComments(mode === 'normal' ? s.track.id : null);
+
+  // من الراديو: يُفتح اللقاء في الكورس على اللحظة المذكورة ويتوقف الراديو
+  const openAt = (sec) => {
+    progress.setPosition(s.track.id, sec);
+    player.playLecture(s.track.id);
+    go('#/lecture/' + s.track.id);
+  };
   const pct = Math.min(100, (time / s.track.duration) * 100 || 0);
 
   return html`<div className="page radio">
@@ -887,6 +1018,8 @@ function RadioPage({ mode, player, now, users, volume, onVolume }) {
         <div className="center"><${FacebookLink} /></div>
       </div>
     </div>
+    ${mode === 'normal' && html`<${CommentsBox} key=${s.track.id} lectureId=${s.track.id} list=${comments}
+      getTime=${() => time} onTime=${openAt} />`}
   </div>`;
 }
 
@@ -909,7 +1042,7 @@ function CoursePage({ player, users }) {
     </div>
 
     <div className="panel summary">
-      <h1>${t('course')}
+      <h1>${t('coursePageTitle')}
         <${InfoTip} label=${t('infoLabel')} text=${t('courseInfo')} />
       </h1>
       <div className="big-pct"><${Pct} value=${sum.percent} /></div>
@@ -962,6 +1095,15 @@ function LecturePage({ id, player, volume, onVolume }) {
   const heard = progress.percent(id);
   const done = progress.isDone(id);
   const prev = coursePrev(id), next = courseNext(id);
+  const comments = useComments(id);
+  const marks = useMemo(() => comments.filter(c => typeof c.s === 'number').map(c => c.s), [comments]);
+
+  // الضغط على وقت في تعليق: الانتقال إلى تلك اللحظة وتشغيلها
+  const jumpTo = (sec) => {
+    player.seekLecture(id, sec);
+    if (!active) player.playLecture(id);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   // سحب شريط التقدم: يُعرض الموضع أثناء السحب ثم يُطبّق عند الإفلات
   const [dragging, setDragging] = useState(null);
@@ -992,7 +1134,7 @@ function LecturePage({ id, player, volume, onVolume }) {
         </div>
         <div className="heard-map">
           <span className="heard-map-label">${t('heardMap')}</span>
-          <${HeardBar} id=${id} position=${shown} duration=${lec.normal} />
+          <${HeardBar} id=${id} position=${shown} duration=${lec.normal} marks=${marks} />
         </div>
 
         <div className="controls">
@@ -1015,6 +1157,8 @@ function LecturePage({ id, player, volume, onVolume }) {
         </div>
       </div>
     </div>
+    <${CommentsBox} lectureId=${id} list=${comments}
+      getTime=${() => (current ? player.currentTime : progress.position(id))} onTime=${jumpTo} />
   </div>`;
 }
 
@@ -1190,7 +1334,7 @@ function App() {
   // عنوان التبويب محايد مراعاةً للخصوصية
   useEffect(() => {
     document.title = route.page === 'radio' ? t(MODE_LABEL[route.mode])
-      : route.page === 'course' ? t('course')
+      : route.page === 'course' ? t('coursePageTitle')
       : route.page === 'account' ? t('accountTitle')
       : route.page === 'lecture' ? shortTitle(route.id)
       : t('appName');
