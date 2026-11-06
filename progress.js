@@ -117,14 +117,13 @@ const progress = (() => {
       if (!e.d && e.c / total >= DONE_RATIO) e.d = 1;
     }
     state.sec[DEVICE_ID] = (state.sec[DEVICE_ID] || 0) + (to - from);
-    state.last = id;
-    state.lastAt = Date.now();
     const day = dayKey();
     if (!state.days.includes(day)) state.days.push(day);
     touch();
     notifySoon();
   }
 
+  // يُستدعى من الكورس فقط، فيحدد آخر لقاء فُتح منه
   function setPosition(id, sec) {
     if (!LECTURE_BY_ID[id]) return;
     const e = entry(id);
@@ -169,13 +168,15 @@ const progress = (() => {
     };
   }
 
-  // اللقاء الذي يكمل منه: آخر لقاء لم يكتمل، وإلا أول لقاء غير مكتمل بالترتيب
+  // اللقاء الذي يكمل منه في الكورس: آخر لقاء فتحه من الكورس ولم يكتمل،
+  // وإلا أول لقاء غير مكتمل بالترتيب. الاستماع من الراديو لا يغيّره
   function continueId() {
     if (state.last && LECTURE_BY_ID[state.last] && !isDone(state.last)) return state.last;
     return COURSE_ORDER.find(id => !isDone(id)) || null;
   }
 
-  const hasAny = () => Object.keys(state.lectures).length > 0;
+  // هل بدأ الكورس فعلًا (فتح لقاء منه)
+  const hasAny = () => !!state.last;
 
   // دمج تقدّم محفوظ على جهاز آخر دون فقدان أي جزء من الجهتين
   function merge(remote) {
