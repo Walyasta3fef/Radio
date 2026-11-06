@@ -3,41 +3,71 @@
 // يُحسب على النسخة العادية فقط (الكورس والراديو العادي)
 // كل لقاء مقسّم إلى شرائح مدة كل منها 5 ثوانٍ، وتُعلَّم الشريحة عند سماعها فعلًا
 // فالتقديم لا يُحتسب، وسماع الجزء نفسه مرتين لا يُحتسب مرتين
-// يُحفظ على هذا المتصفح فقط حتى إضافة كود الاسترجاع
+// يُحفظ على المتصفح، ويُزامَن مع الحساب عند تسجيل الاسم (account.js)
 // =====================
 const PROGRESS_KEY = 'afaf_progress_v1';
+const DEVICE_KEY = 'afaf_device';
 const SLOT_SECONDS = 5;
 const DONE_RATIO = 0.9;
 
-const progress = (() => {
-  let state = storage.getJSON(PROGRESS_KEY);
-  if (!state || state.v !== 1) state = { v: 1, lectures: {}, seconds: 0, days: 0, lastDay: null, last: null };
+// معرّف عشوائي لهذا المتصفح، لجمع وقت الاستماع من الأجهزة المختلفة دون تكرار
+const DEVICE_ID = (() => {
+  let id = storage.get(DEVICE_KEY);
+  if (!id) { id = Math.random().toString(36).slice(2, 10); storage.set(DEVICE_KEY, id); }
+  return id;
+})();
 
-  const bitsCache = {};
+const dayKey = (d = new Date()) =>
+  d.getFullYear() + String(d.getMonth() + 1).padStart(2, '0') + String(d.getDate()).padStart(2, '0');
+
+const progress = (() => {
+  // الحالة:
+  // lectures: لكل لقاء { h: الشرائح المسموعة مشفّرة، c: عددها، p: موضع التوقف، t: وقت آخر تحديث للموضع، d: اكتمل }
+  // sec: ثواني الاستماع لكل جهاز، days: أيام الاستماع، last: آخر لقاء
+  const empty = () => ({ v: 2, lectures: {}, sec: {}, days: [], legacyDays: 0, last: null, lastAt: 0 });
+
+  function migrate(s) {
+    if (!s) return empty();
+    if (s.v === 2) return s;
+    if (s.v === 1) {
+      const n = empty();
+      n.lectures = s.lectures || {};
+      n.sec[DEVICE_ID] = s.seconds || 0;
+      n.legacyDays = s.days || 0;
+      n.last = s.last || null;
+      return n;
+    }
+    return empty();
+  }
+
+  let state = migrate(storage.getJSON(PROGRESS_KEY));
+  let bitsCache = {};
   const listeners = new Set();
   let dirty = false;
+  let rev = 0;          // يزيد مع كل تغيير، لمعرفة وجود ما يلزم رفعه
   let notifyTimer = null;
 
   const slotsOf = (id) => Math.ceil(LECTURE_BY_ID[id].normal / SLOT_SECONDS);
 
-  // h: الشرائح المسموعة مشفّرة، c: عددها، p: موضع التوقف، d: اكتمل
   function entry(id) {
-    if (!state.lectures[id]) state.lectures[id] = { h: '', c: 0, p: 0, d: 0 };
+    if (!state.lectures[id]) state.lectures[id] = { h: '', c: 0, p: 0, t: 0, d: 0 };
     return state.lectures[id];
   }
 
-  function bits(id) {
-    if (bitsCache[id]) return bitsCache[id];
+  function decode(id, h) {
     const arr = new Uint8Array(Math.ceil(slotsOf(id) / 8));
-    const h = state.lectures[id] && state.lectures[id].h;
     if (h) {
       try {
         const bin = atob(h);
         for (let i = 0; i < Math.min(arr.length, bin.length); i++) arr[i] = bin.charCodeAt(i);
       } catch (e) {}
     }
-    bitsCache[id] = arr;
     return arr;
+  }
+
+  function bits(id) {
+    if (!bitsCache[id]) bitsCache[id] = decode(id, state.lectures[id] && state.lectures[id].h);
+    return bitsCache[id];
   }
 
   function encode(arr) {
@@ -46,14 +76,21 @@ const progress = (() => {
     return btoa(s);
   }
 
-  function today() {
-    const d = new Date();
-    return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate();
+  function popcount(arr) {
+    let n = 0;
+    for (let i = 0; i < arr.length; i++) { let b = arr[i]; while (b) { n += b & 1; b >>= 1; } }
+    return n;
   }
+
+  function touch() { dirty = true; rev++; }
 
   function notifySoon() {
     if (notifyTimer) return;
     notifyTimer = setTimeout(() => { notifyTimer = null; listeners.forEach(fn => fn()); }, 1000);
+  }
+  function notifyNow() {
+    clearTimeout(notifyTimer); notifyTimer = null;
+    listeners.forEach(fn => fn());
   }
 
   function save() {
@@ -79,19 +116,23 @@ const progress = (() => {
       e.h = encode(arr);
       if (!e.d && e.c / total >= DONE_RATIO) e.d = 1;
     }
-    state.seconds += to - from;
+    state.sec[DEVICE_ID] = (state.sec[DEVICE_ID] || 0) + (to - from);
     state.last = id;
-    const day = today();
-    if (state.lastDay !== day) { state.lastDay = day; state.days++; }
-    dirty = true;
+    state.lastAt = Date.now();
+    const day = dayKey();
+    if (!state.days.includes(day)) state.days.push(day);
+    touch();
     notifySoon();
   }
 
   function setPosition(id, sec) {
     if (!LECTURE_BY_ID[id]) return;
-    entry(id).p = Math.max(0, Math.floor(sec));
+    const e = entry(id);
+    e.p = Math.max(0, Math.floor(sec));
+    e.t = Date.now();
     state.last = id;
-    dirty = true;
+    state.lastAt = e.t;
+    touch();
   }
 
   // موضع الاستئناف، ويبدأ من الأول إذا كان قد وصل إلى النهاية تقريبًا
@@ -118,12 +159,13 @@ const progress = (() => {
       if (e) heard += Math.min(dur, e.c * SLOT_SECONDS);
       if (isDone(id)) done++;
     });
+    const seconds = Object.values(state.sec).reduce((s, x) => s + x, 0);
     return {
       percent: total ? heard / total * 100 : 0,
       done,
       count: COURSE_ORDER.length,
-      seconds: Math.floor(state.seconds),
-      days: state.days,
+      seconds: Math.floor(seconds),
+      days: state.days.length + (state.legacyDays || 0),
     };
   }
 
@@ -135,11 +177,58 @@ const progress = (() => {
 
   const hasAny = () => Object.keys(state.lectures).length > 0;
 
+  // دمج تقدّم محفوظ على جهاز آخر دون فقدان أي جزء من الجهتين
+  function merge(remote) {
+    remote = remote && migrateRemote(remote);
+    if (!remote) return;
+    Object.entries(remote.lectures || {}).forEach(([id, r]) => {
+      if (!LECTURE_BY_ID[id] || !r) return;
+      const e = entry(id);
+      const mine = bits(id);
+      const theirs = decode(id, r.h);
+      for (let i = 0; i < mine.length; i++) mine[i] |= theirs[i];
+      e.h = encode(mine);
+      e.c = popcount(mine);
+      e.d = e.d || r.d || (e.c / slotsOf(id) >= DONE_RATIO) ? 1 : 0;
+      if ((r.t || 0) > (e.t || 0)) { e.p = r.p || 0; e.t = r.t; }
+    });
+    Object.entries(remote.sec || {}).forEach(([dev, s]) => {
+      if (typeof s === 'number') state.sec[dev] = Math.max(state.sec[dev] || 0, s);
+    });
+    (remote.days || []).forEach(d => { if (!state.days.includes(d)) state.days.push(d); });
+    state.legacyDays = Math.max(state.legacyDays || 0, remote.legacyDays || 0);
+    if ((remote.lastAt || 0) > (state.lastAt || 0)) { state.last = remote.last; state.lastAt = remote.lastAt; }
+    touch();
+    save();
+    notifyNow();
+  }
+
+  function migrateRemote(r) {
+    if (typeof r === 'string') { try { r = JSON.parse(r); } catch (e) { return null; } }
+    return r && r.v === 2 ? r : null;
+  }
+
+  function exportState() { return JSON.stringify(state); }
+
+  // مسح التقدّم من هذا المتصفح فقط (عند الخروج)، ويبقى محفوظًا في الحساب
+  function reset() {
+    state = empty();
+    bitsCache = {};
+    storage.set(PROGRESS_KEY, '');
+    dirty = false;
+    rev++;
+    notifyNow();
+  }
+
   function subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn); }
 
   setInterval(save, 5000);
   window.addEventListener('pagehide', save);
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') save(); });
 
-  return { record, setPosition, position, percent, isDone, summary, continueId, hasAny, subscribe, save };
+  return {
+    record, setPosition, position, percent, isDone, summary, continueId, hasAny,
+    merge, exportState, reset, subscribe, save,
+    get rev() { return rev; },
+  };
 })();
