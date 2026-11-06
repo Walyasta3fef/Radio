@@ -4,6 +4,8 @@ const html = htm.bind(React.createElement);
 const MODES = ['normal', 'fast'];
 const MODE_LABEL = { normal: 'normalRadio', fast: 'fastRadio' };
 const MODE_DESC = { normal: 'normalRadioDesc', fast: 'fastRadioDesc' };
+const MODE_NOTE = { normal: 'normalNote', fast: 'fastNote' };
+const MODE_INFO = { normal: 'normalInfo', fast: 'fastInfo' };
 
 const fmtTime = (s) => isNaN(s) ? '0:00' : `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 const fmtCount = (n) => n >= 1000000 ? (n / 1000000).toFixed(1) + t('million')
@@ -426,6 +428,7 @@ function HomePage({ engine, now, users }) {
         <span className="card-live"><${LiveDot} />${t('live')}</span>
       </div>
       <p className="card-desc">${t(MODE_DESC[mode])}</p>
+      <p className="card-note">${t(MODE_NOTE[mode])}</p>
       <p className="card-now">
         ${playingHere ? t('playingHere') + ' · ' : ''}
         ${t('nowPlaying', { title: shortTitle(s.track.id) })}
@@ -493,7 +496,7 @@ function RadioPage({ mode, engine, now, users, volume, onVolume }) {
         <div className="panel-head">
           <h1>
             ${t(MODE_LABEL[mode])}
-            ${mode === 'normal' && html`<${InfoTip} label=${t('dataNoteLabel')} text=${t('dataNote')} />`}
+            <${InfoTip} label=${t('infoLabel')} text=${t(MODE_INFO[mode])} />
           </h1>
           <div className="live"><${LiveDot} />${t('live')}</div>
         </div>
