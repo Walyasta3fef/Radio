@@ -168,6 +168,7 @@ function usePlayer(volume) {
     if (!audio || !s) return;
     setShifted(false);
     setLive(s);
+    setMediaMeta(s.track.id);
     endedRef.current = false;
     lastAttemptRef.current = Date.now();
     lastProgressRef.current = Date.now();
@@ -207,6 +208,7 @@ function usePlayer(volume) {
     const audio = audioRef.current;
     const id = lectureRef.current;
     if (!audio || !id) return;
+    setMediaMeta(id);
     lastAttemptRef.current = Date.now();
     lastProgressRef.current = Date.now();
     if (!navigator.onLine) { updateStatus('offline'); return; }
@@ -331,7 +333,12 @@ function usePlayer(volume) {
       if (modeRef.current === 'lecture' && id) progress.setPosition(id, ct);
     };
     const onSeeking = () => { lastSampleRef.current = null; };
-    const onPlaying = () => { if (wantPlayRef.current) updateStatus('playing'); };
+    const onPlaying = () => {
+      if (!wantPlayRef.current) return;
+      updateStatus('playing');
+      const id = loadedKeyRef.current && loadedKeyRef.current.split(':')[1];
+      if (id) setMediaMeta(id);
+    };
     const onWaiting = () => {
       if (wantPlayRef.current && statusRef.current !== 'next' && statusRef.current !== 'offline') updateStatus('loading');
     };
@@ -446,16 +453,9 @@ function usePlayer(volume) {
     return () => { clearInterval(id); document.removeEventListener('visibilitychange', onVisible); };
   }, [syncAndPlay, loadLecture, playAudio, reloadInPlace]);
 
-  // شاشة القفل والإشعارات: اسم مختصر محايد مراعاةً لخصوصية المستمع
+  // شاشة القفل والإشعارات
   const nowId = mode === 'lecture' ? lectureId : (live && live.track.id);
-  useEffect(() => {
-    if (!('mediaSession' in navigator) || !nowId) return;
-    try {
-      navigator.mediaSession.metadata = new MediaMetadata({
-        title: shortTitle(nowId), artist: t('mediaArtist'), album: '',
-      });
-    } catch (e) {}
-  }, [nowId]);
+  useEffect(() => { if (nowId) setMediaMeta(nowId); }, [nowId]);
 
   useEffect(() => {
     if (!('mediaSession' in navigator)) return;
@@ -486,6 +486,17 @@ function usePlayer(volume) {
     toggleRadio, goLive, toggleLecture, playLecture, seekLecture, skip, stop, retry,
   };
 }
+
+// بيانات شاشة القفل: اسم مختصر محايد مراعاةً للخصوصية
+function setMediaMeta(id) {
+  if (!('mediaSession' in navigator)) return;
+  try {
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: id ? shortTitle(id) : t('mediaArtist'), artist: t('mediaArtist'), album: '',
+    });
+  } catch (e) {}
+}
+setMediaMeta(null);
 
 // حالة الراديو كما تُعرض: البث الحي، أو اللقاء المتأخر إذا أوقفه المستمع
 function radioView(player, mode, now) {
@@ -697,6 +708,17 @@ function MiniBar({ value }) {
   return html`<div className="bar"><div className="fill" style=${{ width: Math.min(100, value) + '%' }}></div></div>`;
 }
 
+// شريط الأجزاء المسموعة: تتلون الأجزاء التي سُمعت فعلًا فقط
+function HeardBar({ id, position, duration }) {
+  const segs = progress.segments(id);
+  return html`<div className="bar heard-bar">
+    ${segs.map(([a, b], i) => html`<span key=${i} className="heard-seg"
+      style=${{ insetInlineStart: a + '%', width: Math.max(0.6, b - a) + '%' }}></span>`)}
+    ${position != null && duration > 0 && html`<span className="heard-cursor"
+      style=${{ insetInlineStart: Math.min(100, position / duration * 100) + '%' }}></span>`}
+  </div>`;
+}
+
 const STATUS_KEY = {
   loading: 'statusLoading', next: 'statusNext', blocked: 'statusBlocked',
   error: 'statusError', offline: 'statusOffline',
@@ -820,12 +842,10 @@ function HomePage({ player, now, users }) {
 // صفحة الراديو
 // =====================
 function RadioPage({ mode, player, now, users, volume, onVolume }) {
-  useProgressVersion();
   const modeUsers = users.filter(u => u.at === mode);
   const rv = radioView(player, mode, now);
   const { s, time } = rv;
   const pct = Math.min(100, (time / s.track.duration) * 100 || 0);
-  const heard = progress.percent(s.track.id);
 
   return html`<div className="page radio">
     <div className="topbar">
@@ -850,9 +870,6 @@ function RadioPage({ mode, player, now, users, volume, onVolume }) {
         <div className="now">
           <p className="now-title">${s.track.title}</p>
           ${!rv.behind && html`<p className="now-next">${t('next', { title: s.next.title })}</p>`}
-          ${mode === 'normal' && html`<button className="now-link" onClick=${() => go('#/lecture/' + s.track.id)}>
-            ${progress.isDone(s.track.id) ? '✓ ' : ''}${t('heardLabel')} <${Pct} value=${heard + '%'} /> · ${t('openInCourse')}
-          </button>`}
         </div>
 
         <${PlayButton} active=${rv.active} status=${rv.status} onClick=${() => player.toggleRadio(mode)} />
@@ -919,10 +936,10 @@ function CoursePage({ player, users }) {
               <span className="lesson-title">${LECTURE_BY_ID[id].title}</span>
               <span className="lesson-meta">
                 ${fmtTime(LECTURE_BY_ID[id].normal)}
-                ${pct ? html` · ${t('heardLabel')} <${Pct} value=${pct + '%'} />` : ''}
+                ${pct ? html`<span> · ${t('heardLabel')} <${Pct} value=${pct + '%'} /></span>` : ''}
                 ${playing ? ' · ' + t('playingHere') : ''}
               </span>
-              ${pct > 0 && !done && html`<${MiniBar} value=${pct} />`}
+              ${pct > 0 && !done && html`<${HeardBar} id=${id} />`}
             </span>
             ${done && html`<span className="done-badge" aria-label=${t('lectureDone')}><${Icon} name="check" size=${14} /></span>`}
           </button>
@@ -972,6 +989,10 @@ function LecturePage({ id, player, volume, onVolume }) {
             onChange=${e => setDragging(parseFloat(e.target.value))}
             onMouseUp=${commit} onTouchEnd=${commit} onKeyUp=${commit} />
           <div className="times"><span>${fmtTime(shown)}</span><span>${fmtTime(lec.normal)}</span></div>
+        </div>
+        <div className="heard-map">
+          <span className="heard-map-label">${t('heardMap')}</span>
+          <${HeardBar} id=${id} position=${shown} duration=${lec.normal} />
         </div>
 
         <div className="controls">
