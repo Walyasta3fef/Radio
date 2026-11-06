@@ -79,46 +79,46 @@ async function getCountryCode() {
 
 // =====================
 // اللقاءات
-// fast: مدة النسخة السريعة بالثواني
-// مدد النسخة العادية تُجلب تلقائيًا من بيانات archive.org
+// normal و fast: مدة النسختين بالثواني (تُقاس بصفحة durations.html)
+// لإضافة لقاء جديد: أضف سطرًا في آخر القائمة بالمدتين والعنوان
 // =====================
 const LECTURES = [
-  { id: "c01", fast: 2719, title: "الكورس الأساسي لقاء 1, الإباحية مشكلة ديناميكية الإباحية مشكلة نظامية" },
-  { id: "c02", fast: 2619, title: "الكورس الأساسي لقاء 2 تشوه التنبؤ و تشوه المثالية" },
-  { id: "c03", fast: 3036, title: "الكورس الأساسي لقاء 3 , تشوه التفكير بالتمني و تشوه التعريف" },
-  { id: "c04", fast: 2250, title: "الكورس الأساسي لقاء 4 , تشوه الينبغيات" },
-  { id: "L01", fast: 2714, title: "لقاء 1 - محاور التغيير" },
-  { id: "L02", fast: 2510, title: "لقاء 2 - قرار الإقلاع عن الإباحية" },
-  { id: "L03", fast: 2073, title: "لقاء 3 - بحس إن الإباحية فرصة صعب تتفوت" },
-  { id: "L04", fast: 1859, title: "لقاء 4 - الأفكار مسيطرة عليا وبتوقعني" },
-  { id: "L05", fast: 1828, title: "لقاء 5 - مغالطات الإدمان وعلاجه" },
-  { id: "L06", fast: 1989, title: "لقاء 6 - بخاف تنزل عليا مصيبة بعد الوقوع" },
-  { id: "L07", fast: 2193, title: "لقاء 7 - التعامل مع الخواطر والتفكير الجنسي" },
-  { id: "L08", fast: 2197, title: "لقاء 8 - هتفرج وابقى أتوب" },
-  { id: "L09", fast: 2850, title: "لقاء 9 - أنا هفضل أعاني بدون جنس كده كتير؟" },
-  { id: "L10", fast: 1752, title: "لقاء 10 - العلاج الشمولي للإباحية" },
-  { id: "L11", fast: 1642, title: "لقاء 11 - علاج اليأس وسرعة الإحباط" },
-  { id: "L12", fast: 2117, title: "لقاء 12 - كيف نتعامل مع الشعور بالشهوة" },
-  { id: "L13", fast: 2063, title: "لقاء 13 - ليه بتقدم فترة وبعدين بتراجع؟" },
-  { id: "L14", fast: 2193, title: "لقاء 14 - الفرق بين الخوف والرعب من المعصية" },
-  { id: "L15", fast: 2151, title: "لقاء 15 - طاعة قصاد معصية والدنيا ماشية!" },
-  { id: "L16", fast: 2345, title: "لقاء 16 - خطوات عملية لعلاج الإباحية" },
-  { id: "L17", fast: 2121, title: "لقاء 17 - علاج الإباحية فن مش بالعافية" },
-  { id: "L18", fast: 2251, title: "لقاء 18 - أتجوز ولا أستنى لما اتعافى؟" },
-  { id: "L19", fast: 1955, title: "لقاء 19 - ازاي اتعامل مع أعراض الانسحاب؟" },
-  { id: "L20", fast: 1978, title: "لقاء 20 - الفرق بين الزواج والإباحية" },
-  { id: "L21", fast: 1586, title: "لقاء 21 - خايف أقاوم وفي الآخر أنفجر" },
-  { id: "L22", fast: 1613, title: "لقاء 22 - الفرق بين التبطيل والتعافي" },
-  { id: "L23", fast: 2091, title: "لقاء 23 - ليه لما بقع بستحلاها ومش بعرف أوقف؟" },
-  { id: "L24", fast: 2002, title: "لقاء 24 - التعافي رحلة مش هدف" },
-  { id: "L25", fast: 2035, title: "لقاء 25 - مش مشكلة المرادي مانا كده كده بنتعافى" },
-  { id: "L26", fast: 2675, title: "لقاء 26 - الإباحية مش مشكلة إدمان" },
-  { id: "L27", fast: 2357, title: "لقاء 27 - الفرق بين الندم وجلد الذات" },
-  { id: "L28", fast: 2494, title: "لقاء 28 - التعافي زي بناء العضلات" },
-  { id: "L29", fast: 1883, title: "لقاء 29 - خدعوك فقالوا: الإباحية دمرت حياتك" },
-  { id: "L30", fast: 2066, title: "لقاء 30 - تقاوم ليه؟ مانت كده كده هتقع!" },
-  { id: "L31", fast: 1527, title: "لقاء 31 - هل المسار اللي بيتكون في المخ مش بيموت؟" },
-  { id: "L32", fast: 1912, title: "لقاء 32 - ذنب يعتاده الفينة بعد الفينة - الانهزامية" },
+  { id: "c01", normal: 4963, fast: 2719, title: "الكورس الأساسي لقاء 1, الإباحية مشكلة ديناميكية الإباحية مشكلة نظامية" },
+  { id: "c02", normal: 5498, fast: 2619, title: "الكورس الأساسي لقاء 2 تشوه التنبؤ و تشوه المثالية" },
+  { id: "c03", normal: 6272, fast: 3036, title: "الكورس الأساسي لقاء 3 , تشوه التفكير بالتمني و تشوه التعريف" },
+  { id: "c04", normal: 4739, fast: 2250, title: "الكورس الأساسي لقاء 4 , تشوه الينبغيات" },
+  { id: "L01", normal: 5391, fast: 2714, title: "لقاء 1 - محاور التغيير" },
+  { id: "L02", normal: 6534, fast: 2510, title: "لقاء 2 - قرار الإقلاع عن الإباحية" },
+  { id: "L03", normal: 5158, fast: 2073, title: "لقاء 3 - بحس إن الإباحية فرصة صعب تتفوت" },
+  { id: "L04", normal: 4132, fast: 1859, title: "لقاء 4 - الأفكار مسيطرة عليا وبتوقعني" },
+  { id: "L05", normal: 5439, fast: 1828, title: "لقاء 5 - مغالطات الإدمان وعلاجه" },
+  { id: "L06", normal: 5024, fast: 1989, title: "لقاء 6 - بخاف تنزل عليا مصيبة بعد الوقوع" },
+  { id: "L07", normal: 5384, fast: 2193, title: "لقاء 7 - التعامل مع الخواطر والتفكير الجنسي" },
+  { id: "L08", normal: 4940, fast: 2197, title: "لقاء 8 - هتفرج وابقى أتوب" },
+  { id: "L09", normal: 5582, fast: 2850, title: "لقاء 9 - أنا هفضل أعاني بدون جنس كده كتير؟" },
+  { id: "L10", normal: 3655, fast: 1752, title: "لقاء 10 - العلاج الشمولي للإباحية" },
+  { id: "L11", normal: 3818, fast: 1642, title: "لقاء 11 - علاج اليأس وسرعة الإحباط" },
+  { id: "L12", normal: 4432, fast: 2117, title: "لقاء 12 - كيف نتعامل مع الشعور بالشهوة" },
+  { id: "L13", normal: 4426, fast: 2063, title: "لقاء 13 - ليه بتقدم فترة وبعدين بتراجع؟" },
+  { id: "L14", normal: 5057, fast: 2193, title: "لقاء 14 - الفرق بين الخوف والرعب من المعصية" },
+  { id: "L15", normal: 4985, fast: 2151, title: "لقاء 15 - طاعة قصاد معصية والدنيا ماشية!" },
+  { id: "L16", normal: 4789, fast: 2345, title: "لقاء 16 - خطوات عملية لعلاج الإباحية" },
+  { id: "L17", normal: 4490, fast: 2121, title: "لقاء 17 - علاج الإباحية فن مش بالعافية" },
+  { id: "L18", normal: 4554, fast: 2251, title: "لقاء 18 - أتجوز ولا أستنى لما اتعافى؟" },
+  { id: "L19", normal: 4636, fast: 1955, title: "لقاء 19 - ازاي اتعامل مع أعراض الانسحاب؟" },
+  { id: "L20", normal: 4050, fast: 1978, title: "لقاء 20 - الفرق بين الزواج والإباحية" },
+  { id: "L21", normal: 3421, fast: 1586, title: "لقاء 21 - خايف أقاوم وفي الآخر أنفجر" },
+  { id: "L22", normal: 3455, fast: 1613, title: "لقاء 22 - الفرق بين التبطيل والتعافي" },
+  { id: "L23", normal: 3906, fast: 2091, title: "لقاء 23 - ليه لما بقع بستحلاها ومش بعرف أوقف؟" },
+  { id: "L24", normal: 3471, fast: 2002, title: "لقاء 24 - التعافي رحلة مش هدف" },
+  { id: "L25", normal: 3751, fast: 2035, title: "لقاء 25 - مش مشكلة المرادي مانا كده كده بنتعافى" },
+  { id: "L26", normal: 4583, fast: 2675, title: "لقاء 26 - الإباحية مش مشكلة إدمان" },
+  { id: "L27", normal: 4040, fast: 2357, title: "لقاء 27 - الفرق بين الندم وجلد الذات" },
+  { id: "L28", normal: 4011, fast: 2494, title: "لقاء 28 - التعافي زي بناء العضلات" },
+  { id: "L29", normal: 3566, fast: 1883, title: "لقاء 29 - خدعوك فقالوا: الإباحية دمرت حياتك" },
+  { id: "L30", normal: 3653, fast: 2066, title: "لقاء 30 - تقاوم ليه؟ مانت كده كده هتقع!" },
+  { id: "L31", normal: 2980, fast: 1527, title: "لقاء 31 - هل المسار اللي بيتكون في المخ مش بيموت؟" },
+  { id: "L32", normal: 3369, fast: 1912, title: "لقاء 32 - ذنب يعتاده الفينة بعد الفينة - الانهزامية" },
 ];
 
 // الاسم المختصر المحايد لشاشة القفل: c01 ← الكورس الأساسي 1، L05 ← لقاء 5
@@ -139,47 +139,3 @@ const MEDIA_BASES = {
   },
 };
 const mediaUrl = (mode, id) => MEDIA_BASES[mode][id[0]] + id.slice(1) + '.mp3';
-
-// =====================
-// مدد النسخة العادية من بيانات archive.org
-// تُحفظ على الجهاز أسبوعًا، وتُستخدم النسخة المحفوظة إذا تعذّر الاتصال
-// =====================
-const NORMAL_META_URL = atob('aHR0cHM6Ly9hcmNoaXZlLm9yZy9tZXRhZGF0YS93YWx5YXN0YWFmZWZNUDMvZmlsZXM=');
-const NORMAL_CACHE_KEY = 'radio_normal_durations_v1';
-
-function parseLength(v) {
-  if (v == null) return 0;
-  const s = String(v);
-  if (s.includes(':')) return s.split(':').reduce((acc, p) => acc * 60 + parseFloat(p || 0), 0);
-  return parseFloat(s) || 0;
-}
-
-const isComplete = (map) => !!map && LECTURES.every(l => map[l.id] > 0);
-
-async function loadNormalDurations() {
-  const cached = storage.getJSON(NORMAL_CACHE_KEY);
-  if (cached && isComplete(cached.map) && Date.now() - cached.at < 7 * 86400000) return cached.map;
-
-  try {
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 12000);
-    const r = await fetch(NORMAL_META_URL, { signal: ctrl.signal });
-    clearTimeout(timer);
-    const d = await r.json();
-    const files = Array.isArray(d) ? d : (d && d.result) || [];
-    const map = {};
-    files.forEach(f => {
-      const m = /^Walyastaafef_(LIVE)?(\d{2})\.mp3$/.exec(f && f.name || '');
-      if (!m) return;
-      const len = Math.floor(parseLength(f.length));
-      if (len > 0) map[(m[1] ? 'L' : 'c') + m[2]] = len;
-    });
-    if (isComplete(map)) {
-      storage.setJSON(NORMAL_CACHE_KEY, { at: Date.now(), map });
-      return map;
-    }
-  } catch (e) {}
-
-  if (cached && isComplete(cached.map)) return cached.map;
-  throw new Error('normal durations unavailable');
-}
