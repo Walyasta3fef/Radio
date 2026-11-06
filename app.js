@@ -39,23 +39,8 @@ function useClock() {
 // =====================
 // المحطتان
 // =====================
-function useStations() {
-  const [fast] = useState(() => createStation('fast',
-    LECTURES.map(l => ({ id: l.id, title: l.title, duration: l.fast }))));
-  const [normal, setNormal] = useState(null);
-  const [normalError, setNormalError] = useState(false);
-
-  const loadNormal = useCallback(() => {
-    setNormalError(false);
-    loadNormalDurations()
-      .then(map => setNormal(createStation('normal',
-        LECTURES.map(l => ({ id: l.id, title: l.title, duration: map[l.id] })))))
-      .catch(() => setNormalError(true));
-  }, []);
-  useEffect(() => { loadNormal(); }, [loadNormal]);
-
-  return { stations: { fast, normal }, normalError, loadNormal };
-}
+const STATIONS = Object.fromEntries(MODES.map(mode => [mode, createStation(mode,
+  LECTURES.map(l => ({ id: l.id, title: l.title, duration: l[mode] })))]));
 
 // =====================
 // مشغّل البث: مشغّل واحد للموقع كله يبقى يعمل أثناء التنقل
@@ -429,10 +414,9 @@ function InfoTip({ label, text }) {
 // =====================
 // الصفحة الرئيسية
 // =====================
-function HomePage({ stations, normalError, engine, now, users }) {
+function HomePage({ engine, now, users }) {
   const card = (mode) => {
-    const st = stations[mode];
-    const s = st ? st.getState(now) : null;
+    const s = STATIONS[mode].getState(now);
     const playingHere = engine.isPlaying && engine.mode === mode;
     const count = users.filter(u => u.at === mode).length;
     return html`<button key=${mode} className=${'card' + (playingHere ? ' card-active' : '')}
@@ -444,8 +428,7 @@ function HomePage({ stations, normalError, engine, now, users }) {
       <p className="card-desc">${t(MODE_DESC[mode])}</p>
       <p className="card-now">
         ${playingHere ? t('playingHere') + ' · ' : ''}
-        ${s ? t('nowPlaying', { title: shortTitle(s.track.id) })
-          : (mode === 'normal' && normalError ? t('stationError') : t('stationLoading'))}
+        ${t('nowPlaying', { title: shortTitle(s.track.id) })}
       </p>
       <span className="card-count">${t('listeners', { n: count })}</span>
     </button>`;
@@ -482,7 +465,8 @@ const STATUS_KEY = {
   error: 'statusError', offline: 'statusOffline',
 };
 
-function RadioPage({ mode, station, normalError, loadNormal, engine, now, users, volume, onVolume }) {
+function RadioPage({ mode, engine, now, users, volume, onVolume }) {
+  const station = STATIONS[mode];
   const modeUsers = users.filter(u => u.at === mode);
   const active = engine.mode === mode && engine.isPlaying;
 
@@ -493,22 +477,6 @@ function RadioPage({ mode, station, normalError, loadNormal, engine, now, users,
       <${CountryFlags} users=${modeUsers} />
     </div>
   </div>`;
-
-  if (!station) {
-    return html`<div className="page radio">${top}
-      <div className="panel center">
-        ${normalError
-          ? html`<div className="center">
-                 <p className="msg warn">${t('stationError')}</p>
-                 <button className="small-btn" onClick=${loadNormal}>${t('retry')}</button>
-               </div>`
-          : html`<div className="center">
-                 <span className="spinner light"></span>
-                 <p className="msg">${t('stationLoading')}</p>
-               </div>`}
-      </div>
-    </div>`;
-  }
 
   const s = active && engine.live ? engine.live : station.getState(now);
   const time = active ? engine.currentTime : s.position;
@@ -584,12 +552,11 @@ function MiniPlayer({ engine, route }) {
 function App() {
   const route = useRoute();
   const now = useClock();
-  const { stations, normalError, loadNormal } = useStations();
   const [volume, setVolume] = useState(() => {
     const v = parseFloat(storage.get('radio_volume'));
     return isNaN(v) ? 0.7 : Math.min(1, Math.max(0, v));
   });
-  const engine = useRadioEngine(stations, volume);
+  const engine = useRadioEngine(STATIONS, volume);
 
   const at = engine.isPlaying ? engine.mode : (route.page === 'radio' ? route.mode : 'home');
   const users = usePresence(at);
@@ -619,11 +586,9 @@ function App() {
     <${Stars} />
     <audio ref=${engine.audioRef} preload="none" controlsList="nodownload" />
     ${route.page === 'radio'
-      ? html`<${RadioPage} mode=${route.mode} station=${stations[route.mode]}
-          normalError=${normalError} loadNormal=${loadNormal} engine=${engine}
+      ? html`<${RadioPage} mode=${route.mode} engine=${engine}
           now=${now} users=${users} volume=${volume} onVolume=${onVolume} />`
-      : html`<${HomePage} stations=${stations} normalError=${normalError}
-          engine=${engine} now=${now} users=${users} />`}
+      : html`<${HomePage} engine=${engine} now=${now} users=${users} />`}
     <${MiniPlayer} engine=${engine} route=${route} />
   </div>`;
 }
