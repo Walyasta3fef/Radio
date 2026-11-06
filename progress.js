@@ -23,12 +23,14 @@ const dayKey = (d = new Date()) =>
 const progress = (() => {
   // الحالة:
   // lectures: لكل لقاء { h: الشرائح المسموعة مشفّرة، c: عددها، p: موضع التوقف، t: وقت آخر تحديث للموضع، d: اكتمل }
-  // sec: ثواني الاستماع لكل جهاز، days: أيام الاستماع، last: آخر لقاء
-  const empty = () => ({ v: 2, lectures: {}, sec: {}, days: [], legacyDays: 0, last: null, lastAt: 0 });
+  // sec: وقت الاستماع القديم قبل التقرير اليومي (لكل جهاز)، days: أيام الاستماع، last: آخر لقاء
+  // daily: وقت الاستماع الفعلي لكل جهاز ولكل يوم، مع التكرار:
+  //   { جهاز: { يوم: { c: الكورس، n: الراديو العادي، f: الراديو السريع، l: { لقاء: ثوانٍ } } } }
+  const empty = () => ({ v: 2, lectures: {}, sec: {}, days: [], legacyDays: 0, last: null, lastAt: 0, daily: {} });
 
   function migrate(s) {
     if (!s) return empty();
-    if (s.v === 2) return s;
+    if (s.v === 2) { if (!s.daily) s.daily = {}; return s; }
     if (s.v === 1) {
       const n = empty();
       n.lectures = s.lectures || {};
@@ -114,14 +116,50 @@ const progress = (() => {
     }
     if (changed) {
       e.h = encode(arr);
-      if (!e.d && e.c / total >= DONE_RATIO) e.d = 1;
+      if (!e.d && e.c / total >= DONE_RATIO) { e.d = 1; e.da = dayKey(); }
     }
-    state.sec[DEVICE_ID] = (state.sec[DEVICE_ID] || 0) + (to - from);
     const day = dayKey();
     if (!state.days.includes(day)) state.days.push(day);
     touch();
     notifySoon();
   }
+
+  // وقت الاستماع الفعلي من أي مصدر (c كورس، n راديو عادي، f راديو سريع)، والتكرار يُحتسب
+  function addTime(source, id, sec) {
+    if (!(sec > 0) || !['c', 'n', 'f'].includes(source)) return;
+    const day = dayKey();
+    const mine = state.daily[DEVICE_ID] || (state.daily[DEVICE_ID] = {});
+    const d = mine[day] || (mine[day] = { c: 0, n: 0, f: 0, l: {} });
+    const r1 = (x) => Math.round(x * 10) / 10;
+    d[source] = r1((d[source] || 0) + sec);
+    if (id) d.l[id] = r1((d.l[id] || 0) + sec);
+    touch();
+  }
+
+  // إحصاءات فترة: من يوم إلى يوم (مفاتيح YYYYMMDD، شاملة)
+  function stats(fromKey, toKey) {
+    const byDay = {};
+    const lec = {};
+    let c = 0, n = 0, f = 0;
+    Object.values(state.daily).forEach(days => {
+      Object.entries(days).forEach(([day, d]) => {
+        if (day < fromKey || day > toKey || !d) return;
+        const total = (d.c || 0) + (d.n || 0) + (d.f || 0);
+        byDay[day] = (byDay[day] || 0) + total;
+        c += d.c || 0; n += d.n || 0; f += d.f || 0;
+        Object.entries(d.l || {}).forEach(([id, s]) => { lec[id] = (lec[id] || 0) + s; });
+      });
+    });
+    let top = null;
+    Object.entries(lec).forEach(([id, s]) => { if (LECTURE_BY_ID[id] && (!top || s > top.sec)) top = { id, sec: s }; });
+    const completed = Object.entries(state.lectures)
+      .filter(([id, e]) => e.d && e.da && e.da >= fromKey && e.da <= toKey && LECTURE_BY_ID[id]).length;
+    const activeDays = Object.values(byDay).filter(s => s >= 60).length;
+    return { total: c + n + f, c, n, f, byDay, top, completed, activeDays };
+  }
+
+  // وقت الاستماع القديم المسجّل قبل إضافة التقرير اليومي
+  const legacySeconds = () => Object.values(state.sec || {}).reduce((s, x) => s + x, 0);
 
   // يُستدعى من الكورس فقط، فيحدد آخر لقاء فُتح منه
   function setPosition(id, sec) {
@@ -207,10 +245,21 @@ const progress = (() => {
       e.h = encode(mine);
       e.c = popcount(mine);
       e.d = e.d || r.d || (e.c / slotsOf(id) >= DONE_RATIO) ? 1 : 0;
+      if (r.da && (!e.da || r.da < e.da)) e.da = r.da;
+      if (e.d && !e.da) e.da = dayKey();
       if ((r.t || 0) > (e.t || 0)) { e.p = r.p || 0; e.t = r.t; }
     });
     Object.entries(remote.sec || {}).forEach(([dev, s]) => {
       if (typeof s === 'number') state.sec[dev] = Math.max(state.sec[dev] || 0, s);
+    });
+    // وقت الاستماع اليومي: لكل جهاز ويوم نأخذ النسخة الأكبر، فلا يتكرر شيء
+    Object.entries(remote.daily || {}).forEach(([dev, days]) => {
+      const mine = state.daily[dev] || (state.daily[dev] = {});
+      Object.entries(days || {}).forEach(([day, d]) => {
+        if (!d) return;
+        const tot = (x) => x ? (x.c || 0) + (x.n || 0) + (x.f || 0) : -1;
+        if (tot(d) > tot(mine[day])) mine[day] = { c: d.c || 0, n: d.n || 0, f: d.f || 0, l: { ...(d.l || {}) } };
+      });
     });
     (remote.days || []).forEach(d => { if (!state.days.includes(d)) state.days.push(d); });
     state.legacyDays = Math.max(state.legacyDays || 0, remote.legacyDays || 0);
@@ -244,7 +293,7 @@ const progress = (() => {
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') save(); });
 
   return {
-    record, setPosition, position, percent, segments, isDone, summary, continueId, hasAny,
+    record, addTime, stats, legacySeconds, setPosition, position, percent, segments, isDone, summary, continueId, hasAny,
     merge, exportState, reset, subscribe, save,
     get rev() { return rev; },
   };
