@@ -288,6 +288,12 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--accent-soft); o
 .nav .small-btn { margin: 0; padding: 8px 14px; }
 .small-btn:disabled { opacity: .35; cursor: default; }
 
+.heard-bar { position: relative; height: 8px; }
+.heard-seg { position: absolute; top: 0; bottom: 0; background: linear-gradient(90deg, var(--accent), var(--accent-2)); border-radius: 2px; }
+.heard-cursor { position: absolute; top: -3px; bottom: -3px; width: 2px; margin-inline-start: -1px; background: #fff; border-radius: 2px; }
+.heard-map { display: flex; flex-direction: column; gap: 6px; margin: 4px 0 16px; text-align: right; }
+.heard-map-label { font-size: 11px; color: var(--faint); }
+.lesson-body .heard-bar { height: 5px; }
 .now-link { margin-top: 8px; font-size: 12px; color: var(--accent-soft); text-decoration: underline; text-underline-offset: 3px; }
 
 /* =====================
