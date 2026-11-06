@@ -433,3 +433,82 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--accent-soft); o
   border: 1px solid rgba(252, 211, 77, .35); unicode-bidi: isolate;
 }
 .time-chip:hover { background: rgba(252, 211, 77, .25); }
+
+/* =====================
+   ألوان الكارتين: بنفسجي للكورس ونيلي للراديو (من عائلة واحدة)
+   ===================== */
+:root { --course: #a855f7; --course-soft: #d8b4fe; --radio: #6366f1; --radio-soft: #a5b4fc; }
+.home .section { margin-bottom: 26px; }
+.tint-course { background: linear-gradient(180deg, rgba(168, 85, 247, .16), rgba(168, 85, 247, .04)); border-color: rgba(168, 85, 247, .35); }
+.tint-radio { background: linear-gradient(180deg, rgba(99, 102, 241, .18), rgba(99, 102, 241, .04)); border-color: rgba(129, 140, 248, .35); }
+.tint-course.card-active { border-color: rgba(168, 85, 247, .75); }
+.tint-radio.card-active { border-color: rgba(129, 140, 248, .8); box-shadow: 0 10px 30px -12px rgba(99, 102, 241, .7); }
+.card-title { display: inline-flex; align-items: center; gap: 8px; }
+.title-icon {
+  width: 32px; height: 32px; border-radius: 10px; flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.tint-course .title-icon { background: rgba(168, 85, 247, .25); color: var(--course-soft); }
+.tint-radio .title-icon { background: rgba(99, 102, 241, .28); color: var(--radio-soft); }
+.tint-course .pct { color: var(--course-soft); }
+.tint-radio .seg .on { color: #3730a3; }
+.tint-radio .play { color: #3730a3; }
+.tint-radio .play-btn-glow { animation-name: glow-pulse-radio; }
+@keyframes glow-pulse-radio {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(99, 102, 241, .5); }
+  50% { box-shadow: 0 0 0 16px rgba(99, 102, 241, 0); }
+}
+.tint-radio .now { background: rgba(10, 14, 40, .35); border-color: rgba(129, 140, 248, .2); }
+.tint-radio .card-head .live { margin: 0; }
+.tint-course .continue { background: rgba(168, 85, 247, .2); }
+.radio-foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.radio-foot .link-btn { color: var(--radio-soft); }
+
+/* صفحة الكورس */
+.summary-foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 10px; }
+.report-btn {
+  display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700;
+  padding: 7px 14px; border-radius: 999px; background: var(--glass-2); border: 1px solid var(--line-2);
+}
+.report-btn:hover { background: rgba(255, 255, 255, .2); }
+
+/* التقرير */
+.seg-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); margin-bottom: 16px; }
+.seg-4 button { padding: 8px 4px; font-size: 13px; }
+.rep-total { display: flex; flex-direction: column; align-items: center; gap: 2px; margin-bottom: 14px; }
+.rep-total small { color: var(--muted); font-size: 12px; }
+.rep-total b { font-size: 32px; font-weight: 800; }
+.rep-compare { font-size: 12px; color: var(--muted); }
+.rep-compare.up { color: #a7f3d0; }
+.src-bar { display: flex; height: 10px; border-radius: 999px; overflow: hidden; background: var(--glass-2); }
+.src-c { background: var(--course); }
+.src-n { background: var(--radio); }
+.src-f { background: #67e8f9; }
+.src-legend { list-style: none; display: flex; flex-direction: column; gap: 6px; margin: 10px 0 18px; font-size: 13px; }
+.src-legend li { display: flex; align-items: center; gap: 8px; }
+.src-legend b { margin-inline-start: auto; font-weight: 700; }
+.dot { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+.chart { display: flex; align-items: flex-end; gap: 3px; height: 130px; margin-bottom: 18px; }
+.col { flex: 1; min-width: 0; height: 100%; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.col-bar { flex: 1; width: 100%; display: flex; align-items: flex-end; background: rgba(255, 255, 255, .04); border-radius: 6px; overflow: hidden; }
+.col-bar span { display: block; width: 100%; background: linear-gradient(0deg, var(--radio), var(--course)); border-radius: 6px 6px 0 0; min-height: 0; }
+.col small { font-size: 10px; color: var(--faint); white-space: nowrap; height: 14px; }
+.col-today small { color: var(--text); font-weight: 700; }
+.chart-month { gap: 1px; }
+.rep-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.rep-grid div { display: flex; flex-direction: column; align-items: center; background: var(--glass); border: 1px solid var(--line); border-radius: 12px; padding: 10px 4px; }
+.rep-grid b { font-size: 20px; }
+.rep-grid small { color: var(--muted); font-size: 11px; }
+.rep-top { margin-top: 10px; display: flex; flex-direction: column; gap: 2px; background: var(--glass); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; text-align: right; }
+.rep-top small { color: var(--muted); font-size: 11px; }
+.rep-top b { font-size: 14px; line-height: 1.7; }
+.empty-report { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 28px 0; color: var(--muted); }
+.title-icon.big { width: 56px; height: 56px; border-radius: 16px; background: var(--glass-2); color: var(--accent-soft); }
+
+/* تثبيت البرنامج */
+.foot { gap: 10px; align-items: center; }
+.install-btn {
+  display: inline-flex; align-items: center; gap: 6px; height: 40px; padding: 0 14px;
+  border-radius: 12px; background: var(--glass-2); border: 1px solid var(--line-2); font-size: 13px; font-weight: 700;
+}
+.install-btn.ghost { font-weight: 500; color: var(--muted); }
