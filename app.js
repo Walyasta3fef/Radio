@@ -2,21 +2,41 @@ const { useState, useEffect, useRef, useCallback, useMemo } = React;
 const html = htm.bind(React.createElement);
 
 const MODES = ['normal', 'fast'];
-const MODE_LABEL = { normal: 'normalRadio', fast: 'fastRadio' };
+const MODE_LABEL = { normal: 'normalRadio', fast: 'fastRadio', lecture: 'course' };
 const MODE_DESC = { normal: 'normalRadioDesc', fast: 'fastRadioDesc' };
 const MODE_NOTE = { normal: 'normalNote', fast: 'fastNote' };
 const MODE_INFO = { normal: 'normalInfo', fast: 'fastInfo' };
+const SKIP_SECONDS = 15;
 
-const fmtTime = (s) => isNaN(s) ? '0:00' : `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+const STATIONS = Object.fromEntries(MODES.map(mode => [mode, createStation(mode,
+  LECTURES.map(l => ({ id: l.id, title: l.title, duration: l[mode] })))]));
+
+const fmtTime = (s) => {
+  if (isNaN(s)) return '0:00';
+  s = Math.floor(s);
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = String(s % 60).padStart(2, '0');
+  return h ? `${h}:${String(m).padStart(2, '0')}:${sec}` : `${m}:${sec}`;
+};
 const fmtCount = (n) => n >= 1000000 ? (n / 1000000).toFixed(1) + t('million')
   : n >= 1000 ? (n / 1000).toFixed(1) + t('thousand') : n;
+// النسبة الكلية بكسر عشري عندما تكون صغيرة حتى يظهر أي تقدّم
+const fmtPct = (n) => (n > 0 && n < 10 ? (Math.floor(n * 10) / 10) : Math.floor(n)) + '%';
+const fmtHours = (sec) => {
+  const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60);
+  return h ? t('hoursMinutes', { h, m }) : t('minutesOnly', { m });
+};
 
 // =====================
 // التنقل بين الصفحات دون إعادة تحميل، فلا يتوقف الصوت
 // =====================
 function parseRoute() {
-  const m = /^#\/radio\/(normal|fast)$/.exec(location.hash);
-  return m ? { page: 'radio', mode: m[1] } : { page: 'home' };
+  const h = location.hash;
+  let m = /^#\/radio\/(normal|fast)$/.exec(h);
+  if (m) return { page: 'radio', mode: m[1] };
+  if (h === '#/course') return { page: 'course' };
+  m = /^#\/lecture\/(\w+)$/.exec(h);
+  if (m && LECTURE_BY_ID[m[1]]) return { page: 'lecture', id: m[1] };
+  return { page: 'home' };
 }
 function useRoute() {
   const [route, setRoute] = useState(parseRoute);
@@ -38,67 +58,52 @@ function useClock() {
   return now;
 }
 
-// =====================
-// المحطتان
-// =====================
-const STATIONS = Object.fromEntries(MODES.map(mode => [mode, createStation(mode,
-  LECTURES.map(l => ({ id: l.id, title: l.title, duration: l[mode] })))]));
+// إعادة الرسم عند تغيّر التقدّم
+function useProgressVersion() {
+  const [v, setV] = useState(0);
+  useEffect(() => progress.subscribe(() => setV(x => x + 1)), []);
+  return v;
+}
 
 // =====================
-// مشغّل البث: مشغّل واحد للموقع كله يبقى يعمل أثناء التنقل
+// المشغّل: مشغّل واحد للموقع كله يبقى يعمل أثناء التنقل
+// mode: normal أو fast (بث مباشر) أو lecture (لقاء من الكورس)
 // =====================
-function useRadioEngine(stations, volume) {
+function usePlayer(volume) {
   const audioRef = useRef(null);
-  const stationsRef = useRef(stations);
-  stationsRef.current = stations;
-
-  const modeRef = useRef(null);          // المحطة الحالية في المشغّل
+  const modeRef = useRef(null);
+  const lectureRef = useRef(null);
   const wantPlayRef = useRef(false);     // هل يريد المستخدم الاستماع الآن
-  const loadedKeyRef = useRef(null);     // المحطة واللقاء المحمّلان حاليًا
+  const loadedKeyRef = useRef(null);     // المحمّل حاليًا، مثل normal:L05 أو lecture:c01
   const statusRef = useRef('idle');
   const endedRef = useRef(false);
   const pendingSeekRef = useRef(false);
+  const resumeRef = useRef(null);
   const lastProgressRef = useRef(0);
   const lastAttemptRef = useRef(0);
+  const lastSampleRef = useRef(null);    // آخر موضع مسجّل لحساب الجزء المسموع فعلًا
 
   const [mode, setMode] = useState(null);
+  const [lectureId, setLectureId] = useState(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [status, setStatus] = useState('idle');
   const [live, setLive] = useState(null);
   const [currentTime, setCurrentTime] = useState(0);
 
   const updateStatus = useCallback((s) => { statusRef.current = s; setStatus(s); }, []);
-  const stationState = () => {
-    const st = stationsRef.current[modeRef.current];
-    return st ? st.getState() : null;
+  const isRadio = () => modeRef.current === 'normal' || modeRef.current === 'fast';
+  const radioState = () => isRadio() ? STATIONS[modeRef.current].getState() : null;
+  const radioKey = (s) => modeRef.current + ':' + s.track.id;
+
+  // اللقاء الذي يُحتسب الاستماع إليه الآن (النسخة العادية فقط)
+  const trackedId = () => {
+    const k = loadedKeyRef.current;
+    if (!k || k.startsWith('fast:')) return null;
+    return k.split(':')[1];
   };
-  const keyOf = (s) => modeRef.current + ':' + s.track.id;
 
-  // ضبط المشغّل على موضع البث الحي ثم التشغيل
-  const syncAndPlay = useCallback((forceReload = false) => {
-    const audio = audioRef.current;
-    const s = stationState();
-    if (!audio || !s) return;
-    setLive(s);
-    endedRef.current = false;
-    lastAttemptRef.current = Date.now();
-    lastProgressRef.current = Date.now();
-    if (!navigator.onLine) { updateStatus('offline'); return; }
-    updateStatus('loading');
-
-    const key = keyOf(s);
-    if (forceReload || loadedKeyRef.current !== key) {
-      loadedKeyRef.current = key;
-      pendingSeekRef.current = true;
-      audio.src = mediaUrl(modeRef.current, s.track.id);
-      audio.load();
-    } else if (audio.readyState >= 1) {
-      audio.currentTime = s.position;
-    } else {
-      pendingSeekRef.current = true;
-    }
-
-    const p = audio.play();
+  const playAudio = useCallback(() => {
+    const p = audioRef.current.play();
     if (p && p.catch) {
       p.catch(err => {
         if (!wantPlayRef.current) return;
@@ -109,58 +114,192 @@ function useRadioEngine(stations, volume) {
     }
   }, [updateStatus]);
 
-  const start = useCallback((m) => {
-    if (!stationsRef.current[m]) return;
-    if (modeRef.current !== m) {
-      // الانتقال من محطة إلى أخرى
-      lastAttemptRef.current = Date.now();
-      if (audioRef.current) audioRef.current.pause();
-      loadedKeyRef.current = null;
-      modeRef.current = m;
-      setMode(m);
+  const switchTo = (m, id = null) => {
+    if (modeRef.current === m && lectureRef.current === id) return;
+    lastAttemptRef.current = Date.now();
+    if (audioRef.current) audioRef.current.pause();
+    loadedKeyRef.current = null;
+    lastSampleRef.current = null;
+    modeRef.current = m;
+    lectureRef.current = id;
+    setMode(m);
+    setLectureId(id);
+    setCurrentTime(id ? progress.position(id) : 0);
+  };
+
+  // البث المباشر: ضبط المشغّل على موضع البث الحي ثم التشغيل
+  const syncAndPlay = useCallback((forceReload = false) => {
+    const audio = audioRef.current;
+    const s = radioState();
+    if (!audio || !s) return;
+    setLive(s);
+    endedRef.current = false;
+    lastAttemptRef.current = Date.now();
+    lastProgressRef.current = Date.now();
+    if (!navigator.onLine) { updateStatus('offline'); return; }
+    updateStatus('loading');
+
+    const key = radioKey(s);
+    if (forceReload || loadedKeyRef.current !== key) {
+      loadedKeyRef.current = key;
+      pendingSeekRef.current = true;
+      lastSampleRef.current = null;
+      audio.src = mediaUrl(modeRef.current, s.track.id);
+      audio.load();
+    } else if (audio.readyState >= 1) {
+      audio.currentTime = s.position;
+    } else {
+      pendingSeekRef.current = true;
     }
+    playAudio();
+  }, [updateStatus, playAudio]);
+
+  // الكورس: تشغيل لقاء من موضع التوقف
+  const loadLecture = useCallback((forceReload = false) => {
+    const audio = audioRef.current;
+    const id = lectureRef.current;
+    if (!audio || !id) return;
+    lastAttemptRef.current = Date.now();
+    lastProgressRef.current = Date.now();
+    if (!navigator.onLine) { updateStatus('offline'); return; }
+    updateStatus('loading');
+
+    const key = 'lecture:' + id;
+    if (forceReload || loadedKeyRef.current !== key) {
+      resumeRef.current = forceReload && loadedKeyRef.current === key ? audio.currentTime : progress.position(id);
+      loadedKeyRef.current = key;
+      lastSampleRef.current = null;
+      audio.src = mediaUrl('normal', id);
+      audio.load();
+    }
+    playAudio();
+  }, [updateStatus, playAudio]);
+
+  const startRadio = useCallback((m) => {
+    switchTo(m);
     wantPlayRef.current = true;
     setIsPlaying(true);
     syncAndPlay();
     logEvent('playback_started_' + m);
   }, [syncAndPlay]);
 
+  const playLecture = useCallback((id) => {
+    switchTo('lecture', id);
+    wantPlayRef.current = true;
+    setIsPlaying(true);
+    loadLecture();
+    logEvent('lecture_started');
+  }, [loadLecture]);
+
   const stop = useCallback(() => {
     wantPlayRef.current = false;
     setIsPlaying(false);
     updateStatus('idle');
     if (audioRef.current) audioRef.current.pause();
-    logEvent('playback_stopped');
+    progress.save();
   }, [updateStatus]);
 
-  const toggle = useCallback((m) => {
+  const resume = useCallback(() => {
+    if (isRadio()) syncAndPlay(); else loadLecture();
+  }, [syncAndPlay, loadLecture]);
+
+  const toggleRadio = useCallback((m) => {
     if (wantPlayRef.current && modeRef.current === m) {
       if (statusRef.current === 'blocked') return syncAndPlay();
       return stop();
     }
-    start(m);
-  }, [start, stop, syncAndPlay]);
+    startRadio(m);
+  }, [startRadio, stop, syncAndPlay]);
+
+  const toggleLecture = useCallback((id) => {
+    if (wantPlayRef.current && modeRef.current === 'lecture' && lectureRef.current === id) {
+      if (statusRef.current === 'blocked') return loadLecture();
+      return stop();
+    }
+    playLecture(id);
+  }, [playLecture, stop, loadLecture]);
+
+  // التقديم والتأخير داخل لقاء من الكورس
+  const seekLecture = useCallback((id, sec) => {
+    const dur = LECTURE_BY_ID[id].normal;
+    sec = Math.max(0, Math.min(dur - 1, sec));
+    const audio = audioRef.current;
+    if (modeRef.current === 'lecture' && lectureRef.current === id && loadedKeyRef.current === 'lecture:' + id
+        && audio && audio.readyState >= 1) {
+      lastSampleRef.current = null;
+      audio.currentTime = sec;
+    } else if (modeRef.current === 'lecture' && lectureRef.current === id) {
+      resumeRef.current = sec;
+    }
+    progress.setPosition(id, sec);
+    setCurrentTime(sec);
+  }, []);
+
+  const skip = useCallback((delta) => {
+    const id = lectureRef.current;
+    if (modeRef.current !== 'lecture' || !id) return;
+    const audio = audioRef.current;
+    const base = audio && audio.readyState >= 1 ? audio.currentTime : progress.position(id);
+    seekLecture(id, base + delta);
+  }, [seekLecture]);
+
+  const retry = useCallback(() => { if (isRadio()) syncAndPlay(true); else loadLecture(true); }, [syncAndPlay, loadLecture]);
 
   useEffect(() => { if (audioRef.current) audioRef.current.volume = volume; }, [volume]);
 
   // أحداث المشغّل
   useEffect(() => {
     const audio = audioRef.current;
-    const onTime = () => { lastProgressRef.current = Date.now(); setCurrentTime(audio.currentTime); };
+
+    const onTime = () => {
+      lastProgressRef.current = Date.now();
+      const ct = audio.currentTime;
+      setCurrentTime(ct);
+      const id = trackedId();
+      if (id && !audio.paused && !audio.seeking) {
+        const prev = lastSampleRef.current;
+        if (prev != null) {
+          const d = ct - prev;
+          if (d > 0 && d <= 3) progress.record(id, prev, ct);
+        }
+        lastSampleRef.current = ct;
+      }
+      if (modeRef.current === 'lecture' && id) progress.setPosition(id, ct);
+    };
+    const onSeeking = () => { lastSampleRef.current = null; };
     const onPlaying = () => { if (wantPlayRef.current) updateStatus('playing'); };
     const onWaiting = () => {
       if (wantPlayRef.current && statusRef.current !== 'next' && statusRef.current !== 'offline') updateStatus('loading');
     };
     const onMeta = () => {
+      if (resumeRef.current != null && modeRef.current === 'lecture') {
+        audio.currentTime = resumeRef.current;
+        resumeRef.current = null;
+        return;
+      }
       if (!pendingSeekRef.current) return;
       pendingSeekRef.current = false;
-      const s = stationState();
-      if (s && keyOf(s) === loadedKeyRef.current) audio.currentTime = s.position;
+      const s = radioState();
+      if (s && radioKey(s) === loadedKeyRef.current) audio.currentTime = s.position;
     };
     const onEnded = () => {
       if (!wantPlayRef.current) return;
-      const s = stationState();
-      if (s && keyOf(s) !== loadedKeyRef.current) {
+      if (modeRef.current === 'lecture') {
+        // انتهى اللقاء: ننتقل تلقائيًا إلى اللقاء التالي في الكورس
+        const id = lectureRef.current;
+        progress.setPosition(id, 0);
+        progress.save();
+        const next = courseNext(id);
+        if (next) {
+          playLecture(next);
+          if (location.hash === '#/lecture/' + id) go('#/lecture/' + next);
+        } else {
+          stop();
+        }
+        return;
+      }
+      const s = radioState();
+      if (s && radioKey(s) !== loadedKeyRef.current) {
         syncAndPlay();
       } else {
         // انتهى الملف قبل موعده في البث؛ ننتظر بدء اللقاء التالي
@@ -176,48 +315,51 @@ function useRadioEngine(stations, volume) {
       wantPlayRef.current = false;
       setIsPlaying(false);
       updateStatus('idle');
+      progress.save();
     };
     const onError = () => {
       if (wantPlayRef.current && audio.getAttribute('src')) updateStatus(navigator.onLine ? 'error' : 'offline');
     };
     const onOffline = () => { if (wantPlayRef.current) updateStatus('offline'); };
-    const onOnline = () => { if (wantPlayRef.current) syncAndPlay(true); };
+    const onOnline = () => {
+      if (!wantPlayRef.current) return;
+      if (isRadio()) syncAndPlay(true); else loadLecture(true);
+    };
 
-    audio.addEventListener('timeupdate', onTime);
-    audio.addEventListener('playing', onPlaying);
-    audio.addEventListener('waiting', onWaiting);
-    audio.addEventListener('loadedmetadata', onMeta);
-    audio.addEventListener('ended', onEnded);
-    audio.addEventListener('pause', onPause);
-    audio.addEventListener('error', onError);
+    const events = {
+      timeupdate: onTime, seeking: onSeeking, playing: onPlaying, waiting: onWaiting,
+      loadedmetadata: onMeta, ended: onEnded, pause: onPause, error: onError,
+    };
+    Object.entries(events).forEach(([e, fn]) => audio.addEventListener(e, fn));
     window.addEventListener('offline', onOffline);
     window.addEventListener('online', onOnline);
     return () => {
-      audio.removeEventListener('timeupdate', onTime);
-      audio.removeEventListener('playing', onPlaying);
-      audio.removeEventListener('waiting', onWaiting);
-      audio.removeEventListener('loadedmetadata', onMeta);
-      audio.removeEventListener('ended', onEnded);
-      audio.removeEventListener('pause', onPause);
-      audio.removeEventListener('error', onError);
+      Object.entries(events).forEach(([e, fn]) => audio.removeEventListener(e, fn));
       window.removeEventListener('offline', onOffline);
       window.removeEventListener('online', onOnline);
     };
-  }, [syncAndPlay, updateStatus]);
+  }, [syncAndPlay, loadLecture, playLecture, stop, updateStatus]);
 
-  // المراقب: يعيد المشغّل لموضع البث إذا توقف أو علّق أو تأخر
+  // المراقب: يعالج التوقف والتعليق، ويعيد البث المباشر إلى موضعه الحي
   useEffect(() => {
     const tick = () => {
       if (!wantPlayRef.current) return;
       const audio = audioRef.current;
-      const s = stationState();
-      if (!audio || !s) return;
-
+      if (!audio) return;
       const sinceAttempt = Date.now() - lastAttemptRef.current;
       const st = statusRef.current;
-
       if (st === 'blocked' || st === 'offline') return;
-      if (keyOf(s) !== loadedKeyRef.current) return syncAndPlay();
+
+      if (modeRef.current === 'lecture') {
+        if (st === 'error') { if (sinceAttempt > 8000) loadLecture(true); return; }
+        if (audio.paused) { if (sinceAttempt > 6000) { lastAttemptRef.current = Date.now(); playAudio(); } return; }
+        if (Date.now() - lastProgressRef.current > 15000 && sinceAttempt > 15000) loadLecture(true);
+        return;
+      }
+
+      const s = radioState();
+      if (!s) return;
+      if (radioKey(s) !== loadedKeyRef.current) return syncAndPlay();
       if (endedRef.current) return;
       if (st === 'error') { if (sinceAttempt > 8000) syncAndPlay(true); return; }
       if (audio.paused) { if (sinceAttempt > 6000) syncAndPlay(); return; }
@@ -230,29 +372,37 @@ function useRadioEngine(stations, volume) {
     const onVisible = () => { if (document.visibilityState === 'visible') tick(); };
     document.addEventListener('visibilitychange', onVisible);
     return () => { clearInterval(id); document.removeEventListener('visibilitychange', onVisible); };
-  }, [syncAndPlay]);
+  }, [syncAndPlay, loadLecture, playAudio]);
 
   // شاشة القفل والإشعارات: اسم مختصر محايد مراعاةً لخصوصية المستمع
-  const liveId = live && live.track.id;
+  const nowId = mode === 'lecture' ? lectureId : (live && live.track.id);
   useEffect(() => {
-    if (!('mediaSession' in navigator) || !liveId) return;
+    if (!('mediaSession' in navigator) || !nowId) return;
     try {
       navigator.mediaSession.metadata = new MediaMetadata({
-        title: shortTitle(liveId), artist: t('mediaArtist'), album: '',
+        title: shortTitle(nowId), artist: t('mediaArtist'), album: '',
       });
     } catch (e) {}
-  }, [liveId]);
+  }, [nowId]);
 
   useEffect(() => {
     if (!('mediaSession' in navigator)) return;
     const set = (action, handler) => {
       try { navigator.mediaSession.setActionHandler(action, handler); } catch (e) {}
     };
-    set('play', () => { if (modeRef.current) start(modeRef.current); });
+    set('play', () => { if (modeRef.current) { wantPlayRef.current = true; setIsPlaying(true); resume(); } });
     set('pause', () => stop());
     set('stop', () => stop());
-    ['seekbackward', 'seekforward', 'seekto', 'previoustrack', 'nexttrack'].forEach(a => set(a, null));
-  }, [start, stop]);
+    if (mode === 'lecture') {
+      set('seekbackward', () => skip(-SKIP_SECONDS));
+      set('seekforward', () => skip(SKIP_SECONDS));
+      set('seekto', (d) => { if (d && lectureRef.current) seekLecture(lectureRef.current, d.seekTime); });
+      set('previoustrack', () => { const p = coursePrev(lectureRef.current); if (p) playLecture(p); });
+      set('nexttrack', () => { const n = courseNext(lectureRef.current); if (n) playLecture(n); });
+    } else {
+      ['seekbackward', 'seekforward', 'seekto', 'previoustrack', 'nexttrack'].forEach(a => set(a, null));
+    }
+  }, [mode, resume, stop, skip, seekLecture, playLecture]);
 
   useEffect(() => {
     if (!('mediaSession' in navigator)) return;
@@ -260,15 +410,15 @@ function useRadioEngine(stations, volume) {
   }, [isPlaying]);
 
   return {
-    audioRef, mode, isPlaying, status, live, currentTime, toggle, stop,
-    retry: () => syncAndPlay(true),
+    audioRef, mode, lectureId, isPlaying, status, live, currentTime,
+    toggleRadio, toggleLecture, playLecture, seekLecture, skip, stop, retry,
   };
 }
 
 // =====================
 // تسجيل الحضور
 // كل زائر يسجّل نفسه فقط، ويُحذف تلقائيًا من الخادم عند انقطاع اتصاله
-// at: المكان الذي يوجد فيه الزائر (home أو normal أو fast)
+// at: المكان الذي يوجد فيه الزائر (home أو normal أو fast أو course)
 // =====================
 function usePresence(at) {
   const [users, setUsers] = useState([]);
@@ -323,7 +473,7 @@ function usePresence(at) {
 }
 
 // =====================
-// عناصر الواجهة
+// عناصر مشتركة
 // =====================
 function Stars() {
   const stars = useMemo(() => Array.from({ length: 60 }, (_, i) => ({
@@ -349,6 +499,10 @@ function LiveDot() {
 
 function OnlineBadge({ count }) {
   return html`<div className="chip"><${LiveDot} />${t('listeners', { n: count })}</div>`;
+}
+
+function BackButton({ to }) {
+  return html`<button className="chip back" onClick=${() => go(to)} aria-label=${t('back')}>→ ${t('back')}</button>`;
 }
 
 function CountryFlags({ users }) {
@@ -413,13 +567,45 @@ function InfoTip({ label, text }) {
   </span>`;
 }
 
+function MiniBar({ value }) {
+  return html`<div className="bar"><div className="fill" style=${{ width: value + '%' }}></div></div>`;
+}
+
+const STATUS_KEY = {
+  loading: 'statusLoading', next: 'statusNext', blocked: 'statusBlocked',
+  error: 'statusError', offline: 'statusOffline',
+};
+
+function StatusLine({ active, status, idleText, onRetry }) {
+  const isWarn = status === 'error' || status === 'blocked' || status === 'offline';
+  return html`<div className="status">
+    ${active && STATUS_KEY[status] && html`<p className=${isWarn ? 'warn' : ''}>${t(STATUS_KEY[status])}</p>`}
+    ${!active && html`<p>${idleText}</p>`}
+    ${active && status === 'error' && html`<button className="small-btn" onClick=${onRetry}>${t('retry')}</button>`}
+  </div>`;
+}
+
+function PlayButton({ active, status, onClick }) {
+  const busy = active && (status === 'loading' || status === 'next');
+  const showPause = active && status !== 'blocked' && status !== 'offline';
+  return html`<button className=${'play' + (showPause && !busy ? ' play-btn-glow' : '')}
+      onClick=${onClick} aria-label=${showPause ? t('pause') : t('play')}>
+    ${busy ? html`<span className="spinner"></span>` : (showPause ? '⏸' : '▶')}
+  </button>`;
+}
+
 // =====================
 // الصفحة الرئيسية
 // =====================
-function HomePage({ engine, now, users }) {
-  const card = (mode) => {
+function HomePage({ player, now, users }) {
+  useProgressVersion();
+  const sum = progress.summary();
+  const contId = progress.continueId();
+  const started = progress.hasAny();
+
+  const radioCard = (mode) => {
     const s = STATIONS[mode].getState(now);
-    const playingHere = engine.isPlaying && engine.mode === mode;
+    const playingHere = player.isPlaying && player.mode === mode;
     const count = users.filter(u => u.at === mode).length;
     return html`<button key=${mode} className=${'card' + (playingHere ? ' card-active' : '')}
         onClick=${() => go('#/radio/' + mode)}>
@@ -437,6 +623,8 @@ function HomePage({ engine, now, users }) {
     </button>`;
   };
 
+  const courseActive = player.isPlaying && player.mode === 'lecture';
+
   return html`<div className="page home">
     <div className="topbar">
       <${TotalStats} />
@@ -447,14 +635,22 @@ function HomePage({ engine, now, users }) {
       <p>${t('tagline')}</p>
     </header>
     <div className="cards">
-      ${MODES.map(card)}
-      <div className="card card-disabled" aria-disabled="true">
-        <div className="card-head">
-          <span className="card-title">${t('course')}</span>
-          <span className="badge">${t('soon')}</span>
-        </div>
-        <p className="card-desc">${t('courseDesc')}</p>
+      <div className=${'card course-card' + (courseActive ? ' card-active' : '')}>
+        <button className="card-main" onClick=${() => go('#/course')}>
+          <div className="card-head">
+            <span className="card-title">${t('course')}</span>
+            <span className="pct">${fmtPct(sum.percent)}</span>
+          </div>
+          <p className="card-desc">${t('courseDesc')}</p>
+          <${MiniBar} value=${sum.percent} />
+          <p className="card-count">${t('doneOf', { done: sum.done, count: sum.count })}</p>
+        </button>
+        ${contId && html`<button className="continue" onClick=${() => go('#/lecture/' + contId)}>
+          <span>${started ? t('continueFrom') : t('startCourse')}</span>
+          <b>${shortTitle(contId)} · ${progress.percent(contId)}%</b>
+        </button>`}
       </div>
+      ${MODES.map(radioCard)}
     </div>
     <footer className="foot"><${FacebookLink} /></footer>
   </div>`;
@@ -463,33 +659,26 @@ function HomePage({ engine, now, users }) {
 // =====================
 // صفحة الراديو
 // =====================
-const STATUS_KEY = {
-  loading: 'statusLoading', next: 'statusNext', blocked: 'statusBlocked',
-  error: 'statusError', offline: 'statusOffline',
-};
-
-function RadioPage({ mode, engine, now, users, volume, onVolume }) {
+function RadioPage({ mode, player, now, users, volume, onVolume }) {
+  useProgressVersion();
   const station = STATIONS[mode];
   const modeUsers = users.filter(u => u.at === mode);
-  const active = engine.mode === mode && engine.isPlaying;
+  const active = player.mode === mode && player.isPlaying;
 
-  const top = html`<div className="topbar">
-    <button className="chip back" onClick=${() => go('#/')} aria-label=${t('back')}>→ ${t('back')}</button>
-    <div className="top-left">
-      <${OnlineBadge} count=${modeUsers.length} />
-      <${CountryFlags} users=${modeUsers} />
+  const s = active && player.live ? player.live : station.getState(now);
+  const time = active ? player.currentTime : s.position;
+  const status = active ? player.status : 'idle';
+  const pct = Math.min(100, (time / s.track.duration) * 100 || 0);
+  const heard = progress.percent(s.track.id);
+
+  return html`<div className="page radio">
+    <div className="topbar">
+      <${BackButton} to="#/" />
+      <div className="top-left">
+        <${OnlineBadge} count=${modeUsers.length} />
+        <${CountryFlags} users=${modeUsers} />
+      </div>
     </div>
-  </div>`;
-
-  const s = active && engine.live ? engine.live : station.getState(now);
-  const time = active ? engine.currentTime : s.position;
-  const status = active ? engine.status : 'idle';
-  const busy = active && (status === 'loading' || status === 'next');
-  const showPause = active && status !== 'blocked' && status !== 'offline';
-  const progress = Math.min(100, (time / s.track.duration) * 100 || 0);
-  const isWarn = status === 'error' || status === 'blocked' || status === 'offline';
-
-  return html`<div className="page radio">${top}
     <div className="panel-wrap">
       <div className="panel-glow"></div>
       <div className="panel">
@@ -504,22 +693,17 @@ function RadioPage({ mode, engine, now, users, volume, onVolume }) {
         <div className="now">
           <p className="now-title">${s.track.title}</p>
           <p className="now-next">${t('next', { title: s.next.title })}</p>
+          <button className="now-link" onClick=${() => go('#/lecture/' + s.track.id)}>
+            ${progress.isDone(s.track.id) ? '✓ ' : ''}${t('heardPct', { n: heard })} · ${t('openInCourse')}
+          </button>
         </div>
 
-        <button className=${'play' + (showPause && !busy ? ' play-btn-glow' : '')}
-            onClick=${() => engine.toggle(mode)} aria-label=${showPause ? t('pause') : t('play')}>
-          ${busy ? html`<span className="spinner"></span>` : (showPause ? '⏸' : '▶')}
-        </button>
-
-        <div className="status">
-          ${active && STATUS_KEY[status] && html`<p className=${isWarn ? 'warn' : ''}>${t(STATUS_KEY[status])}</p>`}
-          ${!active && html`<p>${t('tapToListen')}</p>`}
-          ${active && status === 'error' && html`<button className="small-btn" onClick=${engine.retry}>${t('retry')}</button>`}
-        </div>
+        <${PlayButton} active=${active} status=${status} onClick=${() => player.toggleRadio(mode)} />
+        <${StatusLine} active=${active} status=${status} idleText=${t('tapToListen')} onRetry=${player.retry} />
 
         <div className="progress">
           <div className="times"><span>${fmtTime(time)}</span><span>${fmtTime(s.track.duration)}</span></div>
-          <div className="bar"><div className="fill" style=${{ width: progress + '%' }}></div></div>
+          <${MiniBar} value=${pct} />
         </div>
 
         ${!IS_IOS && html`<input type="range" min="0" max="1" step="0.01" value=${volume}
@@ -532,18 +716,143 @@ function RadioPage({ mode, engine, now, users, volume, onVolume }) {
 }
 
 // =====================
+// صفحة الكورس
+// =====================
+function CoursePage({ player, users }) {
+  useProgressVersion();
+  const sum = progress.summary();
+  const contId = progress.continueId();
+  const courseUsers = users.filter(u => u.at === 'course');
+
+  return html`<div className="page course">
+    <div className="topbar">
+      <${BackButton} to="#/" />
+      <${OnlineBadge} count=${courseUsers.length} />
+    </div>
+
+    <div className="panel summary">
+      <h1>${t('course')}
+        <${InfoTip} label=${t('infoLabel')} text=${t('courseInfo')} />
+      </h1>
+      <div className="big-pct">${fmtPct(sum.percent)}</div>
+      <${MiniBar} value=${sum.percent} />
+      <div className="stat-row">
+        <div><b>${sum.done}/${sum.count}</b><small>${t('lecturesDone')}</small></div>
+        <div><b>${fmtHours(sum.seconds)}</b><small>${t('listenTime')}</small></div>
+        <div><b>${sum.days}</b><small>${t('listenDays')}</small></div>
+      </div>
+      ${contId && html`<button className="cta" onClick=${() => go('#/lecture/' + contId)}>
+        ${progress.hasAny() ? t('continueFrom') : t('startCourse')} ${shortTitle(contId)}
+      </button>`}
+    </div>
+
+    <ol className="lessons">
+      ${COURSE_ORDER.map((id, i) => {
+        const pct = progress.percent(id);
+        const done = progress.isDone(id);
+        const playing = player.isPlaying && player.mode === 'lecture' && player.lectureId === id;
+        return html`<li key=${id}>
+          <button className=${'lesson' + (playing ? ' lesson-playing' : '')} onClick=${() => go('#/lecture/' + id)}>
+            <span className=${'num' + (done ? ' num-done' : '')}>${done ? '✓' : i + 1}</span>
+            <span className="lesson-body">
+              <span className="lesson-title">${LECTURE_BY_ID[id].title}</span>
+              <span className="lesson-meta">
+                ${fmtTime(LECTURE_BY_ID[id].normal)}${pct ? ' · ' + t('heardPct', { n: pct }) : ''}
+                ${playing ? ' · ' + t('playingHere') : ''}
+              </span>
+              ${pct > 0 && !done && html`<${MiniBar} value=${pct} />`}
+            </span>
+          </button>
+        </li>`;
+      })}
+    </ol>
+  </div>`;
+}
+
+// =====================
+// صفحة اللقاء
+// =====================
+function LecturePage({ id, player, volume, onVolume }) {
+  useProgressVersion();
+  const lec = LECTURE_BY_ID[id];
+  const current = player.mode === 'lecture' && player.lectureId === id;
+  const active = current && player.isPlaying;
+  const time = current ? player.currentTime : progress.position(id);
+  const status = active ? player.status : 'idle';
+  const heard = progress.percent(id);
+  const done = progress.isDone(id);
+  const prev = coursePrev(id), next = courseNext(id);
+  const idx = courseIndex(id);
+
+  // سحب شريط التقدم: يُعرض الموضع أثناء السحب ثم يُطبّق عند الإفلات
+  const [dragging, setDragging] = useState(null);
+  const shown = dragging != null ? dragging : time;
+  const commit = () => { if (dragging != null) { player.seekLecture(id, dragging); setDragging(null); } };
+
+  return html`<div className="page lecture">
+    <div className="topbar">
+      <${BackButton} to="#/course" />
+      <span className="chip">${t('lectureOf', { n: idx + 1, count: COURSE_ORDER.length })}</span>
+    </div>
+
+    <div className="panel-wrap">
+      <div className="panel-glow"></div>
+      <div className="panel">
+        <p className="lecture-title">${lec.title}</p>
+        <p className=${'heard' + (done ? ' heard-done' : '')}>
+          ${done ? '✓ ' + t('lectureDone') + ' · ' : ''}${t('heardPct', { n: heard })}
+        </p>
+
+        <div className="seek">
+          <input type="range" min="0" max=${lec.normal} step="1" value=${Math.floor(shown)}
+            aria-label=${t('seek')}
+            onInput=${e => setDragging(parseFloat(e.target.value))}
+            onChange=${e => setDragging(parseFloat(e.target.value))}
+            onMouseUp=${commit} onTouchEnd=${commit} onKeyUp=${commit} />
+          <div className="times"><span>${fmtTime(shown)}</span><span>${fmtTime(lec.normal)}</span></div>
+        </div>
+
+        <div className="controls">
+          <button className="skip" onClick=${() => current ? player.skip(-SKIP_SECONDS) : player.seekLecture(id, time - SKIP_SECONDS)}
+            aria-label=${t('back15')}>−15</button>
+          <${PlayButton} active=${active} status=${status} onClick=${() => player.toggleLecture(id)} />
+          <button className="skip" onClick=${() => current ? player.skip(SKIP_SECONDS) : player.seekLecture(id, time + SKIP_SECONDS)}
+            aria-label=${t('forward15')}>+15</button>
+        </div>
+
+        <${StatusLine} active=${active} status=${status}
+          idleText=${time > 0 ? t('resumeHint', { t: fmtTime(time) }) : t('tapToStart')} onRetry=${player.retry} />
+
+        ${!IS_IOS && html`<input type="range" min="0" max="1" step="0.01" value=${volume}
+          onChange=${onVolume} aria-label=${t('volume')} className="volume" />`}
+
+        <div className="nav">
+          <button className="small-btn" disabled=${!prev} onClick=${() => prev && go('#/lecture/' + prev)}>→ ${t('prevLecture')}</button>
+          <button className="small-btn" disabled=${!next} onClick=${() => next && go('#/lecture/' + next)}>${t('nextLecture')} ←</button>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+// =====================
 // المشغّل المصغّر: يظهر أسفل الشاشة أثناء الاستماع في صفحة أخرى
 // =====================
-function MiniPlayer({ engine, route }) {
-  if (!engine.isPlaying || !engine.live) return null;
-  if (route.page === 'radio' && route.mode === engine.mode) return null;
-  const busy = engine.status === 'loading' || engine.status === 'next';
+function MiniPlayer({ player, route }) {
+  if (!player.isPlaying) return null;
+  const isLecture = player.mode === 'lecture';
+  if (isLecture && route.page === 'lecture' && route.id === player.lectureId) return null;
+  if (!isLecture && route.page === 'radio' && route.mode === player.mode) return null;
+  const id = isLecture ? player.lectureId : (player.live && player.live.track.id);
+  if (!id) return null;
+  const target = isLecture ? '#/lecture/' + id : '#/radio/' + player.mode;
+  const busy = player.status === 'loading' || player.status === 'next';
   return html`<div className="mini">
-    <button className="mini-info" onClick=${() => go('#/radio/' + engine.mode)}>
-      <b>${t(MODE_LABEL[engine.mode])}</b>
-      <span>${shortTitle(engine.live.track.id)}</span>
+    <button className="mini-info" onClick=${() => go(target)}>
+      <b>${t(MODE_LABEL[player.mode])}</b>
+      <span>${shortTitle(id)}</span>
     </button>
-    <button className="mini-btn" onClick=${engine.stop} aria-label=${t('pause')}>
+    <button className="mini-btn" onClick=${player.stop} aria-label=${t('pause')}>
       ${busy ? html`<span className="spinner small"></span>` : '⏸'}
     </button>
   </div>`;
@@ -559,9 +868,11 @@ function App() {
     const v = parseFloat(storage.get('radio_volume'));
     return isNaN(v) ? 0.7 : Math.min(1, Math.max(0, v));
   });
-  const engine = useRadioEngine(STATIONS, volume);
+  const player = usePlayer(volume);
 
-  const at = engine.isPlaying ? engine.mode : (route.page === 'radio' ? route.mode : 'home');
+  const pageAt = route.page === 'radio' ? route.mode
+    : (route.page === 'course' || route.page === 'lecture') ? 'course' : 'home';
+  const at = player.isPlaying ? (player.mode === 'lecture' ? 'course' : player.mode) : pageAt;
   const users = usePresence(at);
 
   // الإحصائيات الكلية
@@ -576,7 +887,10 @@ function App() {
 
   // عنوان التبويب محايد مراعاةً للخصوصية
   useEffect(() => {
-    document.title = route.page === 'radio' ? t(MODE_LABEL[route.mode]) : t('appName');
+    document.title = route.page === 'radio' ? t(MODE_LABEL[route.mode])
+      : route.page === 'course' ? t('course')
+      : route.page === 'lecture' ? shortTitle(route.id)
+      : t('appName');
   }, [route]);
 
   const onVolume = (e) => {
@@ -585,14 +899,23 @@ function App() {
     storage.set('radio_volume', String(v));
   };
 
+  let page;
+  if (route.page === 'radio') {
+    page = html`<${RadioPage} mode=${route.mode} player=${player} now=${now} users=${users}
+      volume=${volume} onVolume=${onVolume} />`;
+  } else if (route.page === 'course') {
+    page = html`<${CoursePage} player=${player} users=${users} />`;
+  } else if (route.page === 'lecture') {
+    page = html`<${LecturePage} key=${route.id} id=${route.id} player=${player} volume=${volume} onVolume=${onVolume} />`;
+  } else {
+    page = html`<${HomePage} player=${player} now=${now} users=${users} />`;
+  }
+
   return html`<div className="app" onContextMenu=${e => e.preventDefault()}>
     <${Stars} />
-    <audio ref=${engine.audioRef} preload="none" controlsList="nodownload" />
-    ${route.page === 'radio'
-      ? html`<${RadioPage} mode=${route.mode} engine=${engine}
-          now=${now} users=${users} volume=${volume} onVolume=${onVolume} />`
-      : html`<${HomePage} engine=${engine} now=${now} users=${users} />`}
-    <${MiniPlayer} engine=${engine} route=${route} />
+    <audio ref=${player.audioRef} preload="none" controlsList="nodownload" />
+    ${page}
+    <${MiniPlayer} player=${player} route=${route} />
   </div>`;
 }
 
