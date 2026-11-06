@@ -9,6 +9,7 @@ const NAME_HIDDEN_KEY = 'afaf_name_hidden_day';
 const NAME_SALT = 'afaf-radio-v1|';
 const NAME_MIN = 8;
 const PUSH_EVERY_MS = 30000;
+const NICK_MAX = 10000;
 
 // توحيد الكتابة: إزالة المسافات، وتحويل الأرقام العربية، وعدم التفريق بين الحروف الكبيرة والصغيرة
 function normalizeName(raw) {
@@ -51,7 +52,37 @@ const account = (() => {
   const setStatus = (s) => { syncStatus = s; notify(); };
 
   const ref = (hash) => database.ref('/progress/' + hash);
-  const payload = () => ({ d: progress.exportState(), u: firebase.database.ServerValue.TIMESTAMP });
+  const nickRef = (n) => database.ref('/nicks/' + n);
+  // k: رقم الاسم المعروض في التعليقات (أخ 4821)، ثابت للحساب على كل الأجهزة
+  const payload = () => {
+    const p = { d: progress.exportState(), u: firebase.database.ServerValue.TIMESTAMP };
+    if (acc && acc.nick) p.k = acc.nick;
+    return p;
+  };
+
+  // حجز رقم عشوائي غير مستخدم للاسم المعروض
+  async function claimNick(hash) {
+    for (let i = 0; i < 25; i++) {
+      const n = 1 + Math.floor(Math.random() * NICK_MAX);
+      try {
+        const res = await nickRef(n).transaction(cur => (cur === null ? hash : undefined));
+        if (res.committed) return n;
+      } catch (e) { return null; }
+    }
+    return null;
+  }
+
+  // التأكد من وجود رقم للحساب: من المحفوظ على الخادم، وإلا حجز رقم جديد
+  async function ensureNick(remote) {
+    if (!acc || acc.nick) return;
+    let n = remote && Number.isInteger(remote.k) ? remote.k : null;
+    if (!n) n = await claimNick(acc.hash);
+    if (!n || !acc) return;
+    acc.nick = n;
+    storage.setJSON(ACCOUNT_KEY, acc);
+    pushedRev = -1;
+    notify();
+  }
 
   async function push() {
     if (!acc || !navigator.onLine) return;
@@ -75,6 +106,7 @@ const account = (() => {
       const snap = await ref(acc.hash).once('value');
       const v = snap.val();
       if (v && v.d) progress.merge(v.d);
+      await ensureNick(v);
       pushedRev = -1;
       await push();
     } catch (e) { setStatus('error'); }
@@ -99,6 +131,8 @@ const account = (() => {
       pushedRev = progress.rev;
       lastSync = Date.now();
       setStatus('synced');
+      await ensureNick(null);
+      await push();
       logEvent('account_created');
       return { ok: true };
     } catch (e) { return { error: 'syncFailed' }; }
@@ -116,6 +150,7 @@ const account = (() => {
       remember(name, hash);
       const v = snap.val();
       if (v && v.d) progress.merge(v.d);
+      await ensureNick(v);
       pushedRev = -1;
       await push();
       logEvent('account_login');
@@ -153,6 +188,8 @@ const account = (() => {
 
   return {
     get name() { return acc && acc.name; },
+    get nick() { return acc && acc.nick; },
+    get hash() { return acc && acc.hash; },
     get loggedIn() { return !!acc; },
     get status() { return syncStatus; },
     get lastSync() { return lastSync; },
