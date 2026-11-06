@@ -1,12 +1,16 @@
 // =====================
-// التعليقات على اللقاءات
-// كل تعليق: t النص، s أول وقت مذكور فيه بالثواني (إن وجد)، n رقم الاسم المعروض، ts وقت الإرسال
+// التعليقات
+// المكان (lid): رمز لقاء مثل L05، أو general للتعليقات العامة على الموقع
+// كل تعليق: t النص، s أول وقت مذكور فيه بالثواني، n رقم الاسم المعروض، ts وقت الإرسال
+// والرد يحمل أيضًا: p رقم التعليق الأصلي، و r رقم صاحب التعليق المردود عليه
+// المستويات اثنان فقط: تعليق، ورد عليه
 // لا يمكن تعديل التعليق أو حذفه إلا من لوحة Firebase
 // =====================
 const COMMENT_MAX = 500;
 const COMMENT_COOLDOWN_MS = 30000;
 const COMMENT_LAST_KEY = 'afaf_last_comment';
 const COMMENTS_LIMIT = 300;
+const GENERAL_ID = 'general';
 
 // الأوقات داخل النص: 7:59 أو 07:59 أو 1:07:59
 const TIME_RE = /(^|[^\d:])(\d{1,2}:\d{2}(?::\d{2})?)(?![\d:])/g;
@@ -24,8 +28,9 @@ function parseTime(str) {
   return m < 60 && s < 60 ? h * 3600 + m * 60 + s : null;
 }
 
-// تقسيم النص إلى أجزاء عادية وأوقات قابلة للضغط
+// تقسيم النص إلى أجزاء عادية وأوقات قابلة للضغط (maxSec = 0 يعني بلا أوقات)
 function splitTimes(text, maxSec) {
+  if (!maxSec) return [{ text }];
   const src = toLatinDigits(text);
   const out = [];
   let last = 0, m;
@@ -33,7 +38,7 @@ function splitTimes(text, maxSec) {
   while ((m = TIME_RE.exec(src))) {
     const start = m.index + m[1].length;
     const sec = parseTime(m[2]);
-    if (sec == null || (maxSec && sec > maxSec)) continue;
+    if (sec == null || sec > maxSec) continue;
     if (start > last) out.push({ text: text.slice(last, start) });
     out.push({ time: sec, text: m[2] });
     last = start + m[2].length;
@@ -47,12 +52,14 @@ function firstTime(text, maxSec) {
   return p ? p.time : null;
 }
 
-const commentsApi = {
-  ref: (lectureId) => database.ref('/comments/' + lectureId),
+const maxSecOf = (lid) => (LECTURE_BY_ID[lid] ? LECTURE_BY_ID[lid].normal : 0);
 
-  // الاشتراك في تعليقات لقاء، ويعيد دالة لإلغاء الاشتراك
-  subscribe(lectureId, cb) {
-    const q = this.ref(lectureId).orderByChild('ts').limitToLast(COMMENTS_LIMIT);
+const commentsApi = {
+  ref: (lid) => database.ref('/comments/' + lid),
+
+  // الاشتراك في تعليقات مكان، ويعيد دالة لإلغاء الاشتراك
+  subscribe(lid, cb) {
+    const q = this.ref(lid).orderByChild('ts').limitToLast(COMMENTS_LIMIT);
     const handler = q.on('value', snap => {
       const list = [];
       snap.forEach(child => {
@@ -64,26 +71,58 @@ const commentsApi = {
     return () => q.off('value', handler);
   },
 
+  // أحدث التعليقات من كل اللقاءات
+  subscribeRecent(limit, cb) {
+    const q = database.ref('/recent').orderByChild('ts').limitToLast(limit);
+    const handler = q.on('value', snap => {
+      const list = [];
+      snap.forEach(child => { const v = child.val(); if (v && v.l && LECTURE_BY_ID[v.l]) list.push({ id: child.key, ...v }); });
+      cb(list.reverse());
+    }, () => cb([]));
+    return () => q.off('value', handler);
+  },
+
+  // عدد التعليقات لكل لقاء
+  subscribeCounts(cb) {
+    const ref = database.ref('/counts');
+    const handler = ref.on('value', snap => cb(snap.val() || {}), () => cb({}));
+    return () => ref.off('value', handler);
+  },
+
   cooldownLeft() {
     const last = parseInt(storage.get(COMMENT_LAST_KEY) || '0', 10);
     return Math.max(0, COMMENT_COOLDOWN_MS - (Date.now() - last));
   },
 
-  async add(lectureId, text) {
+  // parent: التعليق الأصلي عند الرد { id, n }
+  async add(lid, text, parent) {
     text = String(text || '').trim();
     if (!account.loggedIn || !account.nick) return { error: 'commentNeedName' };
     if (!text) return { error: 'commentEmpty' };
     if (text.length > COMMENT_MAX) return { error: 'commentTooLong' };
     if (this.cooldownLeft() > 0) return { error: 'commentWait' };
     if (!navigator.onLine) return { error: 'needOnline' };
-    const item = { t: text, n: account.nick, ts: firebase.database.ServerValue.TIMESTAMP };
-    const s = firstTime(text, LECTURE_BY_ID[lectureId] && LECTURE_BY_ID[lectureId].normal);
+    const TS = firebase.database.ServerValue.TIMESTAMP;
+    const item = { t: text, n: account.nick, ts: TS };
+    const s = firstTime(text, maxSecOf(lid));
     if (s != null) item.s = s;
+    if (parent) { item.p = parent.id; item.r = parent.n; }
     try {
-      await this.ref(lectureId).push(item);
+      const ref = this.ref(lid).push();
+      await ref.set(item);
       storage.set(COMMENT_LAST_KEY, String(Date.now()));
-      logEvent('comment_added');
+      if (LECTURE_BY_ID[lid]) {
+        // نسخة مختصرة لقسم أحدث التعليقات، وزيادة عدّاد اللقاء
+        const recent = { l: lid, c: parent ? parent.id : ref.key, t: text.slice(0, 200), n: account.nick, ts: TS };
+        if (s != null) recent.s = s;
+        database.ref('/recent').push(recent).catch(() => {});
+        database.ref('/counts/' + lid).transaction(v => (v || 0) + 1).catch(() => {});
+      }
+      logEvent(parent ? 'reply_added' : 'comment_added');
       return { ok: true };
     } catch (e) { return { error: 'commentFailed' }; }
   },
 };
+
+// تعليق مطلوب إبرازه عند فتح لقاء من «أحدث التعليقات»
+let pendingFocus = null;
