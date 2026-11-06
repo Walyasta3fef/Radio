@@ -147,6 +147,22 @@ const progress = (() => {
     return Math.min(100, Math.floor(e.c / slotsOf(id) * 100));
   }
 
+  // الأجزاء المسموعة كنسب مئوية متصلة: [[البداية، النهاية], ...]
+  function segments(id) {
+    const e = state.lectures[id];
+    if (!e || !e.c || !LECTURE_BY_ID[id]) return [];
+    const arr = bits(id);
+    const total = slotsOf(id);
+    const out = [];
+    let start = -1;
+    for (let i = 0; i <= total; i++) {
+      const on = i < total && (arr[i >> 3] & (1 << (i & 7)));
+      if (on && start < 0) start = i;
+      if (!on && start >= 0) { out.push([start / total * 100, i / total * 100]); start = -1; }
+    }
+    return out;
+  }
+
   const isDone = (id) => !!(state.lectures[id] && state.lectures[id].d);
 
   function summary() {
@@ -228,7 +244,7 @@ const progress = (() => {
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') save(); });
 
   return {
-    record, setPosition, position, percent, isDone, summary, continueId, hasAny,
+    record, setPosition, position, percent, segments, isDone, summary, continueId, hasAny,
     merge, exportState, reset, subscribe, save,
     get rev() { return rev; },
   };
