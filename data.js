@@ -139,3 +139,18 @@ const MEDIA_BASES = {
   },
 };
 const mediaUrl = (mode, id) => MEDIA_BASES[mode][id[0]] + id.slice(1) + '.mp3';
+
+// =====================
+// ترتيب الكورس
+// الترتيب المخصّص أولًا، ثم بقية اللقاءات بترتيبها الطبيعي
+// أي لقاء جديد يُضاف إلى LECTURES يظهر تلقائيًا في آخر الكورس
+// =====================
+const COURSE_HEAD = ['c01', 'c02', 'c03', 'c04', 'L01', 'L02', 'L08'];
+const COURSE_ORDER = [
+  ...COURSE_HEAD,
+  ...LECTURES.map(l => l.id).filter(id => !COURSE_HEAD.includes(id)),
+];
+const LECTURE_BY_ID = Object.fromEntries(LECTURES.map(l => [l.id, l]));
+const courseIndex = (id) => COURSE_ORDER.indexOf(id);
+const courseNext = (id) => COURSE_ORDER[courseIndex(id) + 1] || null;
+const coursePrev = (id) => COURSE_ORDER[courseIndex(id) - 1] || null;
