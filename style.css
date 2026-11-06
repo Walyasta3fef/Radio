@@ -191,6 +191,72 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--accent-soft); o
 }
 
 /* =====================
+   الكورس
+   ===================== */
+.course-card { padding: 0; overflow: hidden; }
+.card-main { width: 100%; text-align: right; padding: 16px 16px 12px; display: block; }
+.card-main .bar { margin-top: 10px; }
+.pct { font-size: 18px; font-weight: 800; color: var(--accent-soft); }
+.continue {
+  width: 100%; display: flex; justify-content: space-between; align-items: center; gap: 8px;
+  padding: 12px 16px; border-top: 1px solid var(--line);
+  background: rgba(168, 85, 247, .15); font-size: 13px; text-align: right;
+}
+.continue:hover { background: rgba(168, 85, 247, .25); }
+.continue b { white-space: nowrap; }
+
+.summary { margin-top: 12px; }
+.summary h1 { font-size: 22px; font-weight: 800; display: inline-flex; align-items: center; gap: 8px; }
+.big-pct { font-size: 44px; font-weight: 800; margin: 6px 0 8px; background: linear-gradient(90deg, var(--accent-soft), var(--accent-2)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.stat-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 14px; }
+.stat-row div { display: flex; flex-direction: column; background: var(--glass); border: 1px solid var(--line); border-radius: 12px; padding: 8px 4px; }
+.stat-row b { font-size: 15px; }
+.stat-row small { color: var(--muted); font-size: 11px; margin-top: 2px; }
+.cta {
+  width: 100%; margin-top: 14px; padding: 12px; border-radius: 14px;
+  background: #fff; color: var(--deep); font-weight: 800; font-size: 14px;
+}
+
+.lessons { list-style: none; display: flex; flex-direction: column; gap: 8px; margin-top: 16px; }
+.lesson {
+  width: 100%; display: flex; align-items: flex-start; gap: 12px; text-align: right;
+  background: var(--glass); border: 1px solid var(--line); border-radius: 14px; padding: 12px;
+}
+.lesson:hover { background: var(--glass-2); }
+.lesson-playing { border-color: rgba(168, 85, 247, .6); }
+.num {
+  flex-shrink: 0; width: 30px; height: 30px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  border: 1px solid var(--line-2); font-size: 13px; font-weight: 700;
+}
+.num-done { background: linear-gradient(135deg, var(--accent), var(--accent-2)); border-color: transparent; }
+.lesson-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.lesson-title { font-size: 14px; font-weight: 700; line-height: 1.6; }
+.lesson-meta { font-size: 12px; color: var(--faint); }
+.lesson-body .bar { height: 4px; }
+
+/* صفحة اللقاء */
+.lecture-title { font-size: 17px; font-weight: 800; line-height: 1.7; }
+.heard { font-size: 12px; color: var(--muted); margin: 6px 0 16px; }
+.heard-done { color: var(--accent-soft); font-weight: 700; }
+.seek { margin-bottom: 12px; }
+.seek input { width: 100%; accent-color: var(--accent); }
+.seek .times { margin-top: 2px; }
+.controls { display: flex; align-items: center; justify-content: center; gap: 22px; margin-bottom: 4px; }
+.controls .play { margin: 0; }
+.skip {
+  width: 48px; height: 48px; border-radius: 50%;
+  border: 1px solid var(--line-2); background: var(--glass); font-weight: 700; font-size: 14px;
+  direction: ltr;
+}
+.skip:hover { background: var(--glass-2); }
+.nav { display: flex; justify-content: space-between; gap: 8px; }
+.nav .small-btn { margin: 0; padding: 8px 14px; }
+.small-btn:disabled { opacity: .35; cursor: default; }
+
+.now-link { margin-top: 8px; font-size: 12px; color: var(--accent-soft); text-decoration: underline; text-underline-offset: 3px; }
+
+/* =====================
    المشغّل المصغّر
    ===================== */
 .mini {
