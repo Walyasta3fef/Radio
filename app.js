@@ -34,6 +34,7 @@ function parseRoute() {
   let m = /^#\/radio\/(normal|fast)$/.exec(h);
   if (m) return { page: 'radio', mode: m[1] };
   if (h === '#/course') return { page: 'course' };
+  if (h === '#/account') return { page: 'account' };
   m = /^#\/lecture\/(\w+)$/.exec(h);
   if (m && LECTURE_BY_ID[m[1]]) return { page: 'lecture', id: m[1] };
   return { page: 'home' };
@@ -62,6 +63,12 @@ function useClock() {
 function useProgressVersion() {
   const [v, setV] = useState(0);
   useEffect(() => progress.subscribe(() => setV(x => x + 1)), []);
+  return v;
+}
+
+function useAccountVersion() {
+  const [v, setV] = useState(0);
+  useEffect(() => account.subscribe(() => setV(x => x + 1)), []);
   return v;
 }
 
@@ -630,6 +637,7 @@ function HomePage({ player, now, users }) {
       <${TotalStats} />
       <${OnlineBadge} count=${users.length} />
     </div>
+    <${NameBar} />
     <header className="hero">
       <h1>${t('appName')}</h1>
       <p>${t('tagline')}</p>
@@ -679,6 +687,7 @@ function RadioPage({ mode, player, now, users, volume, onVolume }) {
         <${CountryFlags} users=${modeUsers} />
       </div>
     </div>
+    <${NameBar} />
     <div className="panel-wrap">
       <div className="panel-glow"></div>
       <div className="panel">
@@ -730,6 +739,7 @@ function CoursePage({ player, users }) {
       <${OnlineBadge} count=${courseUsers.length} />
     </div>
 
+    <${NameBar} />
     <div className="panel summary">
       <h1>${t('course')}
         <${InfoTip} label=${t('infoLabel')} text=${t('courseInfo')} />
@@ -794,6 +804,7 @@ function LecturePage({ id, player, volume, onVolume }) {
       <${BackButton} to="#/course" />
       <span className="chip">${t('lectureOf', { n: idx + 1, count: COURSE_ORDER.length })}</span>
     </div>
+    <${NameBar} />
 
     <div className="panel-wrap">
       <div className="panel-glow"></div>
@@ -831,6 +842,124 @@ function LecturePage({ id, player, volume, onVolume }) {
           <button className="small-btn" disabled=${!next} onClick=${() => next && go('#/lecture/' + next)}>${t('nextLecture')} ←</button>
         </div>
       </div>
+    </div>
+  </div>`;
+}
+
+// =====================
+// شريط الاسم: يظهر في كل الصفحات
+// =====================
+const SYNC_KEY = { syncing: 'syncSyncing', synced: 'syncSynced', error: 'syncError', idle: 'syncIdle' };
+
+function NameBar() {
+  useAccountVersion();
+  if (!account.loggedIn) {
+    return html`<button className="name-bar name-bar-cta" onClick=${() => go('#/account')}>
+      <span>${t('saveProgressCta')}</span><b>←</b>
+    </button>`;
+  }
+  const hidden = account.isHidden();
+  const name = account.name;
+  return html`<div className="name-bar">
+    <button className="name-main" onClick=${() => go('#/account')} aria-label=${t('accountTitle')}>
+      <span className=${'sync-dot sync-' + account.status} title=${t(SYNC_KEY[account.status] || 'syncIdle')}></span>
+      <span className="name-label">${t('yourName')}</span>
+      <b className="name-value" dir="ltr">${hidden ? '•'.repeat(Math.min(10, name.length)) : name}</b>
+    </button>
+    <button className="eye" onClick=${() => account.setHidden(!hidden)}
+      aria-label=${hidden ? t('showName') : t('hideName')} title=${hidden ? t('showName') : t('hideName')}>
+      ${hidden ? '👁' : '🙈'}
+    </button>
+  </div>`;
+}
+
+// =====================
+// صفحة الاسم
+// =====================
+function AccountPage() {
+  useAccountVersion();
+  useProgressVersion();
+  const [tab, setTab] = useState('new');
+  const [value, setValue] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+  const [confirmOut, setConfirmOut] = useState(false);
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setBusy(true); setError(null);
+    const res = tab === 'new' ? await account.create(value) : await account.login(value);
+    setBusy(false);
+    if (res.error) setError(res.error);
+    else { setValue(''); }
+  };
+
+  const warn = html`<p className="name-warn">⚠️ ${t('nameWarning')}</p>`;
+
+  if (account.loggedIn) {
+    const hidden = account.isHidden();
+    const sum = progress.summary();
+    return html`<div className="page account">
+      <div className="topbar"><${BackButton} to="#/" /></div>
+      <div className="panel">
+        <h1 className="acc-title">${t('accountTitle')}</h1>
+        <div className="acc-name">
+          <b dir="ltr">${hidden ? '•'.repeat(Math.min(10, account.name.length)) : account.name}</b>
+          <button className="eye" onClick=${() => account.setHidden(!hidden)}
+            aria-label=${hidden ? t('showName') : t('hideName')}>${hidden ? '👁' : '🙈'}</button>
+        </div>
+        ${warn}
+        <p className="acc-line">${t('accountHint')}</p>
+        <p className="acc-line">
+          <span className=${'sync-dot sync-' + account.status}></span>
+          ${t(SYNC_KEY[account.status] || 'syncIdle')}
+        </p>
+        <p className="acc-line">${t('doneOf', { done: sum.done, count: sum.count })} · ${fmtPct(sum.percent)}</p>
+        <button className="small-btn" onClick=${() => account.sync()}>${t('syncNow')}</button>
+        <div className="acc-out">
+          ${confirmOut
+            ? html`<div>
+                <p className="acc-line">${t('logoutConfirm')}</p>
+                <div className="nav">
+                  <button className="small-btn danger" onClick=${async () => { await account.logout(); setConfirmOut(false); }}>${t('logoutYes')}</button>
+                  <button className="small-btn" onClick=${() => setConfirmOut(false)}>${t('cancel')}</button>
+                </div>
+              </div>`
+            : html`<button className="link-btn" onClick=${() => setConfirmOut(true)}>${t('logout')}</button>`}
+        </div>
+      </div>
+    </div>`;
+  }
+
+  return html`<div className="page account">
+    <div className="topbar"><${BackButton} to="#/" /></div>
+    <div className="panel">
+      <h1 className="acc-title">${t('accountTitle')}</h1>
+      <p className="acc-line">${t('accountIntro')}</p>
+
+      <div className="tabs" role="tablist">
+        <button role="tab" aria-selected=${tab === 'new'} className=${tab === 'new' ? 'on' : ''}
+          onClick=${() => { setTab('new'); setError(null); }}>${t('tabNew')}</button>
+        <button role="tab" aria-selected=${tab === 'login'} className=${tab === 'login' ? 'on' : ''}
+          onClick=${() => { setTab('login'); setError(null); }}>${t('tabLogin')}</button>
+      </div>
+
+      <form onSubmit=${submit}>
+        <input className="name-input" dir="ltr" value=${value} autoComplete="off" autoCapitalize="none"
+          spellCheck="false" placeholder=${tab === 'new' ? t('namePlaceholderNew') : t('namePlaceholderLogin')}
+          onInput=${e => setValue(e.target.value)} aria-label=${t('yourName')} />
+        ${tab === 'new' && html`<div className="name-tools">
+          <span className="hint">${t('nameRules')}</span>
+          <button type="button" className="link-btn" onClick=${() => { setValue(suggestName()); setError(null); }}>${t('suggestName')}</button>
+        </div>`}
+        ${error && html`<p className="form-error">${t(error)}</p>`}
+        ${tab === 'new' && warn}
+        <button className="cta" type="submit" disabled=${busy || !value.trim()}>
+          ${busy ? t('pleaseWait') : (tab === 'new' ? t('createName') : t('loginName'))}
+        </button>
+        ${tab === 'new' && progress.hasAny() && html`<p className="hint center-text">${t('mergeNote')}</p>`}
+        ${tab === 'login' && html`<p className="hint center-text">${t('loginNote')}</p>`}
+      </form>
     </div>
   </div>`;
 }
@@ -889,6 +1018,7 @@ function App() {
   useEffect(() => {
     document.title = route.page === 'radio' ? t(MODE_LABEL[route.mode])
       : route.page === 'course' ? t('course')
+      : route.page === 'account' ? t('accountTitle')
       : route.page === 'lecture' ? shortTitle(route.id)
       : t('appName');
   }, [route]);
@@ -905,6 +1035,8 @@ function App() {
       volume=${volume} onVolume=${onVolume} />`;
   } else if (route.page === 'course') {
     page = html`<${CoursePage} player=${player} users=${users} />`;
+  } else if (route.page === 'account') {
+    page = html`<${AccountPage} />`;
   } else if (route.page === 'lecture') {
     page = html`<${LecturePage} key=${route.id} id=${route.id} player=${player} volume=${volume} onVolume=${onVolume} />`;
   } else {
