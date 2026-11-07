@@ -112,8 +112,11 @@ const commentsApi = {
       await ref.set(item);
       storage.set(COMMENT_LAST_KEY, String(Date.now()));
       if (LECTURE_BY_ID[lid]) {
-        // نسخة مختصرة لقسم أحدث التعليقات، وزيادة عدّاد اللقاء
-        const recent = { l: lid, c: parent ? parent.id : ref.key, t: text.slice(0, 200), n: account.nick, ts: TS };
+        // نسخة مختصرة لقسم أحدث التعليقات بنفس وقت التعليق، وزيادة عدّاد اللقاء
+        let ts = Date.now();
+        try { const v = (await ref.child('ts').once('value')).val(); if (typeof v === 'number') ts = v; } catch (e) {}
+        const recent = { l: lid, c: parent ? parent.id : ref.key, t: text.slice(0, 200), n: account.nick, ts };
+        if (parent) recent.r = parent.n;
         if (s != null) recent.s = s;
         database.ref('/recent').push(recent).catch(() => {});
         database.ref('/counts/' + lid).transaction(v => (v || 0) + 1).catch(() => {});
@@ -123,6 +126,11 @@ const commentsApi = {
     } catch (e) { return { error: 'commentFailed' }; }
   },
 };
+
+// هل التعليق جديد على المستخدم: بعد آخر قراءة ومن شخص آخر
+const isNewComment = (c, lid) => (c.ts || 0) > progress.seenAt(lid) && c.n !== account.nick;
+const isReplyToMe = (c, lid) => !!account.nick && c.r === account.nick && isNewComment(c, lid);
+const maxTs = (list) => list.reduce((m, c) => Math.max(m, c.ts || 0), 0);
 
 // تعليق مطلوب إبرازه عند فتح لقاء من «أحدث التعليقات»
 let pendingFocus = null;

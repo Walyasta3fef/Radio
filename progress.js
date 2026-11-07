@@ -26,11 +26,11 @@ const progress = (() => {
   // sec: وقت الاستماع القديم قبل التقرير اليومي (لكل جهاز)، days: أيام الاستماع، last: آخر لقاء
   // daily: وقت الاستماع الفعلي لكل جهاز ولكل يوم، مع التكرار:
   //   { جهاز: { يوم: { c: الكورس، n: الراديو العادي، f: الراديو السريع، l: { لقاء: ثوانٍ } } } }
-  const empty = () => ({ v: 2, lectures: {}, sec: {}, days: [], legacyDays: 0, last: null, lastAt: 0, daily: {} });
+  const empty = () => ({ v: 2, lectures: {}, sec: {}, days: [], legacyDays: 0, last: null, lastAt: 0, daily: {}, seen: {} });
 
   function migrate(s) {
     if (!s) return empty();
-    if (s.v === 2) { if (!s.daily) s.daily = {}; return s; }
+    if (s.v === 2) { if (!s.daily) s.daily = {}; if (!s.seen) s.seen = {}; return s; }
     if (s.v === 1) {
       const n = empty();
       n.lectures = s.lectures || {};
@@ -158,6 +158,15 @@ const progress = (() => {
     return { total: c + n + f, c, n, f, byDay, top, completed, activeDays };
   }
 
+  // آخر تعليق قرأه المستخدم في كل مكان (بتوقيت الخادم)، لمعرفة الجديد
+  const seenAt = (lid) => (state.seen && state.seen[lid]) || 0;
+  function markSeen(lid, ts) {
+    if (!lid || !(ts > seenAt(lid))) return;
+    state.seen[lid] = ts;
+    touch();
+    notifyNow();
+  }
+
   // وقت الاستماع القديم المسجّل قبل إضافة التقرير اليومي
   const legacySeconds = () => Object.values(state.sec || {}).reduce((s, x) => s + x, 0);
 
@@ -252,6 +261,9 @@ const progress = (() => {
     Object.entries(remote.sec || {}).forEach(([dev, s]) => {
       if (typeof s === 'number') state.sec[dev] = Math.max(state.sec[dev] || 0, s);
     });
+    Object.entries(remote.seen || {}).forEach(([lid, ts]) => {
+      if (typeof ts === 'number' && ts > seenAt(lid)) state.seen[lid] = ts;
+    });
     // وقت الاستماع اليومي: لكل جهاز ويوم نأخذ النسخة الأكبر، فلا يتكرر شيء
     Object.entries(remote.daily || {}).forEach(([dev, days]) => {
       const mine = state.daily[dev] || (state.daily[dev] = {});
@@ -293,7 +305,7 @@ const progress = (() => {
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') save(); });
 
   return {
-    record, addTime, stats, legacySeconds, setPosition, position, percent, segments, isDone, summary, continueId, hasAny,
+    record, addTime, stats, seenAt, markSeen, legacySeconds, setPosition, position, percent, segments, isDone, summary, continueId, hasAny,
     merge, exportState, reset, subscribe, save,
     get rev() { return rev; },
   };

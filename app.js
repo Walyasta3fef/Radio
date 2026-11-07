@@ -787,6 +787,13 @@ function useComments(lid) {
   return list;
 }
 
+// أحدث التعليقات من كل اللقاءات، لمعرفة الجديد منها
+function useRecentFeed(limit) {
+  const [list, setList] = useState([]);
+  useEffect(() => commentsApi.subscribeRecent(limit, setList), [limit]);
+  return list;
+}
+
 function useCommentCounts() {
   const [counts, setCounts] = useState({});
   useEffect(() => commentsApi.subscribeCounts(setCounts), []);
@@ -873,6 +880,23 @@ function CommentsBox({ lid, list, getTime, onTime, startOpen, title }) {
   const [highlight, setHighlight] = useState(focus);
   const maxSec = maxSecOf(lid);
   const canWrite = account.loggedIn && account.nick;
+  useProgressVersion();
+
+  // الجديد يُحسب مرة عند فتح الصندوق، ثم يُعلَّم كمقروء
+  const [seenBase, setSeenBase] = useState(null);
+  const unread = list.filter(c => isNewComment(c, lid)).length;
+  useEffect(() => {
+    if (!open || !list.length) return;
+    if (seenBase == null) {
+      setSeenBase(progress.seenAt(lid));
+      // فتح الردود التي فيها رد جديد على المستخدم
+      const ex = {};
+      list.forEach(c => { if (c.p && isReplyToMe(c, lid)) ex[c.p] = true; });
+      if (Object.keys(ex).length) setExpanded(x => ({ ...x, ...ex }));
+    }
+    progress.markSeen(lid, maxTs(list));
+  }, [open, list, lid]);
+  const wasNew = (c) => seenBase != null && (c.ts || 0) > seenBase && c.n !== account.nick;
 
   // فتح اللقاء من «أحدث التعليقات»: التمرير إلى التعليق وإبرازه
   useEffect(() => {
@@ -900,8 +924,8 @@ function CommentsBox({ lid, list, getTime, onTime, startOpen, title }) {
 
   const replyButton = (top, target) => canWrite && html`<button onClick=${() => setReplyFor({ top: top.id, n: target.n })}>${t('reply')}</button>`;
 
-  const item = (c, top, isReply) => html`<li key=${c.id} id=${'c-' + c.id} className=${'c-item' + (highlight === c.id ? ' focus' : '')}>
-    <div className="c-meta"><b>${t('nickName', { n: c.n })}</b><span>${relTime(c.ts)}</span></div>
+  const item = (c, top, isReply) => html`<li key=${c.id} id=${'c-' + c.id} className=${'c-item' + (highlight === c.id ? ' focus' : '') + (wasNew(c) ? ' is-new' : '')}>
+    <div className="c-meta"><b>${t('nickName', { n: c.n })}${wasNew(c) && account.nick && c.r === account.nick ? html`<span className="to-me">${t('repliedToYou')}</span>` : ''}</b><span>${relTime(c.ts)}</span></div>
     <${CommentText} text=${c.t} maxSec=${maxSec} onTime=${onTime} replyTo=${isReply && c.r} />
     <div className="c-foot">
       ${replyButton(top, c)}
@@ -923,6 +947,7 @@ function CommentsBox({ lid, list, getTime, onTime, startOpen, title }) {
     <button className="c-toggle" onClick=${() => setOpen(o => !o)} aria-expanded=${open}>
       <span>${title || t('comments')}</span>
       <span className="c-count">${list.length}</span>
+      ${!open && unread > 0 && html`<span className="c-new">${t('newCount', { n: unread })}</span>`}
       <span className=${'chev' + (open ? ' chev-open' : '')} aria-hidden="true">⌄</span>
     </button>
 
@@ -947,10 +972,21 @@ function CommentsBox({ lid, list, getTime, onTime, startOpen, title }) {
 
 // أحدث التعليقات من كل اللقاءات (في صفحة الكورس)
 function RecentComments({ player }) {
+  useProgressVersion();
   const [open, setOpen] = useState(false);
   const [limit, setLimit] = useState(10);
-  const [list, setList] = useState([]);
-  useEffect(() => (open ? commentsApi.subscribeRecent(limit, setList) : undefined), [open, limit]);
+  const list = useRecentFeed(limit);
+  const [newIds, setNewIds] = useState(null);
+  const unread = list.filter(c => isNewComment(c, c.l)).length;
+
+  // عند الفتح: نحفظ الجديد لإبرازه، ثم نعلّمه كمقروء
+  useEffect(() => {
+    if (!open || !list.length) return;
+    if (newIds == null) setNewIds(new Set(list.filter(c => isNewComment(c, c.l)).map(c => c.id)));
+    const perLecture = {};
+    list.forEach(c => { perLecture[c.l] = Math.max(perLecture[c.l] || 0, c.ts || 0); });
+    Object.entries(perLecture).forEach(([l, ts]) => progress.markSeen(l, ts));
+  }, [open, list]);
 
   const openComment = (c) => {
     pendingFocus = { lid: c.l, cid: c.c };
@@ -965,16 +1001,20 @@ function RecentComments({ player }) {
   return html`<section className="comments">
     <button className="c-toggle" onClick=${() => setOpen(o => !o)} aria-expanded=${open}>
       <span>${t('recentComments')}</span>
+      ${!open && unread > 0 && html`<span className="c-new">${t('newCount', { n: unread })}</span>`}
       <span className=${'chev' + (open ? ' chev-open' : '')} aria-hidden="true">⌄</span>
     </button>
     ${open && html`<div className="c-body">
       ${list.length === 0 && html`<p className="hint center-text">${t('noComments')}</p>`}
       <ul className="c-list">
-        ${list.map(c => html`<li key=${c.id} className="c-item feed-item" onClick=${() => openComment(c)}>
-          <p className="feed-lecture">${LECTURE_BY_ID[c.l].title}</p>
-          <div className="c-meta"><b>${t('nickName', { n: c.n })}</b><span>${relTime(c.ts)}</span></div>
-          <${CommentText} text=${c.t} maxSec=${maxSecOf(c.l)} onTime=${(sec) => openAt(c, sec)} />
-        </li>`)}
+        ${list.map(c => {
+          const isNew = newIds && newIds.has(c.id);
+          return html`<li key=${c.id} className=${'c-item feed-item' + (isNew ? ' is-new' : '')} onClick=${() => openComment(c)}>
+            <p className="feed-lecture">${LECTURE_BY_ID[c.l].title}</p>
+            <div className="c-meta"><b>${t('nickName', { n: c.n })}${isNew && account.nick && c.r === account.nick ? html`<span className="to-me">${t('repliedToYou')}</span>` : ''}</b><span>${relTime(c.ts)}</span></div>
+            <${CommentText} text=${c.t} maxSec=${maxSecOf(c.l)} onTime=${(sec) => openAt(c, sec)} />
+          </li>`;
+        })}
       </ul>
       ${list.length >= limit && html`<button className="small-btn feed-more" onClick=${() => setLimit(l => l + 10)}>${t('showMore')}</button>`}
     </div>`}
@@ -1046,6 +1086,13 @@ function HomePage({ player, now, users }) {
     player.toggleRadio(mode);
   };
 
+  // علامات التعليقات الجديدة
+  const feed = useRecentFeed(100);
+  const general = useComments(GENERAL_ID);
+  const lectureNew = feed.filter(c => isNewComment(c, c.l)).length;
+  const repliesToMe = feed.filter(c => isReplyToMe(c, c.l)).length;
+  const generalNew = general.filter(c => isNewComment(c, GENERAL_ID)).length;
+
   // الكورس: تشغيل من حيث توقف أو إيقاف
   const courseActive = player.isPlaying && player.mode === 'lecture';
   const courseToggle = () => {
@@ -1073,7 +1120,8 @@ function HomePage({ player, now, users }) {
         <div className="card-row">
           <button className="card-toggle" onClick=${() => toggle('course')} aria-expanded=${open === 'course'}>
             <span className="title-icon"><${Icon} name="book" size=${18} /></span>
-            <span className="card-title">${t('course')}</span>
+            <span className="card-title">${t('course')}${lectureNew > 0 && html`<span className="new-dot" aria-label=${t('newComments')}></span>`}</span>
+            ${repliesToMe > 0 && html`<span className="to-me">${t('repliedToYou')}</span>`}
             <span className="pct"><${Pct} value=${sum.percent} /></span>
             <span className=${'chev' + (open === 'course' ? ' chev-open' : '')} aria-hidden="true">⌄</span>
           </button>
@@ -1130,7 +1178,8 @@ function HomePage({ player, now, users }) {
     </section>
 
     <footer className="foot">
-      <button className="foot-btn" onClick=${() => go('#/general')}><${Icon} name="chat" size=${16} />${t('generalComments')}</button>
+      <button className="foot-btn" onClick=${() => go('#/general')}><${Icon} name="chat" size=${16} />${t('generalComments')}
+        ${generalNew > 0 && html`<span className="badge-new">${generalNew}</span>`}</button>
       <${InstallButton} />
       <${FacebookLink} />
     </footer>
@@ -1203,6 +1252,9 @@ function CoursePage({ player, users }) {
   const contId = progress.continueId();
   const courseUsers = users.filter(u => u.at === 'course');
   const counts = useCommentCounts();
+  const feed = useRecentFeed(100);
+  const newBy = {};
+  feed.forEach(c => { if (isNewComment(c, c.l)) newBy[c.l] = true; });
 
   const continueNow = () => { player.playLecture(contId); go('#/lecture/' + contId); };
 
@@ -1250,9 +1302,9 @@ function CoursePage({ player, users }) {
               </span>
               ${pct > 0 && !done && html`<${HeardBar} id=${id} />`}
             </span>
-            ${(done || n > 0) && html`<span className="lesson-side">
+            ${(done || n > 0 || newBy[id]) && html`<span className="lesson-side">
               ${done && html`<span className="done-badge" aria-label=${t('lectureDone')}><${Icon} name="check" size=${14} /></span>`}
-              ${n > 0 && html`<span className="c-badge" aria-label=${t('commentsCount', { n })}><${Icon} name="chat" size=${13} />${n}</span>`}
+              ${n > 0 && html`<span className=${'c-badge' + (newBy[id] ? ' new' : '')} aria-label=${t('commentsCount', { n })}><${Icon} name="chat" size=${13} />${n}</span>`}
             </span>`}
           </button>
         </li>`;
