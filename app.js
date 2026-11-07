@@ -1192,6 +1192,9 @@ function HomePage({ player, now, users }) {
             ${MODES.map(m => html`<button key=${m} role="tab" aria-selected=${mode === m}
                 className=${mode === m ? 'on' : ''} onClick=${() => pickMode(m)}>${t(MODE_SHORT[m])}</button>`)}
           </div>
+          <div className="seg-hints" aria-hidden="true">
+            ${MODES.map(m => html`<small key=${m}>${m === 'normal' ? t('normalCountsHint') : ''}</small>`)}
+          </div>
           <div className="now">
             <small>${t('nowPlayingLabel')}</small>
             <p className="now-title">${rv.s.track.title}</p>
