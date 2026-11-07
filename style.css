@@ -139,6 +139,24 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid 
 .tint-radio .title-icon { background: var(--radio-soft); color: var(--radio); }
 .tint-radio.card-active { border-color: var(--radio); box-shadow: 0 10px 30px -14px rgba(240, 180, 106, .6); }
 
+/* الكروت المطوية في الرئيسية */
+.card-row { display: flex; align-items: center; gap: 10px; }
+.card-toggle { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; text-align: right; padding: 2px 0; }
+.card-toggle .card-title { font-size: 17px; }
+.card-toggle .chev { margin-inline-start: auto; font-size: 18px; }
+.card-row .play { margin: 0; flex-shrink: 0; }
+.card-row .play .spinner { width: 20px; height: 20px; border-width: 2px; }
+.card-body { display: flex; flex-direction: column; gap: 12px; padding-top: 14px; margin-top: 12px; border-top: 1px solid var(--line); }
+.card-line { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.card-line .live { margin: 0; }
+.card-body .now { margin: 0; text-align: center; }
+.card-body .now small { color: var(--muted); font-size: 12px; }
+.card-body .status { margin: 0; min-height: 0; text-align: center; }
+.card .status { margin-top: 8px; margin-bottom: 0; min-height: 0; text-align: center; }
+.card-body .continue { border: 0; border-radius: 12px; padding: 10px 12px; }
+.live-mini { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+.live-mini.behind .live-dot { background: var(--radio); }
+
 /* الكورس في الرئيسية */
 .course-card { padding: 0; overflow: hidden; }
 .card-main { width: 100%; text-align: right; padding: 16px 16px 12px; display: block; }

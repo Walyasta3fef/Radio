@@ -29,6 +29,7 @@ const STRINGS = {
   infoLabel: 'معلومات',
   nowPlayingLabel: 'يُبث الآن',
   radioDetails: 'تفاصيل الراديو',
+  openCourse: 'كل اللقاءات',
 
   course: 'الكورس',
   coursePageTitle: 'كورس وليستعفف',

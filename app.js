@@ -8,6 +8,7 @@ const MODE_INFO = { normal: 'normalInfo', fast: 'fastInfo' };
 const SKIP_SECONDS = 15;
 const BEHIND_SECONDS = 20;
 const RADIO_MODE_KEY = 'radio_mode';
+const HOME_OPEN_KEY = 'home_open_card';
 
 const STATIONS = Object.fromEntries(MODES.map(mode => [mode, createStation(mode,
   LECTURES.map(l => ({ id: l.id, title: l.title, duration: l[mode] })))]));
@@ -122,7 +123,13 @@ function usePlayer(volume) {
   };
 
   const playAudio = useCallback(() => {
-    const p = audioRef.current.play();
+    const audio = audioRef.current;
+    const p = audio.play();
+    // عندما يكون الصوت يعمل أصلًا لا يصل حدث «بدأ التشغيل» مرة أخرى، فنحدّث الحالة هنا
+    const markPlaying = () => {
+      if (wantPlayRef.current && statusRef.current === 'loading' && !audio.paused && audio.readyState >= 3) updateStatus('playing');
+    };
+    if (p && p.then) p.then(markPlaying, () => {});
     if (p && p.catch) {
       p.catch(err => {
         if (!wantPlayRef.current) return;
@@ -321,6 +328,8 @@ function usePlayer(volume) {
     const onTime = () => {
       lastProgressRef.current = Date.now();
       const ct = audio.currentTime;
+      // حماية إضافية: الوقت يتقدّم فالصوت يعمل، فلا داعي لعلامة التحميل
+      if (wantPlayRef.current && statusRef.current === 'loading' && !audio.paused) updateStatus('playing');
       setCurrentTime(ct);
       const id = trackedId();
       if (!audio.paused && !audio.seeking) {
@@ -1011,8 +1020,22 @@ function HomePage({ player, now, users }) {
   const rv = radioView(player, mode, now);
   const count = users.filter(u => u.at === mode).length;
 
-  // «أكمل من حيث توقفت»: يفتح اللقاء ويشغّله في الضغطة نفسها
-  const continueNow = () => { player.playLecture(contId); go('#/lecture/' + contId); };
+  // كارت واحد مفتوح في المرة، ويُحفظ آخر اختيار
+  const [open, setOpenState] = useState(() => storage.get(HOME_OPEN_KEY) || '');
+  const toggle = (k) => {
+    const v = open === k ? '' : k;
+    setOpenState(v);
+    storage.set(HOME_OPEN_KEY, v);
+  };
+
+  // الكورس: تشغيل من حيث توقف أو إيقاف
+  const courseActive = player.isPlaying && player.mode === 'lecture';
+  const courseToggle = () => {
+    if (courseActive) return player.stop();
+    if (!contId) return;
+    player.playLecture(contId);
+    go('#/lecture/' + contId);
+  };
 
   return html`<div className="page home">
     <div className="topbar">
@@ -1028,50 +1051,63 @@ function HomePage({ player, now, users }) {
     </header>
 
     <section className="section">
-      <div className=${'card course-card tint-course' + (player.isPlaying && player.mode === 'lecture' ? ' card-active' : '')}>
-        <button className="card-main" onClick=${() => go('#/course')}>
-          <div className="card-head">
-            <span className="card-title"><span className="title-icon"><${Icon} name="book" size=${18} /></span>${t('course')}</span>
+      <div className=${'card tint-course' + (courseActive ? ' card-active' : '')}>
+        <div className="card-row">
+          <button className="card-toggle" onClick=${() => toggle('course')} aria-expanded=${open === 'course'}>
+            <span className="title-icon"><${Icon} name="book" size=${18} /></span>
+            <span className="card-title">${t('course')}</span>
             <span className="pct"><${Pct} value=${sum.percent} /></span>
-          </div>
+            <span className=${'chev' + (open === 'course' ? ' chev-open' : '')} aria-hidden="true">⌄</span>
+          </button>
+          ${contId && html`<${PlayButton} size=${46} active=${courseActive} status=${courseActive ? player.status : 'idle'} onClick=${courseToggle} />`}
+        </div>
+        ${open === 'course' && html`<div className="card-body">
           <${MiniBar} value=${sum.percent} />
-          <span className="card-count">${t('doneOf', { done: sum.done, count: sum.count })}</span>
-        </button>
-        ${contId && html`<button className="continue" onClick=${continueNow}>
-          <span className="continue-text">
-            <small>${started ? t('continueFrom') : t('startCourse')}</small>
-            <b>${LECTURE_BY_ID[contId].title}</b>
-          </span>
-          <span className="continue-play"><${Icon} name="play" size=${16} /></span>
-        </button>`}
+          <div className="card-line">
+            <span className="card-count">${t('doneOf', { done: sum.done, count: sum.count })}</span>
+            <button className="link-btn" onClick=${() => go('#/course')}>${t('openCourse')}</button>
+          </div>
+          ${contId && html`<button className="continue" onClick=${() => go('#/lecture/' + contId)}>
+            <span className="continue-text">
+              <small>${started ? t('continueFrom') : t('startCourse')}</small>
+              <b>${LECTURE_BY_ID[contId].title}</b>
+            </span>
+          </button>`}
+        </div>`}
       </div>
     </section>
 
     <section className="section">
-      <div className=${'card radio-card tint-radio' + (rv.active ? ' card-active' : '')}>
-        <div className="card-head">
-          <span className="card-title"><span className="title-icon"><${Icon} name="radio" size=${18} /></span>${t('radioSection')}
-            <${InfoTip} label=${t('infoLabel')} text=${t(MODE_INFO[mode])} /></span>
-          <${LiveBadge} behind=${rv.behind} onGoLive=${player.goLive} />
+      <div className=${'card tint-radio' + (rv.active ? ' card-active' : '')}>
+        <div className="card-row">
+          <button className="card-toggle" onClick=${() => toggle('radio')} aria-expanded=${open === 'radio'}>
+            <span className="title-icon"><${Icon} name="radio" size=${18} /></span>
+            <span className="card-title">${t('radioSection')}</span>
+            <span className=${'live-mini' + (rv.behind ? ' behind' : '')}><${LiveDot} />${t(MODE_SHORT[mode])}</span>
+            <span className=${'chev' + (open === 'radio' ? ' chev-open' : '')} aria-hidden="true">⌄</span>
+          </button>
+          <${PlayButton} size=${46} active=${rv.active} status=${rv.status} onClick=${() => player.toggleRadio(mode)} />
         </div>
-
-        <div className="seg" role="tablist" aria-label=${t('radioSpeed')}>
-          ${MODES.map(m => html`<button key=${m} role="tab" aria-selected=${mode === m}
-              className=${mode === m ? 'on' : ''} onClick=${() => pickMode(m)}>${t(MODE_SHORT[m])}</button>`)}
-        </div>
-
-        <div className="now">
-          <small>${t('nowPlayingLabel')}</small>
-          <p className="now-title">${rv.s.track.title}</p>
-        </div>
-
-        <${PlayButton} active=${rv.active} status=${rv.status} onClick=${() => player.toggleRadio(mode)} />
-        <${StatusLine} active=${rv.active} status=${rv.status} onRetry=${player.retry} />
-
-        <div className="radio-foot">
-          <span className="card-count">${t('listeners', { n: count })}</span>
-          <button className="link-btn" onClick=${() => go('#/radio/' + mode)}>${t('radioDetails')}</button>
-        </div>
+        ${open === 'radio' && html`<div className="card-body">
+          <div className="card-line">
+            <${LiveBadge} behind=${rv.behind} onGoLive=${player.goLive} />
+            <${InfoTip} label=${t('infoLabel')} text=${t(MODE_INFO[mode])} />
+          </div>
+          <div className="seg" role="tablist" aria-label=${t('radioSpeed')}>
+            ${MODES.map(m => html`<button key=${m} role="tab" aria-selected=${mode === m}
+                className=${mode === m ? 'on' : ''} onClick=${() => pickMode(m)}>${t(MODE_SHORT[m])}</button>`)}
+          </div>
+          <div className="now">
+            <small>${t('nowPlayingLabel')}</small>
+            <p className="now-title">${rv.s.track.title}</p>
+          </div>
+          <${StatusLine} active=${rv.active} status=${rv.status} onRetry=${player.retry} />
+          <div className="card-line">
+            <span className="card-count">${t('listeners', { n: count })}</span>
+            <button className="link-btn" onClick=${() => go('#/radio/' + mode)}>${t('radioDetails')}</button>
+          </div>
+        </div>`}
+        ${open !== 'radio' && rv.active && STATUS_KEY[rv.status] && html`<${StatusLine} active=${rv.active} status=${rv.status} onRetry=${player.retry} />`}
       </div>
     </section>
 
