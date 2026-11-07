@@ -710,18 +710,31 @@ function FacebookLink() {
 }
 
 // معلومة صغيرة تظهر عند الضغط على الأيقونة بدل أن تشغل مساحة في الصفحة
+// تُحسب مكانها لتبقى دائمًا داخل الشاشة
 function InfoTip({ label, text }) {
-  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState(null);
+  const btnRef = useRef(null);
   useEffect(() => {
-    if (!open) return;
-    const close = () => setOpen(false);
-    const id = setTimeout(() => document.addEventListener('click', close), 0);
-    return () => { clearTimeout(id); document.removeEventListener('click', close); };
-  }, [open]);
+    if (!pos) return;
+    const close = () => setPos(null);
+    const id = setTimeout(() => {
+      document.addEventListener('click', close);
+      window.addEventListener('scroll', close, { passive: true });
+    }, 0);
+    return () => { clearTimeout(id); document.removeEventListener('click', close); window.removeEventListener('scroll', close); };
+  }, [pos]);
+  const openTip = (e) => {
+    e.stopPropagation();
+    if (pos) return setPos(null);
+    const r = btnRef.current.getBoundingClientRect();
+    const vw = window.innerWidth;
+    const w = Math.min(260, vw - 32);
+    const left = Math.max(16, Math.min(vw - 16 - w, r.left + r.width / 2 - w / 2));
+    setPos({ top: r.bottom + 8, left, width: w });
+  };
   return html`<span className="info">
-    <button className="info-btn" aria-label=${label} aria-expanded=${open}
-      onClick=${(e) => { e.stopPropagation(); setOpen(o => !o); }}>i</button>
-    ${open && html`<span className="info-pop" role="tooltip">${text}</span>`}
+    <button ref=${btnRef} className="info-btn" aria-label=${label} aria-expanded=${!!pos} onClick=${openTip}>i</button>
+    ${pos && html`<span className="info-pop" role="tooltip" style=${pos}>${text}</span>`}
   </span>`;
 }
 
@@ -1021,11 +1034,16 @@ function HomePage({ player, now, users }) {
   const count = users.filter(u => u.at === mode).length;
 
   // كارت واحد مفتوح في المرة، ويُحفظ آخر اختيار
-  const [open, setOpenState] = useState(() => storage.get(HOME_OPEN_KEY) || '');
-  const toggle = (k) => {
-    const v = open === k ? '' : k;
-    setOpenState(v);
-    storage.set(HOME_OPEN_KEY, v);
+  // إذا كان الراديو يعمل يُفتح كارته تلقائيًا
+  const [open, setOpenState] = useState(() =>
+    (player.isPlaying && MODES.includes(player.mode)) ? 'radio' : (storage.get(HOME_OPEN_KEY) || ''));
+  const setOpen = (v) => { setOpenState(v); storage.set(HOME_OPEN_KEY, v); };
+  const toggle = (k) => setOpen(open === k ? '' : k);
+
+  // تشغيل الراديو من الكارت المطوي يفتحه في الضغطة نفسها
+  const radioToggle = () => {
+    if (!rv.active) setOpen('radio');
+    player.toggleRadio(mode);
   };
 
   // الكورس: تشغيل من حيث توقف أو إيقاف
@@ -1086,7 +1104,7 @@ function HomePage({ player, now, users }) {
             <span className=${'live-mini' + (rv.behind ? ' behind' : '')}><${LiveDot} />${t(MODE_SHORT[mode])}</span>
             <span className=${'chev' + (open === 'radio' ? ' chev-open' : '')} aria-hidden="true">⌄</span>
           </button>
-          <${PlayButton} size=${46} active=${rv.active} status=${rv.status} onClick=${() => player.toggleRadio(mode)} />
+          <${PlayButton} size=${46} active=${rv.active} status=${rv.status} onClick=${radioToggle} />
         </div>
         ${open === 'radio' && html`<div className="card-body">
           <div className="card-line">

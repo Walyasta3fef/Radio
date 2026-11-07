@@ -277,8 +277,7 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid 
   border: 1px solid var(--line-2); color: var(--muted);
 }
 .info-pop {
-  position: absolute; top: 28px; left: 50%; transform: translateX(-50%);
-  width: 230px; z-index: 20; text-align: right;
+  position: fixed; z-index: 60; text-align: right;
   background: var(--surface-2); border: 1px solid var(--line-2); border-radius: 12px;
   padding: 10px 12px; font-size: 12px; font-weight: 500; line-height: 1.7; color: var(--text);
   box-shadow: 0 10px 30px rgba(0, 0, 0, .45);
