@@ -832,15 +832,61 @@ function CommentAuthor({ c, toMe }) {
   </b>`;
 }
 
+// فتح لقاء مذكور في تعليق: مع وقت يبدأ منه، وبدونه تُفتح صفحته فقط
+let mentionPlayer = null;
+function openMention(lid, sec) {
+  if (sec != null && mentionPlayer) {
+    progress.setPosition(lid, sec);
+    mentionPlayer.playLecture(lid);
+  }
+  go('#/lecture/' + lid);
+}
+
 function CommentText({ text, maxSec, onTime, replyTo }) {
-  const parts = splitTimes(text, maxSec);
-  return html`<p className="c-text">
-    ${replyTo && html`<span className="c-reply-to">${t('replyTo', { name: replyTo })}</span>`}
-    ${parts.map((p, i) => p.time != null && onTime
-      ? html`<button key=${i} className="time-chip" dir="ltr" onClick=${(e) => { e.stopPropagation(); onTime(p.time); }}
-          aria-label=${t('jumpTo', { t: p.text })}>${p.text}</button>`
-      : html`<span key=${i}>${p.text}</span>`)}
-  </p>`;
+  const parts = splitRich(text, maxSec);
+  return html`<${React.Fragment}>
+    ${replyTo && html`<div className="c-reply-to">${t('replyTo')} <bdi>${replyTo}</bdi></div>`}
+    <p className="c-text">
+      ${parts.map((p, i) => p.lid
+        ? html`<button key=${i} className="time-chip mention-chip" onClick=${(e) => { e.stopPropagation(); openMention(p.lid, p.time); }}
+            aria-label=${t('openMention', { t: p.text })}><${Icon} name="play" size=${10} /><span>${p.text}</span></button>`
+        : p.time != null && onTime
+        ? html`<button key=${i} className="time-chip" dir="ltr" onClick=${(e) => { e.stopPropagation(); onTime(p.time); }}
+            aria-label=${t('jumpTo', { t: p.text })}>${p.text}</button>`
+        : html`<span key=${i}>${p.text}</span>`)}
+    </p>
+  <//>`;
+}
+
+// اختيار لقاء ووقت اختياري، ثم إدراجه في التعليق كنص مقروء
+function MentionPicker({ defaultId, onInsert, onClose }) {
+  const [id, setId] = useState(defaultId || LECTURES[0].id);
+  const [time, setTime] = useState('');
+  const [bad, setBad] = useState(false);
+  const insert = () => {
+    let sec = null;
+    if (time.trim()) {
+      sec = parseTime(time.trim());
+      if (sec == null || sec > LECTURE_BY_ID[id].normal) return setBad(true);
+    }
+    onInsert(mentionText(id, sec));
+  };
+  return html`<div className="mention-pick">
+    <label><small>${t('mentionPick')}</small>
+      <select value=${id} onChange=${e => setId(e.target.value)}>
+        ${LECTURES.map(l => html`<option key=${l.id} value=${l.id}>${l.title}</option>`)}
+      </select>
+    </label>
+    <label><small>${t('mentionTime')}</small>
+      <input value=${time} dir="ltr" inputMode="numeric" placeholder=${t('mentionTimeHint')}
+        onInput=${e => { setTime(e.target.value); setBad(false); }} />
+    </label>
+    ${bad && html`<p className="form-error">${t('mentionBadTime')}</p>`}
+    <div className="c-actions">
+      <button type="button" className="small-btn" onClick=${insert}>${t('mentionInsert')}</button>
+      <button type="button" className="link-btn muted" onClick=${onClose}>${t('cancel')}</button>
+    </div>
+  </div>`;
 }
 
 // نموذج كتابة تعليق أو رد
@@ -849,12 +895,11 @@ function CommentForm({ lid, parent, getTime, onDone, onCancel, compact }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const [sent, setSent] = useState(false);
+  const [picking, setPicking] = useState(false);
   const withTime = !!getTime && maxSecOf(lid) > 0;
 
-  const addTime = () => {
-    const stamp = fmtTime(getTime());
-    setText(v => (v && !/\s$/.test(v) ? v + ' ' : v) + stamp + ' ');
-  };
+  const append = (s) => setText(v => ((v && !/\s$/.test(v) ? v + ' ' : v) + s + ' ').slice(0, COMMENT_MAX));
+  const addTime = () => append(fmtTime(getTime()));
 
   const submit = async (e) => {
     e.preventDefault();
@@ -872,9 +917,14 @@ function CommentForm({ lid, parent, getTime, onDone, onCancel, compact }) {
       aria-label=${t('commentPlaceholderGeneral')}
       onInput=${e => { setText(e.target.value); setSent(false); }}></textarea>
     <div className="c-tools">
-      ${withTime ? html`<button type="button" className="link-btn" onClick=${addTime}>${t('addCurrentTime')}</button>` : html`<span></span>`}
+      <span className="c-tool-links">
+        ${withTime && html`<button type="button" className="link-btn" onClick=${addTime}>${t('addCurrentTime')}</button>`}
+        <button type="button" className="link-btn" onClick=${() => setPicking(p => !p)} aria-expanded=${picking}>${t('addLecture')}</button>
+      </span>
       <span className="hint">${text.length}/${COMMENT_MAX}</span>
     </div>
+    ${picking && html`<${MentionPicker} defaultId=${LECTURE_BY_ID[lid] ? lid : null}
+      onInsert=${(s) => { append(s); setPicking(false); setSent(false); }} onClose=${() => setPicking(false)} />`}
     ${error && html`<p className="form-error">${error}</p>`}
     ${sent && !compact && html`<p className="c-sent">${t('commentSent')}</p>`}
     <div className="c-actions">
@@ -1096,7 +1146,15 @@ function HomePage({ player, now, users }) {
     if (player.mode === 'normal' || player.mode === 'fast') return player.mode;
     return storage.get(RADIO_MODE_KEY) === 'fast' ? 'fast' : 'normal';
   });
-  const pickMode = (m) => { setModeState(m); storage.set(RADIO_MODE_KEY, m); };
+  // اختيار السرعة الأخرى أثناء التشغيل ينقل البث إليها فورًا، فيبقى الزر مطابقًا لما يُسمع
+  const pickMode = (m) => {
+    setModeState(m); storage.set(RADIO_MODE_KEY, m);
+    if (player.isPlaying && MODES.includes(player.mode) && player.mode !== m) player.toggleRadio(m);
+  };
+  // إذا تغيّرت السرعة المشغّلة من مكان آخر يتبعها الاختيار
+  useEffect(() => {
+    if (player.isPlaying && MODES.includes(player.mode) && player.mode !== mode) setModeState(player.mode);
+  }, [player.isPlaying, player.mode]);
   const rv = radioView(player, mode, now);
   const count = users.filter(u => u.at === mode).length;
 
@@ -1173,7 +1231,7 @@ function HomePage({ player, now, users }) {
     </section>
 
     <section className="section">
-      <div className=${'card tint-radio' + (rv.active ? ' card-active' : '')}>
+      <div className=${'card tint-radio' + (mode === 'fast' ? ' mode-fast' : '') + (rv.active ? ' card-active' : '')}>
         <div className="card-row">
           <button className="card-toggle" onClick=${() => toggle('radio')} aria-expanded=${open === 'radio'}>
             <span className="title-icon"><${Icon} name="radio" size=${18} /></span>
@@ -1243,7 +1301,7 @@ function RadioPage({ mode, player, now, users }) {
     </div>
     <div className="flags-row"><${CountryFlags} users=${modeUsers} /></div>
     <div className="panel-wrap">
-      <div className="panel tint-radio">
+      <div className=${'panel tint-radio' + (mode === 'fast' ? ' mode-fast' : '')}>
         <div className="panel-head">
           <h1>
             ${t(MODE_LABEL[mode])}
@@ -1808,7 +1866,7 @@ function MiniPlayer({ player, route }) {
   if (!id) return null;
   const target = isLecture ? '#/lecture/' + id : '#/radio/' + player.mode;
   const busy = player.status === 'loading' || player.status === 'next';
-  return html`<div className=${'mini' + (isLecture ? '' : ' mini-radio')}>
+  return html`<div className=${'mini' + (isLecture ? '' : ' mini-radio') + (player.mode === 'fast' ? ' mode-fast' : '')}>
     <button className="mini-info" onClick=${() => go(target)}>
       <b>${t(MODE_LABEL[player.mode])}</b>
       <span>${LECTURE_BY_ID[id].title}</span>
@@ -1827,6 +1885,7 @@ function App() {
   const now = useClock();
   // مستوى الصوت يُضبط من أزرار الجهاز
   const player = usePlayer(1);
+  mentionPlayer = player;
 
   // آخر صفحة قبل صفحة الاسم، للعودة إليها بعد الحفظ
   const returnRef = useRef('#/');

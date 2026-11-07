@@ -47,8 +47,53 @@ function splitTimes(text, maxSec) {
   return out;
 }
 
+// ذكر لقاء داخل النص: «لقاء 5» أو «لقاء 5 12:30» أو «الكورس الأساسي 2 1:07:59»
+// الوقت اختياري، ويُقارن بمدة النسخة العادية
+const MENTION_RE = /(الكورس\s+ال[أا]ساسي\s+(?:لقا[ءئ]?\s+)?|(?:ال)?لقا[ءئ]?\s+)(\d{1,3})(?!\d)(?:\s+(?:عند\s+|الدقيقة\s+|دقيقة\s+)?(\d{1,2}:\d{2}(?::\d{2})?)(?![\d:]))?/g;
+
+const mentionId = (prefix, num) =>
+  (prefix.startsWith('الكورس') ? 'c' : 'L') + String(parseInt(num, 10)).padStart(2, '0');
+
+// النص الذي يُكتب عند اختيار لقاء من القائمة، ويطابق نمط الذكر أعلاه
+function mentionText(id, sec) {
+  const n = parseInt(id.slice(1), 10);
+  const label = id[0] === 'c' ? t('mentionLabelCourse', { n }) : t('mentionLabelLecture', { n });
+  return sec != null ? label + ' ' + fmtClock(sec) : label;
+}
+
+function fmtClock(s) {
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = String(s % 60).padStart(2, '0');
+  return h ? `${h}:${String(m).padStart(2, '0')}:${sec}` : `${String(m).padStart(2, '0')}:${sec}`;
+}
+
+// تقسيم النص إلى: نص عادي، وأوقات داخل اللقاء الحالي، وذكر لقاءات أخرى (lid)
+function splitRich(text, maxSec) {
+  const src = toLatinDigits(text);
+  const out = [];
+  let last = 0, m;
+  MENTION_RE.lastIndex = 0;
+  while ((m = MENTION_RE.exec(src))) {
+    const lec = LECTURE_BY_ID[mentionId(m[1], m[2])];
+    if (!lec) continue;
+    let sec = m[3] ? parseTime(m[3]) : null;
+    let end = m.index + m[0].length;
+    // الوقت غير الصحيح يبقى نصًا عاديًا، ويبقى ذكر اللقاء
+    if (m[3] && (sec == null || sec > lec.normal)) {
+      sec = null;
+      end = m.index + m[1].length + m[2].length;
+      MENTION_RE.lastIndex = end;
+    }
+    if (m.index > last) out.push(...splitTimes(text.slice(last, m.index), maxSec));
+    out.push({ lid: lec.id, time: sec, text: text.slice(m.index, end).trim() });
+    last = end;
+  }
+  if (last < text.length) out.push(...splitTimes(text.slice(last), maxSec));
+  return out.filter(p => p.text !== '');
+}
+
+// أول وقت داخل اللقاء نفسه (لترتيب التعليقات حسب الوقت)، دون أوقات اللقاءات المذكورة
 function firstTime(text, maxSec) {
-  const p = splitTimes(text, maxSec).find(x => x.time != null);
+  const p = splitRich(text, maxSec).find(x => x.time != null && !x.lid);
   return p ? p.time : null;
 }
 

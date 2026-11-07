@@ -21,8 +21,9 @@
 
   --radio: #F0B46A;
   --radio-ink: #3D2508;
-  --radio-soft: rgba(240, 180, 106, .16);
-  --radio-line: rgba(240, 180, 106, .38);
+  --radio-rgb: 240, 180, 106;
+  --radio-soft: rgba(var(--radio-rgb), .16);
+  --radio-line: rgba(var(--radio-rgb), .38);
 
   --note: #E4E9E1;          /* الأوقات وعلامات التعليقات: لون محايد فاتح */
   --live: #F07F7A;
@@ -137,7 +138,7 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid 
 .tint-course.card-active { border-color: var(--course); box-shadow: 0 10px 30px -14px rgba(168, 201, 155, .6); }
 .tint-radio { border-color: var(--radio-line); }
 .tint-radio .title-icon { background: var(--radio-soft); color: var(--radio); }
-.tint-radio.card-active { border-color: var(--radio); box-shadow: 0 10px 30px -14px rgba(240, 180, 106, .6); }
+.tint-radio.card-active { border-color: var(--radio); box-shadow: 0 10px 30px -14px rgba(var(--radio-rgb), .6); }
 
 /* الكروت المطوية في الرئيسية */
 .card-row { display: flex; align-items: center; gap: 10px; }
@@ -257,7 +258,15 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid 
 .play-btn-glow { animation: glow-course 2s ease-in-out infinite; }
 .tint-radio .play-btn-glow { animation-name: glow-radio; }
 @keyframes glow-course { 0%, 100% { box-shadow: 0 0 0 0 rgba(168, 201, 155, .45); } 50% { box-shadow: 0 0 0 16px rgba(168, 201, 155, 0); } }
-@keyframes glow-radio { 0%, 100% { box-shadow: 0 0 0 0 rgba(240, 180, 106, .45); } 50% { box-shadow: 0 0 0 16px rgba(240, 180, 106, 0); } }
+@keyframes glow-radio { 0%, 100% { box-shadow: 0 0 0 0 rgba(var(--radio-rgb), .45); } 50% { box-shadow: 0 0 0 16px rgba(var(--radio-rgb), 0); } }
+/* الراديو السريع: «لحاء البتولا»، وكل ما يخص الراديو داخل العنصر يتبعه */
+.mode-fast {
+  --radio: #E3D2AE;
+  --radio-ink: #3A2E14;
+  --radio-rgb: 227, 210, 174;
+  --radio-soft: rgba(var(--radio-rgb), .16);
+  --radio-line: rgba(var(--radio-rgb), .38);
+}
 
 .status { min-height: 20px; margin-bottom: 12px; font-size: 12px; color: var(--muted); }
 .status .warn, .msg.warn { color: var(--warn); }
@@ -426,7 +435,8 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid 
 .c-meta b { color: var(--course); }
 .c-meta span { color: var(--faint); }
 .c-text { font-size: 14px; line-height: 1.8; white-space: pre-wrap; word-break: break-word; user-select: text; -webkit-user-select: text; }
-.c-reply-to { color: var(--muted); font-size: 12px; margin-inline-end: 4px; }
+.c-reply-to { display: block; color: var(--faint); font-size: 12px; line-height: 1.6; margin-bottom: 2px; }
+.c-reply-to bdi { font-weight: 700; color: var(--muted); }
 .c-foot { display: flex; gap: 14px; margin-top: 6px; }
 .c-foot button { font-size: 12px; color: var(--muted); font-weight: 700; }
 .c-foot button:hover { color: var(--text); }
@@ -438,6 +448,16 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid 
   border: 1px solid rgba(228, 233, 225, .3); unicode-bidi: isolate;
 }
 .time-chip:hover { background: rgba(228, 233, 225, .18); }
+.mention-chip { display: inline-flex; align-items: center; gap: 4px; color: var(--course); border-color: var(--course-line); background: var(--course-soft); }
+.c-tool-links { display: inline-flex; gap: 14px; flex-wrap: wrap; }
+.mention-pick { display: flex; flex-direction: column; gap: 8px; background: var(--sunken); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
+.mention-pick label { display: flex; flex-direction: column; gap: 4px; }
+.mention-pick small { color: var(--muted); font-size: 12px; }
+.mention-pick select, .mention-pick input {
+  width: 100%; padding: 9px 10px; border-radius: 10px; font: inherit; font-size: 14px;
+  background: var(--surface); color: var(--text); border: 1px solid var(--line-2);
+}
+.mention-pick input { text-align: left; }
 
 /* أحدث التعليقات في صفحة الكورس */
 .feed-item { cursor: pointer; }
