@@ -76,7 +76,7 @@ const commentsApi = {
     const q = database.ref('/recent').orderByChild('ts').limitToLast(limit);
     const handler = q.on('value', snap => {
       const list = [];
-      snap.forEach(child => { const v = child.val(); if (v && v.l && LECTURE_BY_ID[v.l]) list.push({ id: child.key, ...v }); });
+      snap.forEach(child => { const v = child.val(); if (v && v.l && LECTURE_BY_ID[v.l] && typeof v.t === 'string') list.push({ id: child.key, ...v }); });
       cb(list.reverse());
     }, () => cb([]));
     return () => q.off('value', handler);
@@ -94,19 +94,28 @@ const commentsApi = {
     return Math.max(0, COMMENT_COOLDOWN_MS - (Date.now() - last));
   },
 
-  // parent: التعليق الأصلي عند الرد { id, n }
+  // هل يستطيع المستخدم الكتابة: باسم خاص، أو كمميز داخل بحساب Google
+  canWrite: () => staff.isStaff || (account.loggedIn && !!account.nick),
+
+  // parent: التعليق الأصلي عند الرد { id, n, a }
   async add(lid, text, parent) {
     text = String(text || '').trim();
-    if (!account.loggedIn || !account.nick) return { error: 'commentNeedName' };
+    if (!this.canWrite()) return { error: 'commentNeedName' };
     if (!text) return { error: 'commentEmpty' };
     if (text.length > COMMENT_MAX) return { error: 'commentTooLong' };
-    if (this.cooldownLeft() > 0) return { error: 'commentWait' };
+    if (!staff.isStaff && this.cooldownLeft() > 0) return { error: 'commentWait' };
     if (!navigator.onLine) return { error: 'needOnline' };
     const TS = firebase.database.ServerValue.TIMESTAMP;
-    const item = { t: text, n: account.nick, ts: TS };
+    const item = { t: text, ts: TS };
+    if (staff.isStaff) item.a = staff.uid;
+    else item.n = account.nick;
     const s = firstTime(text, maxSecOf(lid));
     if (s != null) item.s = s;
-    if (parent) { item.p = parent.id; item.r = parent.n; }
+    if (parent) {
+      item.p = parent.id;
+      if (parent.n) item.r = parent.n;
+      if (parent.a) item.ra = parent.a;
+    }
     try {
       const ref = this.ref(lid).push();
       await ref.set(item);
@@ -115,9 +124,8 @@ const commentsApi = {
         // نسخة مختصرة لقسم أحدث التعليقات بنفس وقت التعليق، وزيادة عدّاد اللقاء
         let ts = Date.now();
         try { const v = (await ref.child('ts').once('value')).val(); if (typeof v === 'number') ts = v; } catch (e) {}
-        const recent = { l: lid, c: parent ? parent.id : ref.key, t: text.slice(0, 200), n: account.nick, ts };
-        if (parent) recent.r = parent.n;
-        if (s != null) recent.s = s;
+        const recent = { l: lid, c: parent ? parent.id : ref.key, i: ref.key, t: text.slice(0, 200), ts };
+        ['n', 'a', 'r', 'ra', 's'].forEach(k => { if (item[k] != null) recent[k] = item[k]; });
         database.ref('/recent').push(recent).catch(() => {});
         database.ref('/counts/' + lid).transaction(v => (v || 0) + 1).catch(() => {});
       }
@@ -125,11 +133,31 @@ const commentsApi = {
       return { ok: true };
     } catch (e) { return { error: 'commentFailed' }; }
   },
+
+  // حذف تعليق وردوده (للمشرف فقط)، مع نسخه في «أحدث التعليقات» وتصحيح العدّاد
+  async remove(lid, comment, replies) {
+    const ids = [comment.id, ...(replies || []).map(r => r.id)];
+    try {
+      await Promise.all(ids.map(id => this.ref(lid).child(id).remove()));
+      if (LECTURE_BY_ID[lid]) {
+        await Promise.all(ids.map(async id => {
+          const snap = await database.ref('/recent').orderByChild('i').equalTo(id).once('value');
+          const tasks = [];
+          snap.forEach(ch => { tasks.push(database.ref('/recent/' + ch.key).remove()); });
+          await Promise.all(tasks);
+        }));
+        database.ref('/counts/' + lid).transaction(v => Math.max(0, (v || 0) - ids.length)).catch(() => {});
+      }
+      return { ok: true };
+    } catch (e) { return { error: 'commentFailed' }; }
+  },
 };
 
+// صاحب التعليق: هل هو المستخدم الحالي
+const isMine = (c) => (c.n && c.n === account.nick) || (c.a && c.a === staff.uid);
 // هل التعليق جديد على المستخدم: بعد آخر قراءة ومن شخص آخر
-const isNewComment = (c, lid) => (c.ts || 0) > progress.seenAt(lid) && c.n !== account.nick;
-const isReplyToMe = (c, lid) => !!account.nick && c.r === account.nick && isNewComment(c, lid);
+const isNewComment = (c, lid) => (c.ts || 0) > progress.seenAt(lid) && !isMine(c);
+const isReplyToMe = (c, lid) => ((!!account.nick && c.r === account.nick) || (!!staff.uid && c.ra === staff.uid)) && isNewComment(c, lid);
 const maxTs = (list) => list.reduce((m, c) => Math.max(m, c.ts || 0), 0);
 
 // تعليق مطلوب إبرازه عند فتح لقاء من «أحدث التعليقات»

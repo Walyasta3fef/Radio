@@ -527,3 +527,19 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid 
 .new-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--course); margin-inline-start: 6px; vertical-align: middle; }
 .badge-new { min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; background: var(--course); color: var(--course-ink); font-size: 11px; font-weight: 800; display: inline-flex; align-items: center; justify-content: center; }
 .c-badge.new { color: var(--course); font-weight: 800; }
+
+/* المميزون */
+.staff-name { color: var(--radio) !important; display: inline-flex; align-items: center; gap: 4px; }
+.staff-check { width: 16px; height: 16px; border-radius: 50%; background: var(--radio); color: var(--radio-ink); display: inline-flex; align-items: center; justify-content: center; }
+.c-del { color: var(--live) !important; }
+.staff-box { display: flex; flex-direction: column; gap: 6px; }
+.uid-row { display: flex; align-items: center; gap: 8px; background: var(--sunken); border: 1px solid var(--line); border-radius: 12px; padding: 8px 10px; }
+.uid-row code { flex: 1; min-width: 0; font-size: 11px; overflow-wrap: anywhere; text-align: left; user-select: all; -webkit-user-select: all; }
+.uid-row .small-btn { margin: 0; }
+.staff-admin { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line); text-align: right; }
+.staff-admin h2 { font-size: 16px; font-weight: 800; margin-bottom: 10px; }
+.staff-admin form { display: flex; flex-direction: column; gap: 8px; }
+.staff-admin .name-input { text-align: right; }
+.check-row { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+.staff-list { list-style: none; display: flex; flex-direction: column; gap: 6px; margin-top: 14px; font-size: 13px; }
+.staff-list li { display: flex; justify-content: space-between; align-items: center; gap: 8px; background: var(--sunken); border-radius: 10px; padding: 8px 10px; }

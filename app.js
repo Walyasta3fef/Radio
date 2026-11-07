@@ -44,6 +44,7 @@ function parseRoute() {
   if (h === '#/account') return { page: 'account' };
   if (h === '#/report') return { page: 'report' };
   if (h === '#/general') return { page: 'general' };
+  if (h === '#/staff') return { page: 'staff' };
   m = /^#\/lecture\/(\w+)$/.exec(h);
   if (m && LECTURE_BY_ID[m[1]]) return { page: 'lecture', id: m[1] };
   return { page: 'home' };
@@ -814,10 +815,26 @@ const relTime = (() => {
   };
 })();
 
+function useStaffVersion() {
+  const [v, setV] = useState(0);
+  useEffect(() => staff.subscribe(() => setV(x => x + 1)), []);
+  return v;
+}
+
+// اسم صاحب التعليق: الاسم المميز بعلامة، أو «أخ ...»
+const authorName = (n, a) => (a && staff.nameOf(a)) || t('nickName', { n });
+function CommentAuthor({ c, toMe }) {
+  const special = c.a && staff.nameOf(c.a);
+  return html`<b className=${special ? 'staff-name' : ''}>
+    ${special ? html`<span className="staff-check" aria-hidden="true"><${Icon} name="check" size=${11} /></span>` : ''}${authorName(c.n, c.a)}
+    ${toMe ? html`<span className="to-me">${t('repliedToYou')}</span>` : ''}
+  </b>`;
+}
+
 function CommentText({ text, maxSec, onTime, replyTo }) {
   const parts = splitTimes(text, maxSec);
   return html`<p className="c-text">
-    ${replyTo && html`<span className="c-reply-to">${t('replyTo', { n: replyTo })}</span>`}
+    ${replyTo && html`<span className="c-reply-to">${t('replyTo', { name: replyTo })}</span>`}
     ${parts.map((p, i) => p.time != null && onTime
       ? html`<button key=${i} className="time-chip" dir="ltr" onClick=${(e) => { e.stopPropagation(); onTime(p.time); }}
           aria-label=${t('jumpTo', { t: p.text })}>${p.text}</button>`
@@ -848,9 +865,9 @@ function CommentForm({ lid, parent, getTime, onDone, onCancel, compact }) {
   };
 
   return html`<form className=${'c-form' + (compact ? ' reply-form' : '')} onSubmit=${submit}>
-    ${!compact && html`<div className="c-as">${t('commentAs')} <b>${t('nickName', { n: account.nick })}</b></div>`}
+    ${!compact && html`<div className="c-as">${t('commentAs')} <b>${staff.isStaff ? staff.name : t('nickName', { n: account.nick })}</b></div>`}
     <textarea value=${text} maxLength=${COMMENT_MAX} rows=${compact ? 2 : 3}
-      placeholder=${compact ? t('replyPlaceholder', { n: parent.n }) : (withTime ? t('commentPlaceholder') : t('commentPlaceholderGeneral'))}
+      placeholder=${compact ? t('replyPlaceholder', { name: authorName(parent.n, parent.a) }) : (withTime ? t('commentPlaceholder') : t('commentPlaceholderGeneral'))}
       aria-label=${t('commentPlaceholderGeneral')}
       onInput=${e => { setText(e.target.value); setSent(false); }}></textarea>
     <div className="c-tools">
@@ -879,7 +896,8 @@ function CommentsBox({ lid, list, getTime, onTime, startOpen, title }) {
   const [expanded, setExpanded] = useState(() => (focus ? { [focus]: true } : {}));
   const [highlight, setHighlight] = useState(focus);
   const maxSec = maxSecOf(lid);
-  const canWrite = account.loggedIn && account.nick;
+  useStaffVersion();
+  const canWrite = commentsApi.canWrite();
   useProgressVersion();
 
   // الجديد يُحسب مرة عند فتح الصندوق، ثم يُعلَّم كمقروء
@@ -896,7 +914,14 @@ function CommentsBox({ lid, list, getTime, onTime, startOpen, title }) {
     }
     progress.markSeen(lid, maxTs(list));
   }, [open, list, lid]);
-  const wasNew = (c) => seenBase != null && (c.ts || 0) > seenBase && c.n !== account.nick;
+  const wasNew = (c) => seenBase != null && (c.ts || 0) > seenBase && !isMine(c);
+  const toMe = (c) => wasNew(c) && ((account.nick && c.r === account.nick) || (staff.uid && c.ra === staff.uid));
+
+  // حذف تعليق (للمشرف فقط)
+  const del = async (c, isReply) => {
+    if (!window.confirm(t('deleteConfirm'))) return;
+    await commentsApi.remove(lid, c, isReply ? [] : (replies[c.id] || []));
+  };
 
   // فتح اللقاء من «أحدث التعليقات»: التمرير إلى التعليق وإبرازه
   useEffect(() => {
@@ -922,13 +947,14 @@ function CommentsBox({ lid, list, getTime, onTime, startOpen, title }) {
     return { tops, replies };
   }, [list, sort]);
 
-  const replyButton = (top, target) => canWrite && html`<button onClick=${() => setReplyFor({ top: top.id, n: target.n })}>${t('reply')}</button>`;
+  const replyButton = (top, target) => canWrite && html`<button onClick=${() => setReplyFor({ top: top.id, n: target.n, a: target.a })}>${t('reply')}</button>`;
 
   const item = (c, top, isReply) => html`<li key=${c.id} id=${'c-' + c.id} className=${'c-item' + (highlight === c.id ? ' focus' : '') + (wasNew(c) ? ' is-new' : '')}>
-    <div className="c-meta"><b>${t('nickName', { n: c.n })}${wasNew(c) && account.nick && c.r === account.nick ? html`<span className="to-me">${t('repliedToYou')}</span>` : ''}</b><span>${relTime(c.ts)}</span></div>
-    <${CommentText} text=${c.t} maxSec=${maxSec} onTime=${onTime} replyTo=${isReply && c.r} />
+    <div className="c-meta"><${CommentAuthor} c=${c} toMe=${toMe(c)} /><span>${relTime(c.ts)}</span></div>
+    <${CommentText} text=${c.t} maxSec=${maxSec} onTime=${onTime} replyTo=${isReply && (c.r || c.ra) ? authorName(c.r, c.ra) : null} />
     <div className="c-foot">
       ${replyButton(top, c)}
+      ${staff.isMod && html`<button className="c-del" onClick=${() => del(c, isReply)}>${t('delete')}</button>`}
       ${!isReply && (replies[c.id] || []).length > 0 && html`<button onClick=${() => setExpanded(x => ({ ...x, [c.id]: !x[c.id] }))}>
         ${expanded[c.id] ? t('hideReplies') : t('showReplies', { n: replies[c.id].length })}
       </button>`}
@@ -936,7 +962,7 @@ function CommentsBox({ lid, list, getTime, onTime, startOpen, title }) {
     ${!isReply && (expanded[c.id] || replyFor && replyFor.top === c.id) && html`<ul className="replies">
       ${expanded[c.id] && (replies[c.id] || []).map(r => item(r, c, true))}
       ${replyFor && replyFor.top === c.id && html`<li key="form">
-        <${CommentForm} lid=${lid} compact parent=${{ id: c.id, n: replyFor.n }} getTime=${getTime}
+        <${CommentForm} lid=${lid} compact parent=${{ id: c.id, n: replyFor.n, a: replyFor.a }} getTime=${getTime}
           onDone=${() => { setReplyFor(null); setExpanded(x => ({ ...x, [c.id]: true })); }}
           onCancel=${() => setReplyFor(null)} />
       </li>`}
@@ -1011,7 +1037,7 @@ function RecentComments({ player }) {
           const isNew = newIds && newIds.has(c.id);
           return html`<li key=${c.id} className=${'c-item feed-item' + (isNew ? ' is-new' : '')} onClick=${() => openComment(c)}>
             <p className="feed-lecture">${LECTURE_BY_ID[c.l].title}</p>
-            <div className="c-meta"><b>${t('nickName', { n: c.n })}${isNew && account.nick && c.r === account.nick ? html`<span className="to-me">${t('repliedToYou')}</span>` : ''}</b><span>${relTime(c.ts)}</span></div>
+            <div className="c-meta"><${CommentAuthor} c=${c} toMe=${isNew && ((account.nick && c.r === account.nick) || (staff.uid && c.ra === staff.uid))} /><span>${relTime(c.ts)}</span></div>
             <${CommentText} text=${c.t} maxSec=${maxSecOf(c.l)} onTime=${(sec) => openAt(c, sec)} />
           </li>`;
         })}
@@ -1395,6 +1421,77 @@ function GeneralPage() {
 }
 
 // =====================
+// صفحة المميزين (سرية، تُفتح من الرابط فقط)
+// =====================
+function StaffPage() {
+  useStaffVersion();
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState(null);
+  const [uid, setUid] = useState('');
+  const [name, setName] = useState('');
+  const [mod, setMod] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const signIn = async () => {
+    setBusy(true); setMsg(null);
+    const r = await staff.signIn();
+    setBusy(false);
+    if (r.error) setMsg(t(r.error));
+  };
+  const copyUid = async () => {
+    try { await navigator.clipboard.writeText(staff.uid); setCopied(true); setTimeout(() => setCopied(false), 2000); } catch (e) {}
+  };
+  const addOne = async (e) => {
+    e.preventDefault();
+    setBusy(true); setMsg(null);
+    const r = await staff.add(uid, name, mod);
+    setBusy(false);
+    if (r.error) setMsg(t(r.error));
+    else { setUid(''); setName(''); setMod(false); }
+  };
+
+  return html`<div className="page staff">
+    <div className="topbar"><${BackButton} to="#/" /></div>
+    <div className="panel">
+      <h1 className="acc-title">${t('staffTitle')}</h1>
+
+      ${!staff.user
+        ? html`<button className="cta" disabled=${busy} onClick=${signIn}>${busy ? t('pleaseWait') : t('staffSignIn')}</button>`
+        : html`<div className="staff-box">
+            <p className="acc-line">${staff.user.email || ''}</p>
+            ${staff.isStaff
+              ? html`<p className="acc-line"><b className="staff-name"><span className="staff-check"><${Icon} name="check" size=${11} /></span>${staff.name}</b>
+                  · ${staff.isOwner ? t('staffOwner') : staff.isMod ? t('staffMod') : t('staffMember')}</p>`
+              : html`<p className="acc-line">${t('staffNotYet')}</p>`}
+            <div className="uid-row">
+              <code dir="ltr">${staff.uid}</code>
+              <button className="small-btn" onClick=${copyUid}>${copied ? t('copied') : t('copy')}</button>
+            </div>
+          </div>`}
+
+      ${staff.isOwner && html`<div className="staff-admin">
+        <h2>${t('staffAddTitle')}</h2>
+        <form onSubmit=${addOne}>
+          <input className="name-input" dir="ltr" placeholder=${t('staffUidPh')} value=${uid} onInput=${e => setUid(e.target.value)} aria-label=${t('staffUidPh')} />
+          <input className="name-input" placeholder=${t('staffNamePh')} value=${name} onInput=${e => setName(e.target.value)} aria-label=${t('staffNamePh')} />
+          <label className="check-row"><input type="checkbox" checked=${mod} onChange=${e => setMod(e.target.checked)} />${t('staffCanDelete')}</label>
+          <button className="cta" type="submit" disabled=${busy || !uid.trim() || !name.trim()}>${t('staffAdd')}</button>
+        </form>
+        <ul className="staff-list">
+          ${Object.entries(staff.list).map(([id, s]) => html`<li key=${id}>
+            <span><b>${s.name}</b> · ${s.owner ? t('staffOwner') : s.mod ? t('staffMod') : t('staffMember')}</span>
+            ${!s.owner && html`<button className="link-btn muted" onClick=${() => window.confirm(t('staffRemoveConfirm', { name: s.name })) && staff.remove(id)}>${t('delete')}</button>`}
+          </li>`)}
+        </ul>
+      </div>`}
+
+      ${msg && html`<p className="form-error">${msg}</p>`}
+      ${staff.user && html`<button className="link-btn muted center-text" onClick=${() => staff.signOut()}>${t('staffSignOut')}</button>`}
+    </div>
+  </div>`;
+}
+
+// =====================
 // التقرير
 // =====================
 const PERIODS = ['day', 'week', 'month', 'year'];
@@ -1753,6 +1850,7 @@ function App() {
       : route.page === 'account' ? t('accountTitle')
       : route.page === 'report' ? t('report')
       : route.page === 'general' ? t('generalComments')
+      : route.page === 'staff' ? t('staffTitle')
       : route.page === 'lecture' ? shortTitle(route.id)
       : IS_STANDALONE ? t('appShortName') : t('appName');
   }, [route]);
@@ -1768,6 +1866,8 @@ function App() {
     page = html`<${ReportPage} />`;
   } else if (route.page === 'general') {
     page = html`<${GeneralPage} />`;
+  } else if (route.page === 'staff') {
+    page = html`<${StaffPage} />`;
   } else if (route.page === 'lecture') {
     page = html`<${LecturePage} key=${route.id} id=${route.id} player=${player} />`;
   } else {

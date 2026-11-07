@@ -3,10 +3,10 @@
 // يُجلب الأحدث من الإنترنت أولًا، والنسخة المحفوظة تُستخدم فقط عند انقطاع الاتصال
 // الملفات الصوتية وFirebase لا تُحفظ هنا
 // =====================
-const CACHE = 'shell-v14';
+const CACHE = 'shell-v15';
 const SHELL = [
   './', 'index.html', 'style.css', 'i18n.js', 'data.js', 'radio.js', 'progress.js',
-  'account.js', 'comments.js', 'app.js', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png',
+  'account.js', 'staff.js', 'comments.js', 'app.js', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png',
 ];
 
 self.addEventListener('install', (e) => {
