@@ -879,17 +879,26 @@ function CommentText({ text, maxSec, onTime, replyTo }) {
 }
 
 // اختيار لقاء ووقت اختياري، ثم إدراجه في التعليق كنص مقروء
-function MentionPicker({ defaultId, onInsert, onClose }) {
-  const [id, setId] = useState(defaultId || LECTURES[0].id);
-  const [time, setTime] = useState('');
-  const [bad, setBad] = useState(false);
+// الحالة محفوظة في النموذج، حتى يُضاف الاختيار تلقائيًا عند الإرسال دون ضغط «إضافة»
+// يعيد نص الذكر، أو null إذا كان الوقت غير صحيح
+function mentionFromPick(pick) {
+  let sec = null;
+  if (pick.time.trim()) {
+    sec = parseLooseTime(pick.time);
+    if (sec == null || sec > LECTURE_BY_ID[pick.id].normal) return null;
+  }
+  return mentionText(pick.id, sec);
+}
+
+function MentionPicker({ pick, setPick, onInsert, onClose }) {
+  const { id, time, bad } = pick;
+  const setId = (v) => setPick(p => ({ ...p, id: v }));
+  const setTime = (v) => setPick(p => ({ ...p, time: v }));
+  const setBad = (v) => setPick(p => ({ ...p, bad: v }));
   const insert = () => {
-    let sec = null;
-    if (time.trim()) {
-      sec = parseLooseTime(time);
-      if (sec == null || sec > LECTURE_BY_ID[id].normal) return setBad(true);
-    }
-    onInsert(mentionText(id, sec));
+    const s = mentionFromPick(pick);
+    if (s == null) return setBad(true);
+    onInsert(s);
   };
   return html`<div className="mention-pick">
     <label><small>${t('mentionPick')}</small>
@@ -915,19 +924,31 @@ function CommentForm({ lid, parent, getTime, onDone, onCancel, compact }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const [sent, setSent] = useState(false);
-  const [picking, setPicking] = useState(false);
+  // pick: اختيار «أضف لقاء» ما دامت القائمة مفتوحة
+  const newPick = () => ({ id: LECTURE_BY_ID[lid] ? lid : LECTURES[0].id, time: '', bad: false });
+  const [pick, setPick] = useState(null);
   const withTime = !!getTime && maxSecOf(lid) > 0;
 
-  const append = (s) => setText(v => ((v && !/\s$/.test(v) ? v + ' ' : v) + s + ' ').slice(0, COMMENT_MAX));
+  const joinText = (v, s) => ((v && !/\s$/.test(v) ? v + ' ' : v) + s + ' ').slice(0, COMMENT_MAX);
+  const append = (s) => setText(v => joinText(v, s));
   const addTime = () => append(fmtTime(getTime()));
 
   const submit = async (e) => {
     e.preventDefault();
+    // القائمة مفتوحة ولم يُضغط «إضافة»: يُضاف الاختيار إلى النص قبل الإرسال
+    let body = text;
+    if (pick) {
+      const s = mentionFromPick(pick);
+      if (s == null) return setPick(p => ({ ...p, bad: true }));
+      body = joinText(text, s);
+    }
     setBusy(true); setError(null); setSent(false);
-    const res = await commentsApi.add(lid, text, parent);
+    const res = await commentsApi.add(lid, body, parent);
     setBusy(false);
-    if (res.error) setError(t(res.error, { s: Math.ceil(commentsApi.cooldownLeft() / 1000) }));
-    else { setText(''); setSent(true); if (onDone) onDone(); }
+    if (res.error) {
+      setText(body); setPick(null);
+      setError(t(res.error, { s: Math.ceil(commentsApi.cooldownLeft() / 1000) }));
+    } else { setText(''); setPick(null); setSent(true); if (onDone) onDone(); }
   };
 
   return html`<form className=${'c-form' + (compact ? ' reply-form' : '')} onSubmit=${submit}>
@@ -940,15 +961,15 @@ function CommentForm({ lid, parent, getTime, onDone, onCancel, compact }) {
       <span className="hint">${text.length}/${COMMENT_MAX}</span>
       <span className="c-tool-links">
         ${withTime && html`<button type="button" className="link-btn" onClick=${addTime}>${t('addCurrentTime')}</button>`}
-        <button type="button" className="link-btn" onClick=${() => setPicking(p => !p)} aria-expanded=${picking}>${t('addLecture')}</button>
+        <button type="button" className="link-btn" onClick=${() => setPick(p => (p ? null : newPick()))} aria-expanded=${!!pick}>${t('addLecture')}</button>
       </span>
     </div>
-    ${picking && html`<${MentionPicker} defaultId=${LECTURE_BY_ID[lid] ? lid : null}
-      onInsert=${(s) => { append(s); setPicking(false); setSent(false); }} onClose=${() => setPicking(false)} />`}
+    ${pick && html`<${MentionPicker} pick=${pick} setPick=${setPick}
+      onInsert=${(s) => { append(s); setPick(null); setSent(false); }} onClose=${() => setPick(null)} />`}
     ${error && html`<p className="form-error">${error}</p>`}
     ${sent && !compact && html`<p className="c-sent">${t('commentSent')}</p>`}
     <div className="c-actions">
-      <button className="small-btn c-send" type="submit" disabled=${busy || !text.trim()}>
+      <button className="small-btn c-send" type="submit" disabled=${busy || (!text.trim() && !pick)}>
         ${busy ? t('pleaseWait') : (compact ? t('sendReply') : t('sendComment'))}
       </button>
       ${onCancel && html`<button type="button" className="link-btn muted" onClick=${onCancel}>${t('cancel')}</button>`}
