@@ -600,6 +600,7 @@ const ICON_PATHS = {
   radio: html`<g><circle cx="12" cy="12" r="2"></circle><path d="M8.5 8.5a5 5 0 0 0 0 7"></path><path d="M15.5 8.5a5 5 0 0 1 0 7"></path><path d="M5.6 5.6a9 9 0 0 0 0 12.8"></path><path d="M18.4 5.6a9 9 0 0 1 0 12.8"></path></g>`,
   chart: html`<g><path d="M4 20V10"></path><path d="M10 20V4"></path><path d="M16 20v-7"></path><path d="M22 20H2"></path></g>`,
   download: html`<g><path d="M12 3v12"></path><path d="M7 10l5 5 5-5"></path><path d="M5 21h14"></path></g>`,
+  list: html`<g><path d="M9 6h11"></path><path d="M9 12h11"></path><path d="M9 18h11"></path><circle cx="4.5" cy="6" r="1"></circle><circle cx="4.5" cy="12" r="1"></circle><circle cx="4.5" cy="18" r="1"></circle></g>`,
   chat: html`<path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"></path>`,
 };
 function Icon({ name, size = 18 }) {
@@ -1155,16 +1156,18 @@ function HomePage({ player, now, users }) {
         </div>
         ${open === 'course' && html`<div className="card-body">
           <${MiniBar} value=${sum.percent} />
-          <button className="row-link" onClick=${() => go('#/course')} aria-label=${t('openCourse')}>
-            <span>${t('doneOf', { done: sum.done, count: sum.count })}</span>
-            <span className="row-arrow" aria-hidden="true">‹</span>
-          </button>
           ${contId && html`<button className="continue" onClick=${() => go('#/lecture/' + contId)}>
             <span className="continue-text">
               <small>${started ? t('continueFrom') : t('startCourse')}</small>
               <b>${LECTURE_BY_ID[contId].title}</b>
             </span>
           </button>`}
+          <button className="lessons-btn" onClick=${() => go('#/course')}>
+            <${Icon} name="list" size=${16} />
+            <span className="lessons-label">${t('openCourse')}</span>
+            <small className="lessons-count">${t('doneShort', { done: sum.done, count: sum.count })}</small>
+            <span className="row-arrow" aria-hidden="true">‹</span>
+          </button>
         </div>`}
       </div>
     </section>

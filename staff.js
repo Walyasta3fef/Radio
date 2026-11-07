@@ -12,7 +12,11 @@ const staff = (() => {
   const listeners = new Set();
   const notify = () => listeners.forEach(fn => fn());
 
-  database.ref('/staff').on('value', snap => { list = snap.val() || {}; notify(); }, () => {});
+  // إن رُفضت القراءة أو انقطعت، تُعاد المحاولة بعد قليل
+  const listen = () => database.ref('/staff').on('value',
+    snap => { list = snap.val() || {}; notify(); },
+    () => setTimeout(listen, 15000));
+  listen();
 
   if (auth) {
     auth.onAuthStateChanged(u => { user = u; notify(); });
