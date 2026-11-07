@@ -1081,10 +1081,10 @@ function HomePage({ player, now, users }) {
         </div>
         ${open === 'course' && html`<div className="card-body">
           <${MiniBar} value=${sum.percent} />
-          <div className="card-line">
-            <span className="card-count">${t('doneOf', { done: sum.done, count: sum.count })}</span>
-            <button className="link-btn" onClick=${() => go('#/course')}>${t('openCourse')}</button>
-          </div>
+          <button className="row-link" onClick=${() => go('#/course')} aria-label=${t('openCourse')}>
+            <span>${t('doneOf', { done: sum.done, count: sum.count })}</span>
+            <span className="row-arrow" aria-hidden="true">‹</span>
+          </button>
           ${contId && html`<button className="continue" onClick=${() => go('#/lecture/' + contId)}>
             <span className="continue-text">
               <small>${started ? t('continueFrom') : t('startCourse')}</small>
@@ -1120,10 +1120,10 @@ function HomePage({ player, now, users }) {
             <p className="now-title">${rv.s.track.title}</p>
           </div>
           <${StatusLine} active=${rv.active} status=${rv.status} onRetry=${player.retry} />
-          <div className="card-line">
-            <span className="card-count">${t('listeners', { n: count })}</span>
-            <button className="link-btn" onClick=${() => go('#/radio/' + mode)}>${t('radioDetails')}</button>
-          </div>
+          <button className="row-link" onClick=${() => go('#/radio/' + mode)} aria-label=${t('radioDetails')}>
+            <span>${t('listeners', { n: count })}</span>
+            <span className="row-arrow" aria-hidden="true">‹</span>
+          </button>
         </div>`}
         ${open !== 'radio' && rv.active && STATUS_KEY[rv.status] && html`<${StatusLine} active=${rv.active} status=${rv.status} onRetry=${player.retry} />`}
       </div>
