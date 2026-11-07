@@ -61,6 +61,17 @@ function mentionText(id, sec) {
   return sec != null ? label + ' ' + fmtClock(sec) : label;
 }
 
+// وقت تكتبه في خانة الوقت: يقبل النقطتين، أو ; . , - والمسافة بدلًا منهما،
+// أو أرقامًا متصلة (آخر رقمين ثوانٍ، وقبلهما دقائق، وقبلهما ساعات): 1715 = 17:15
+function parseLooseTime(str) {
+  let s = toLatinDigits(String(str)).trim().replace(/[;.,،؛\-\s]+/g, ':');
+  if (/^\d{3,6}$/.test(s)) s = s.length > 4
+    ? s.slice(0, -4) + ':' + s.slice(-4, -2) + ':' + s.slice(-2)
+    : s.slice(0, -2) + ':' + s.slice(-2);
+  if (!/^\d{1,2}:\d{1,2}(:\d{1,2})?$/.test(s)) return null;
+  return parseTime(s);
+}
+
 function fmtClock(s) {
   const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = String(s % 60).padStart(2, '0');
   return h ? `${h}:${String(m).padStart(2, '0')}:${sec}` : `${String(m).padStart(2, '0')}:${sec}`;

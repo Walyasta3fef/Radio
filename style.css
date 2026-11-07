@@ -449,7 +449,7 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid 
 }
 .time-chip:hover { background: rgba(228, 233, 225, .18); }
 .mention-chip { display: inline-flex; align-items: center; gap: 4px; color: var(--course); border-color: var(--course-line); background: var(--course-soft); }
-.c-tool-links { display: inline-flex; gap: 14px; flex-wrap: wrap; }
+.c-tool-links { display: inline-flex; gap: 14px; flex-wrap: wrap; justify-content: flex-end; }
 .mention-pick { display: flex; flex-direction: column; gap: 8px; background: var(--sunken); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
 .mention-pick label { display: flex; flex-direction: column; gap: 4px; }
 .mention-pick small { color: var(--muted); font-size: 12px; }

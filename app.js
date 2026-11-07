@@ -19,8 +19,10 @@ const fmtTime = (s) => {
   const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = String(s % 60).padStart(2, '0');
   return h ? `${h}:${String(m).padStart(2, '0')}:${sec}` : `${m}:${sec}`;
 };
-const fmtCount = (n) => n >= 1000000 ? (n / 1000000).toFixed(1) + t('million')
-  : n >= 1000 ? (n / 1000).toFixed(1) + t('thousand') : n;
+// الرقم يظهر كاملًا حتى 9999، ثم بالآلاف بلا «.0» زائدة: 12.5 ألف
+const shortNum = (x) => String(Math.floor(x * 10) / 10).replace(/\.0$/, '');
+const fmtCount = (n) => n >= 1000000 ? shortNum(n / 1000000) + ' ' + t('million')
+  : n >= 10000 ? shortNum(n / 1000) + ' ' + t('thousand') : String(Math.floor(n));
 // النسبة الكلية بكسر عشري عندما تكون صغيرة حتى يظهر أي تقدّم
 const fmtPct = (n) => (n > 0 && n < 10 ? (Math.floor(n * 10) / 10) : Math.floor(n)) + '%';
 const fmtHours = (sec) => {
@@ -342,6 +344,7 @@ function usePlayer(volume) {
             const k = loadedKeyRef.current || '';
             const src = modeRef.current === 'lecture' ? 'c' : modeRef.current === 'fast' ? 'f' : 'n';
             progress.addTime(src, k.split(':')[1], d);
+            listenStats.add(d);
             if (id) progress.record(id, prev, ct);
           }
         }
@@ -685,22 +688,39 @@ function CountryFlags({ users }) {
   </ul>`;
 }
 
+// العدادات الظاهرة: عدد المشتركين وساعات الاستماع من الجميع
+// (الزيارات والمستمعون القدامى ما زالوا يُحسبون في القاعدة لكن لا يظهرون)
 function TotalStats() {
-  const [stats, setStats] = useState({ total_visits: 0, total_listeners: 0 });
+  const [stats, setStats] = useState({ subscribers: 0, listen_seconds: 0 });
   useEffect(() => {
     const ref = database.ref('/stats');
     const l = ref.on('value', snap => {
       const d = snap.val();
-      if (d) setStats({ total_visits: d.total_visits || 0, total_listeners: d.total_listeners || 0 });
+      if (d) setStats({ subscribers: d.subscribers || 0, listen_seconds: d.listen_seconds || 0 });
     });
     return () => ref.off('value', l);
   }, []);
   return html`<div className="chip stats">
-    <div><b>${fmtCount(stats.total_visits)}</b><small>${t('visits')}</small></div>
+    <div><b>${fmtCount(stats.subscribers)}</b><small>${t('subscribersStat')}</small></div>
     <span className="divider"></span>
-    <div><b>${fmtCount(stats.total_listeners)}</b><small>${t('totalListeners')}</small></div>
+    <div><b>${fmtCount(stats.listen_seconds / 3600)}</b><small>${t('listenHoursStat')}</small></div>
   </div>`;
 }
+
+// ساعات الاستماع العامة: يُجمع الوقت ويُرسل كل دقيقة، وبحد أقصى 120 ثانية في المرة (حسب قواعد Firebase)
+const listenStats = (() => {
+  let pending = 0;
+  const flush = () => {
+    const sec = Math.min(120, Math.floor(pending));
+    if (sec < 1 || !navigator.onLine) return;
+    pending -= sec;
+    database.ref('/stats/listen_seconds').set(firebase.database.ServerValue.increment(sec))
+      .catch(() => { pending += sec; });
+  };
+  setInterval(flush, 60000);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flush(); });
+  return { add(sec) { if (sec > 0) pending += sec; } };
+})();
 
 function FacebookLink() {
   return html`<a className="icon-btn" href="https://www.facebook.com/groups/1594701261071238"
@@ -866,7 +886,7 @@ function MentionPicker({ defaultId, onInsert, onClose }) {
   const insert = () => {
     let sec = null;
     if (time.trim()) {
-      sec = parseTime(time.trim());
+      sec = parseLooseTime(time);
       if (sec == null || sec > LECTURE_BY_ID[id].normal) return setBad(true);
     }
     onInsert(mentionText(id, sec));
@@ -878,7 +898,7 @@ function MentionPicker({ defaultId, onInsert, onClose }) {
       </select>
     </label>
     <label><small>${t('mentionTime')}</small>
-      <input value=${time} dir="ltr" inputMode="numeric" placeholder=${t('mentionTimeHint')}
+      <input value=${time} dir="ltr" inputMode="text" autoComplete="off" placeholder=${t('mentionTimeHint')}
         onInput=${e => { setTime(e.target.value); setBad(false); }} />
     </label>
     ${bad && html`<p className="form-error">${t('mentionBadTime')}</p>`}
@@ -917,11 +937,11 @@ function CommentForm({ lid, parent, getTime, onDone, onCancel, compact }) {
       aria-label=${t('commentPlaceholderGeneral')}
       onInput=${e => { setText(e.target.value); setSent(false); }}></textarea>
     <div className="c-tools">
+      <span className="hint">${text.length}/${COMMENT_MAX}</span>
       <span className="c-tool-links">
         ${withTime && html`<button type="button" className="link-btn" onClick=${addTime}>${t('addCurrentTime')}</button>`}
         <button type="button" className="link-btn" onClick=${() => setPicking(p => !p)} aria-expanded=${picking}>${t('addLecture')}</button>
       </span>
-      <span className="hint">${text.length}/${COMMENT_MAX}</span>
     </div>
     ${picking && html`<${MentionPicker} defaultId=${LECTURE_BY_ID[lid] ? lid : null}
       onInsert=${(s) => { append(s); setPicking(false); setSent(false); }} onClose=${() => setPicking(false)} />`}
@@ -1503,6 +1523,12 @@ function StaffPage() {
   const copyUid = async () => {
     try { await navigator.clipboard.writeText(staff.uid); setCopied(true); setTimeout(() => setCopied(false), 2000); } catch (e) {}
   };
+  const countSubs = async () => {
+    setBusy(true); setMsg(null);
+    const r = await staff.countSubscribers();
+    setBusy(false);
+    setMsg(r.error ? t(r.error) : t('staffCountDone', { n: r.n }));
+  };
   const addOne = async (e) => {
     e.preventDefault();
     setBusy(true); setMsg(null);
@@ -1545,6 +1571,9 @@ function StaffPage() {
             ${!s.owner && html`<button className="link-btn muted" onClick=${() => window.confirm(t('staffRemoveConfirm', { name: s.name })) && staff.remove(id)}>${t('delete')}</button>`}
           </li>`)}
         </ul>
+        <h2>${t('staffCountTitle')}</h2>
+        <p className="acc-line">${t('staffCountHint')}</p>
+        <button className="small-btn" disabled=${busy} onClick=${countSubs}>${busy ? t('pleaseWait') : t('staffCountBtn')}</button>
       </div>`}
 
       ${msg && html`<p className="form-error">${msg}</p>`}

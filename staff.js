@@ -53,6 +53,18 @@ const staff = (() => {
     } catch (e) { return { error: 'staffSaveFailed' }; }
   }
 
+  // للمالك فقط: عدّ الأسماء الخاصة الموجودة (مفاتيح progress فقط بلا بياناتها) وحفظ العدد
+  async function countSubscribers() {
+    try {
+      const token = await auth.currentUser.getIdToken();
+      const res = await fetch(firebaseConfig.databaseURL + '/progress.json?shallow=true&auth=' + encodeURIComponent(token));
+      if (!res.ok) return { error: 'staffCountFailed' };
+      const n = Object.keys((await res.json()) || {}).length;
+      await database.ref('/stats/subscribers').set(n);
+      return { ok: true, n };
+    } catch (e) { return { error: 'staffCountFailed' }; }
+  }
+
   async function remove(uid) {
     try { await database.ref('/staff/' + uid).remove(); return { ok: true }; }
     catch (e) { return { error: 'staffSaveFailed' }; }
@@ -67,7 +79,7 @@ const staff = (() => {
     get name() { const m = me(); return m && m.name; },
     get list() { return list; },
     nameOf: (uid) => (list[uid] && list[uid].name) || null,
-    signIn, signOut, add, remove,
+    signIn, signOut, add, remove, countSubscribers,
     subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn); },
   };
 })();

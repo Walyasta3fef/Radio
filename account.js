@@ -133,6 +133,7 @@ const account = (() => {
       setStatus('synced');
       await ensureNick(null);
       await push();
+      database.ref('/stats/subscribers').set(firebase.database.ServerValue.increment(1)).catch(() => {});
       logEvent('account_created');
       return { ok: true };
     } catch (e) { return { error: 'syncFailed' }; }

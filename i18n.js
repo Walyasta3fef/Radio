@@ -55,6 +55,8 @@ const STRINGS = {
   next: 'التالي: {title}',
   listeners: '{n} مستمع',
   visits: 'زيارات',
+  subscribersStat: 'مشترك',
+  listenHoursStat: 'ساعة استماع',
   totalListeners: 'مستمعين',
   back: 'رجوع',
   playingHere: 'تستمع الآن',
@@ -167,6 +169,11 @@ const STRINGS = {
   reply: 'رد',
   sendReply: 'إرسال الرد',
   replyTo: 'ردًا على',
+  staffCountTitle: 'عدد المشتركين',
+  staffCountHint: 'يعدّ الأسماء الخاصة الموجودة الآن ويضبط العدّاد عليها. يكفي مرة واحدة، وبعدها يزيد العدّاد وحده.',
+  staffCountBtn: 'عُدّ المشتركين الآن',
+  staffCountDone: 'تم ضبط العدّاد على {n} مشترك.',
+  staffCountFailed: 'تعذّر العدّ. تأكد من إضافة قواعد Firebase الجديدة.',
   addLecture: 'أضف لقاء',
   mentionPick: 'اختر اللقاء',
   mentionTime: 'الوقت (اختياري)',
@@ -205,7 +212,7 @@ const STRINGS = {
   lectureShort: 'لقاء {n}',
   mediaArtist: 'راديو',
   thousand: 'ألف',
-  million: 'م',
+  million: 'مليون',
 };
 
 function t(key, vars) {
