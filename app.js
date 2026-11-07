@@ -4,7 +4,6 @@ const html = htm.bind(React.createElement);
 const MODES = ['normal', 'fast'];
 const MODE_LABEL = { normal: 'normalRadio', fast: 'fastRadio', lecture: 'course' };
 const MODE_SHORT = { normal: 'speedNormal', fast: 'speedFast' };
-const MODE_NOTE = { normal: 'normalNote', fast: 'fastNote' };
 const MODE_INFO = { normal: 'normalInfo', fast: 'fastInfo' };
 const SKIP_SECONDS = 15;
 const BEHIND_SECONDS = 20;
@@ -1051,7 +1050,8 @@ function HomePage({ player, now, users }) {
     <section className="section">
       <div className=${'card radio-card tint-radio' + (rv.active ? ' card-active' : '')}>
         <div className="card-head">
-          <span className="card-title"><span className="title-icon"><${Icon} name="radio" size=${18} /></span>${t('radioSection')}</span>
+          <span className="card-title"><span className="title-icon"><${Icon} name="radio" size=${18} /></span>${t('radioSection')}
+            <${InfoTip} label=${t('infoLabel')} text=${t(MODE_INFO[mode])} /></span>
           <${LiveBadge} behind=${rv.behind} onGoLive=${player.goLive} />
         </div>
 
@@ -1059,10 +1059,6 @@ function HomePage({ player, now, users }) {
           ${MODES.map(m => html`<button key=${m} role="tab" aria-selected=${mode === m}
               className=${mode === m ? 'on' : ''} onClick=${() => pickMode(m)}>${t(MODE_SHORT[m])}</button>`)}
         </div>
-        <p className=${'mode-note mode-note-' + mode}>
-          ${t(MODE_NOTE[mode])}
-          <${InfoTip} label=${t('infoLabel')} text=${t(MODE_INFO[mode])} />
-        </p>
 
         <div className="now">
           <small>${t('nowPlayingLabel')}</small>
@@ -1129,8 +1125,7 @@ function RadioPage({ mode, player, now, users }) {
         </div>
 
         <${PlayButton} active=${rv.active} status=${rv.status} onClick=${() => player.toggleRadio(mode)} />
-        <${StatusLine} active=${rv.active} status=${rv.status}
-          idleText=${rv.behind ? t('resumeBehind') : t('tapToListen')} onRetry=${player.retry} />
+        <${StatusLine} active=${rv.active} status=${rv.status} onRetry=${player.retry} />
 
         <div className="progress">
           <div className="times"><span>${fmtTime(time)}</span><span>${fmtTime(s.track.duration)}</span></div>
@@ -1256,11 +1251,6 @@ function LecturePage({ id, player }) {
         <${SeekBar} id=${id} value=${shown} duration=${lec.normal} marks=${marks}
           onInput=${setDragging} onCommit=${commit} />
         <div className="times"><span>${fmtTime(shown)}</span><span>${fmtTime(lec.normal)}</span></div>
-        <div className="sb-legend" aria-hidden="true">
-          <span><i className="lg-played"></i>${t('legendPlayed')}</span>
-          <span><i className="lg-heard"></i>${t('legendHeard')}</span>
-          ${marks.length > 0 && html`<span><i className="lg-mark"></i>${t('legendComments')}</span>`}
-        </div>
 
         <div className="controls">
           <button className="skip" onClick=${() => current ? player.skip(-SKIP_SECONDS) : player.seekLecture(id, time - SKIP_SECONDS)}
@@ -1270,8 +1260,7 @@ function LecturePage({ id, player }) {
             aria-label=${t('forward15')}>+15</button>
         </div>
 
-        <${StatusLine} active=${active} status=${status}
-          idleText=${time > 0 ? t('resumeHint', { t: fmtTime(time) }) : t('tapToStart')} onRetry=${player.retry} />
+        <${StatusLine} active=${active} status=${status} onRetry=${player.retry} />
 
         <div className="nav">
           <button className="small-btn" disabled=${!prev} onClick=${() => prev && go('#/lecture/' + prev)}>${t('prevLecture')}</button>
@@ -1295,7 +1284,6 @@ function GeneralPage() {
       <div className="top-left"><${NameChip} /></div>
     </div>
     <h1 className="acc-title center-text">${t('generalComments')}</h1>
-    <p className="hint center-text">${t('generalIntro')}</p>
     <${CommentsBox} lid=${GENERAL_ID} list=${comments} startOpen title=${t('comments')} />
   </div>`;
 }

@@ -171,9 +171,6 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid 
 .tint-radio .seg .on { background: var(--radio); color: var(--radio-ink); }
 .seg-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); margin-bottom: 16px; }
 .seg-4 button { padding: 8px 4px; font-size: 13px; }
-.mode-note { font-size: 12px; text-align: center; display: flex; align-items: center; justify-content: center; gap: 6px; }
-.mode-note-normal { color: var(--ok); }
-.mode-note-fast { color: var(--warn); }
 
 .foot { display: flex; justify-content: center; align-items: center; gap: 10px; margin-top: 18px; flex-wrap: wrap; }
 .icon-btn {
@@ -325,13 +322,6 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid 
   position: absolute; inset: 0; width: 100%; height: 100%; margin: 0;
   opacity: 0; cursor: pointer; -webkit-appearance: none; appearance: none;
 }
-.sb-legend { display: flex; justify-content: center; gap: 14px; font-size: 11px; color: var(--faint); margin: 2px 0 8px; }
-.sb-legend span { display: inline-flex; align-items: center; gap: 5px; }
-.sb-legend i { width: 10px; height: 6px; border-radius: 2px; display: inline-block; }
-.lg-played { background: var(--course); }
-.lg-heard { background: rgba(168, 201, 155, .38); }
-.lg-mark { width: 6px !important; height: 6px !important; border-radius: 50% !important; background: var(--note); }
-
 .controls { display: flex; align-items: center; justify-content: center; gap: 22px; margin: 6px 0 4px; }
 .controls .play { margin: 0; }
 .skip {
