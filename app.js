@@ -2390,7 +2390,7 @@ function MiniPlayer({ player, route }) {
   if (!player.isPlaying) return null;
   const isLecture = player.mode === 'lecture';
   if (isLecture && route.page === 'lecture' && route.id === player.lectureId) return null;
-  if (!isLecture && (route.page === 'radio' && route.mode === player.mode || route.page === 'home')) return null;
+  if (!isLecture && route.page === 'radio' && route.mode === player.mode) return null;
   const id = isLecture ? player.lectureId : (player.live && player.live.track.id);
   if (!id) return null;
   const target = isLecture ? '#/lecture/' + id : '#/radio/' + player.mode;
