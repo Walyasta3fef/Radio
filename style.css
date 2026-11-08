@@ -612,3 +612,40 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid 
 .title-row input { flex: 1; min-width: 0; padding: 9px 10px; border-radius: 10px; font: inherit; font-size: 14px; background: var(--sunken); color: var(--text); border: 1px solid var(--line-2); }
 .title-num { font-weight: 800; color: var(--course); }
 .title-ok { color: var(--course); font-weight: 700; }
+
+/* رمز الدخول */
+.code-notes { margin: 4px 0 10px; padding-inline-start: 18px; display: flex; flex-direction: column; gap: 4px; font-size: 13px; line-height: 1.7; color: var(--muted); }
+.code-big { display: block; font-family: ui-monospace, monospace; font-size: 26px; font-weight: 800; letter-spacing: 1px; color: var(--text); background: var(--sunken); border: 1px dashed var(--course-line); border-radius: 14px; padding: 14px 18px; margin: 6px 0 12px; word-break: break-all; }
+.save-code .nav { justify-content: center; gap: 10px; }
+.code-check { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 16px 0 10px; font-size: 14px; font-weight: 700; cursor: pointer; }
+.code-check input { width: 18px; height: 18px; accent-color: var(--course); }
+
+/* ===================== المجتمع ===================== */
+.community .composer { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 12px 14px; margin-bottom: 12px; }
+.composer-fake { width: 100%; text-align: right; background: var(--sunken); border: 1px solid var(--line-2); border-radius: 12px; padding: 12px; color: var(--muted); font: inherit; font-size: 14px; cursor: text; }
+.pill-sort { display: flex; gap: 6px; margin: 0 0 12px; }
+.pill-sort button { padding: 6px 14px; border-radius: 999px; font-size: 13px; color: var(--muted); border: 1px solid var(--line); }
+.pill-sort .on { background: var(--course-soft); color: var(--course); border-color: var(--course-line); font-weight: 700; }
+.post-list { display: flex; flex-direction: column; gap: 10px; }
+.post { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 14px 16px; }
+.post > .c-text { font-size: 15px; margin: 4px 0 8px; }
+.post-acts { display: flex; align-items: center; gap: 16px; font-size: 13px; color: var(--muted); }
+.heart-btn, .act-btn { display: inline-flex; align-items: center; gap: 5px; color: var(--muted); font-size: 13px; padding: 4px 0; }
+.heart-btn.on { color: #FFFFFF; font-weight: 700; }
+.heart-btn.on svg { filter: drop-shadow(0 0 6px rgba(255, 255, 255, .35)); }
+.act-btn.on { color: var(--course); }
+.post-acts .new-dot { margin-inline-start: 2px; }
+.post-menu { position: relative; margin-inline-start: auto; }
+.dots-btn { color: var(--muted); padding: 4px; display: inline-flex; }
+.menu-pop { position: absolute; inset-inline-end: 0; top: 100%; z-index: 5; min-width: 140px; display: flex; flex-direction: column;
+  background: var(--surface-2); border: 1px solid var(--line-2); border-radius: 12px; padding: 4px; box-shadow: 0 12px 30px -10px rgba(0, 0, 0, .7); }
+.menu-item { text-align: right; padding: 9px 12px; border-radius: 8px; font-size: 14px; color: var(--text); }
+.menu-item:hover { background: rgba(255, 255, 255, .05); }
+.menu-item.muted { color: var(--muted); }
+.menu-item.danger { color: var(--live); }
+.post-replies { margin-top: 10px; border-inline-start: 2px solid var(--line-2); padding-inline-start: 12px; display: flex; flex-direction: column; gap: 10px; }
+.reply-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.reply { background: var(--sunken); border-radius: 14px; padding: 10px 12px; }
+.reply .c-text { margin: 2px 0 4px; }
+.hidden-note { font-size: 12px; color: var(--warn, var(--live)); margin: 0 0 4px; }
+.toast { text-align: center; font-size: 13px; color: var(--course); margin: 0 0 10px; }

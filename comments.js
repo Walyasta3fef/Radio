@@ -159,6 +159,7 @@ const commentsApi = {
     if (!this.canWrite()) return { error: 'commentNeedName' };
     if (!text) return { error: 'commentEmpty' };
     if (text.length > COMMENT_MAX) return { error: 'commentTooLong' };
+    if (!staff.isStaff && hasContact(text)) return { error: 'noContacts' };
     if (!staff.isStaff && this.cooldownLeft() > 0) return { error: 'commentWait' };
     if (!navigator.onLine) return { error: 'needOnline' };
     const TS = firebase.database.ServerValue.TIMESTAMP;
@@ -199,6 +200,8 @@ const commentsApi = {
     const ids = [comment.id, ...(replies || []).map(r => r.id)];
     try {
       await Promise.all(ids.map(id => this.ref(lid).child(id).remove()));
+      // المجتمع: حذف قلوب المنشور وبلاغاته معه
+      if (lid === GENERAL_ID) ids.forEach(id => { reactions.clear(id); });
       if (LECTURE_BY_ID[lid]) {
         await Promise.all(ids.map(async id => {
           const snap = await database.ref('/recent').orderByChild('i').equalTo(id).once('value');
@@ -222,3 +225,60 @@ const maxTs = (list) => list.reduce((m, c) => Math.max(m, c.ts || 0), 0);
 
 // تعليق مطلوب إبرازه عند فتح لقاء من «أحدث التعليقات»
 let pendingFocus = null;
+
+// =====================
+// منع أرقام الهواتف والروابط وحسابات التواصل في الكتابة
+// حماية للإخوة من التواصل الخاص والاستغلال
+// =====================
+const CONTACT_LINK_RE = /(https?:\/\/|www\.|t\.me|wa\.me|\b[a-z0-9-]+\.(com|net|org|me|io|co|app|link|ly|gg|tv|info|xyz|site|online)\b)/i;
+const CONTACT_HANDLE_RE = /@[a-z0-9_.]{3,}/i;
+const CONTACT_PHONE_RE = /(?:\+?\d[\s\-.()]*){8,}/;
+function hasContact(text) {
+  const s = toLatinDigits(String(text || ''));
+  return CONTACT_LINK_RE.test(s) || CONTACT_HANDLE_RE.test(s) || CONTACT_PHONE_RE.test(s);
+}
+
+// =====================
+// تفاعلات المجتمع: القلوب والبلاغات
+// كل مستخدم له مفتاح سري لكل منشور مشتق من رمز دخوله، فيظهر العدد فقط دون معرفة صاحبه
+// =====================
+const REPORT_HIDE_AT = 3;
+const reactions = (() => {
+  const cache = {};
+  async function keyFor(kind, cid) {
+    const name = account.name;
+    if (!name || !cid) return null;
+    const id = kind + '|' + cid + '|' + name;
+    if (cache[id]) return cache[id];
+    const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('afaf-' + kind + '|' + name + '|' + cid));
+    cache[id] = Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('').slice(0, 32);
+    return cache[id];
+  }
+  const watch = (path, cb) => {
+    const ref = database.ref(path);
+    const h = ref.on('value', snap => cb(snap.val() || {}), () => cb({}));
+    return () => ref.off('value', h);
+  };
+  return {
+    keyFor,
+    watchHearts: (cb) => watch('/hearts', cb),
+    watchReports: (cb) => watch('/reports', cb),
+    async setHeart(cid, on) {
+      const k = await keyFor('heart', cid);
+      if (!k) return;
+      const ref = database.ref('/hearts/' + cid + '/' + k);
+      try { await (on ? ref.set(true) : ref.remove()); } catch (e) {}
+    },
+    async report(cid) {
+      const k = await keyFor('report', cid);
+      if (!k) return;
+      try { await database.ref('/reports/' + cid + '/' + k).set(true); logEvent('post_reported'); } catch (e) {}
+    },
+    // للمشرف: إلغاء البلاغات وإظهار المنشور
+    clearReports(cid) { return database.ref('/reports/' + cid).remove().catch(() => {}); },
+    clear(cid) {
+      database.ref('/hearts/' + cid).remove().catch(() => {});
+      database.ref('/reports/' + cid).remove().catch(() => {});
+    },
+  };
+})();

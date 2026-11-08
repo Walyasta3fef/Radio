@@ -45,7 +45,7 @@ function parseRoute() {
   if (h === '#/course') return { page: 'course' };
   if (h === '#/account') return { page: 'account' };
   if (h === '#/report') return { page: 'report' };
-  if (h === '#/general') return { page: 'general' };
+  if (h === '#/general' || h === '#/community') return { page: 'general' };
   if (h === '#/staff') return { page: 'staff' };
   m = /^#\/lecture\/(\w+)$/.exec(h);
   if (m && LECTURE_BY_ID[m[1]]) return { page: 'lecture', id: m[1] };
@@ -627,6 +627,9 @@ const ICON_PATHS = {
   download: html`<g><path d="M12 3v12"></path><path d="M7 10l5 5 5-5"></path><path d="M5 21h14"></path></g>`,
   list: html`<g><path d="M9 6h11"></path><path d="M9 12h11"></path><path d="M9 18h11"></path><circle cx="4.5" cy="6" r="1"></circle><circle cx="4.5" cy="12" r="1"></circle><circle cx="4.5" cy="18" r="1"></circle></g>`,
   chat: html`<path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"></path>`,
+  heart: html`<path d="M12 20s-7-4.3-9-8.6C1.8 8.4 3.8 5 7 5c1.9 0 3.2 1 4 2.2h2C13.8 6 15.1 5 17 5c3.2 0 5.2 3.4 4 6.4C19 15.7 12 20 12 20z"></path>`,
+  heartFill: html`<path d="M12 20s-7-4.3-9-8.6C1.8 8.4 3.8 5 7 5c1.9 0 3.2 1 4 2.2h2C13.8 6 15.1 5 17 5c3.2 0 5.2 3.4 4 6.4C19 15.7 12 20 12 20z" fill="currentColor"></path>`,
+  dots: html`<g fill="currentColor" stroke="none"><circle cx="5" cy="12" r="1.8"></circle><circle cx="12" cy="12" r="1.8"></circle><circle cx="19" cy="12" r="1.8"></circle></g>`,
   note: html`<g><path d="M12 20h9"></path><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"></path></g>`,
 };
 function Icon({ name, size = 18 }) {
@@ -715,6 +718,7 @@ function CountryFlags({ users }) {
 // (الزيارات والمستمعون القدامى ما زالوا يُحسبون في القاعدة لكن لا يظهرون)
 // آخر قراءة تُحفظ على الجهاز وتظهر فورًا، حتى دون اتصال، ثم تتحدّث عند وصول الجديد
 const STATS_CACHE_KEY = 'statsCache';
+const COMMUNITY_SORT_KEY = 'communitySort';
 const INTRO_NEVER_KEY = 'introNever';
 const INTRO_DAY_KEY = 'introClosedDay';
 const NUDGE_KEY = 'nameNudgeClosedAt';
@@ -961,7 +965,7 @@ function MentionPicker({ pick, setPick, onInsert, onClose }) {
 }
 
 // نموذج كتابة تعليق أو رد
-function CommentForm({ lid, parent, getTime, onDone, onCancel, compact }) {
+function CommentForm({ lid, parent, getTime, onDone, onCancel, compact, placeholder, submitLabel, autoFocus }) {
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
@@ -996,7 +1000,8 @@ function CommentForm({ lid, parent, getTime, onDone, onCancel, compact }) {
   return html`<form className=${'c-form' + (compact ? ' reply-form' : '')} onSubmit=${submit}>
     ${!compact && html`<div className="c-as">${t('commentAs')} <b>${staff.isStaff ? staff.name : authorName(account.nick, null, account.customTitle)}</b></div>`}
     <textarea value=${text} maxLength=${COMMENT_MAX} rows=${compact ? 2 : 3}
-      placeholder=${compact ? t('replyPlaceholder', { name: authorName(parent.n, parent.a, parent.pf) }) : (withTime ? t('commentPlaceholder') : t('commentPlaceholderGeneral'))}
+      placeholder=${placeholder || (compact ? t('replyPlaceholder', { name: authorName(parent.n, parent.a, parent.pf) }) : (withTime ? t('commentPlaceholder') : t('commentPlaceholderGeneral')))}
+      autoFocus=${!!autoFocus}
       aria-label=${t('commentPlaceholderGeneral')}
       onInput=${e => { setText(e.target.value); setSent(false); }}></textarea>
     <div className="c-tools">
@@ -1012,7 +1017,7 @@ function CommentForm({ lid, parent, getTime, onDone, onCancel, compact }) {
     ${sent && !compact && html`<p className="c-sent">${t('commentSent')}</p>`}
     <div className="c-actions">
       <button className="small-btn c-send" type="submit" disabled=${busy || (!text.trim() && !pick)}>
-        ${busy ? t('pleaseWait') : (compact ? t('sendReply') : t('sendComment'))}
+        ${busy ? t('pleaseWait') : (submitLabel || (compact ? t('sendReply') : t('sendComment')))}
       </button>
       ${onCancel && html`<button type="button" className="link-btn muted" onClick=${onCancel}>${t('cancel')}</button>`}
     </div>
@@ -1372,7 +1377,7 @@ function HomePage({ player, now, users }) {
     </section>
 
     <footer className="foot">
-      <button className="foot-btn" onClick=${() => go('#/general')}><${Icon} name="chat" size=${16} />${t('generalComments')}
+      <button className="foot-btn" onClick=${() => go('#/general')}><${Icon} name="chat" size=${16} />${t('community')}
         ${generalNew > 0 && html`<span className="badge-new">${generalNew}</span>`}</button>
       <${InstallButton} />
       <${FacebookLink} />
@@ -1619,15 +1624,192 @@ function LecturePage({ id, player }) {
 // =====================
 // التعليقات العامة على الموقع
 // =====================
-function GeneralPage() {
-  const comments = useComments(GENERAL_ID);
-  return html`<div className="page general">
+// =====================
+// المجتمع: منشورات وردود، وقلب أبيض يظهر عدده فقط، وإبلاغ يخفي المنشور عند 3 بلاغات
+// المنشورات هي التعليقات العامة نفسها، فلا يضيع شيء مما كُتب سابقًا
+// =====================
+function useReactionTree(watchFn) {
+  const [tree, setTree] = useState({});
+  useEffect(() => watchFn(setTree), []);
+  return tree;
+}
+
+// مفاتيح المستخدم السرية لكل منشور (لمعرفة قلبه وبلاغه)
+function useMyKeys(ids) {
+  const [keys, setKeys] = useState({});
+  const sig = ids.join(',') + '|' + (account.name || '');
+  useEffect(() => {
+    if (!account.name) { setKeys({}); return; }
+    let alive = true;
+    Promise.all(ids.map(async id => [id, await reactions.keyFor('heart', id), await reactions.keyFor('report', id)]))
+      .then(rows => { if (alive) setKeys(Object.fromEntries(rows.map(([id, h, r]) => [id, { h, r }]))); });
+    return () => { alive = false; };
+  }, [sig]);
+  return keys;
+}
+
+function HeartButton({ count, mine, onToggle, small }) {
+  return html`<button className=${'heart-btn' + (mine ? ' on' : '') + (small ? ' small' : '')} onClick=${onToggle}
+    aria-pressed=${mine} aria-label=${mine ? t('unheart') : t('heart')}>
+    <${Icon} name=${mine ? 'heartFill' : 'heart'} size=${small ? 15 : 18} />
+    ${count > 0 && html`<span>${count}</span>`}
+  </button>`;
+}
+
+function CommunityPage() {
+  useAccountVersion();
+  useStaffVersion();
+  useProgressVersion();
+  const list = useComments(GENERAL_ID);
+  const hearts = useReactionTree(reactions.watchHearts);
+  const reports = useReactionTree(reactions.watchReports);
+  const [sort, setSortState] = useState(() => storage.get(COMMUNITY_SORT_KEY) || 'active');
+  const setSort = (v) => { setSortState(v); storage.set(COMMUNITY_SORT_KEY, v); };
+  const [composing, setComposing] = useState(false);
+  const [expanded, setExpanded] = useState({});
+  const [replyTo, setReplyTo] = useState({});     // لكل منشور: من يُرد عليه { n, a, pf }
+  const [menuFor, setMenuFor] = useState(null);
+  const [notice, setNotice] = useState(null);
+  const canWrite = commentsApi.canWrite();
+  const keys = useMyKeys(list.map(c => c.id));
+
+  // الجديد منذ آخر زيارة، ثم يُعلَّم كمقروء
+  const [seenBase, setSeenBase] = useState(null);
+  useEffect(() => {
+    if (!list.length) return;
+    if (seenBase == null) setSeenBase(progress.seenAt(GENERAL_ID));
+    progress.markSeen(GENERAL_ID, maxTs(list));
+  }, [list]);
+  const isNew = (c) => seenBase != null && (c.ts || 0) > seenBase && !isMine(c);
+
+  const heartCount = (id) => Object.keys(hearts[id] || {}).length;
+  const myHeart = (id) => !!(keys[id] && hearts[id] && hearts[id][keys[id].h]);
+  const reportCount = (id) => Object.keys(reports[id] || {}).length;
+  const myReport = (id) => !!(keys[id] && reports[id] && reports[id][keys[id].r]);
+  const hidden = (id) => reportCount(id) >= REPORT_HIDE_AT;
+  const visible = (c) => staff.isMod || !hidden(c.id);
+
+  const { posts, replies } = useMemo(() => {
+    const posts = [], replies = {};
+    list.forEach(c => {
+      if (c.p) (replies[c.p] = replies[c.p] || []).push(c);
+      else posts.push(c);
+    });
+    Object.values(replies).forEach(r => r.sort((a, b) => (a.ts || 0) - (b.ts || 0)));
+    // آخر نشاط: آخر رد أو وقت المنشور نفسه
+    const activity = (p) => Math.max(p.ts || 0, ...(replies[p.id] || []).map(r => r.ts || 0));
+    posts.sort((a, b) => sort === 'active' ? activity(b) - activity(a) : (b.ts || 0) - (a.ts || 0));
+    return { posts, replies };
+  }, [list, sort]);
+
+  const toggleHeart = (id) => {
+    if (!account.loggedIn) return go('#/account');
+    reactions.setHeart(id, !myHeart(id));
+  };
+  const report = async (id) => {
+    setMenuFor(null);
+    await reactions.report(id);
+    setNotice(t('reportSent'));
+    setTimeout(() => setNotice(null), 3000);
+  };
+  const del = async (c, isReply) => {
+    setMenuFor(null);
+    if (!window.confirm(t('deletePostConfirm'))) return;
+    await commentsApi.remove(GENERAL_ID, c, isReply ? [] : (replies[c.id] || []));
+  };
+
+  // قائمة ⋯ : إبلاغ، وللمشرف حذف وإظهار
+  const menu = (c, isReply) => {
+    const mine = isMine(c);
+    const items = [];
+    if (account.loggedIn && !mine && !c.a) items.push(myReport(c.id)
+      ? html`<span key="r" className="menu-item muted">${t('reported')}</span>`
+      : html`<button key="r" className="menu-item" onClick=${() => report(c.id)}>${t('report')}</button>`);
+    if (staff.isMod && hidden(c.id)) items.push(html`<button key="s" className="menu-item" onClick=${() => { setMenuFor(null); reactions.clearReports(c.id); }}>${t('unhidePost')}</button>`);
+    if (staff.isMod) items.push(html`<button key="d" className="menu-item danger" onClick=${() => del(c, isReply)}>${t('delete')}</button>`);
+    if (!items.length) return null;
+    return html`<span className="post-menu">
+      <button className="dots-btn" onClick=${() => setMenuFor(menuFor === c.id ? null : c.id)} aria-label=${t('moreOptions')} aria-expanded=${menuFor === c.id}>
+        <${Icon} name="dots" size=${18} />
+      </button>
+      ${menuFor === c.id && html`<span className="menu-pop" role="menu">${items}</span>`}
+    </span>`;
+  };
+
+  const hiddenNote = (c) => staff.isMod && hidden(c.id) && html`<p className="hidden-note">${t('hiddenByReports', { n: reportCount(c.id) })}</p>`;
+
+  const replyItem = (c, post) => html`<li key=${c.id} className=${'reply' + (isNew(c) ? ' is-new' : '')}>
+    <div className="c-meta"><${CommentAuthor} c=${c} toMe=${isNew(c) && ((account.nick && c.r === account.nick) || (staff.uid && c.ra === staff.uid))} /><span>${relTime(c.ts)}</span></div>
+    ${hiddenNote(c)}
+    <${CommentText} text=${c.t} maxSec=${0} replyTo=${(c.r || c.ra) ? authorName(c.r, c.ra, c.rp) : null} />
+    <div className="post-acts">
+      <${HeartButton} small count=${heartCount(c.id)} mine=${myHeart(c.id)} onToggle=${() => toggleHeart(c.id)} />
+      ${canWrite && html`<button className="act-btn" onClick=${() => setReplyTo(x => ({ ...x, [post.id]: { n: c.n, a: c.a, pf: c.pf } }))}>${t('reply')}</button>`}
+      ${menu(c, true)}
+    </div>
+  </li>`;
+
+  const postItem = (p) => {
+    const rs = (replies[p.id] || []).filter(visible);
+    const open = !!expanded[p.id];
+    const target = replyTo[p.id] || { n: p.n, a: p.a, pf: p.pf };
+    const newReplies = rs.filter(isNew).length;
+    return html`<article key=${p.id} id=${'c-' + p.id} className=${'post' + (isNew(p) ? ' is-new' : '')}>
+      <div className="c-meta">
+        <${CommentAuthor} c=${p} />
+        <span>${relTime(p.ts)}${isNew(p) && html`<i className="new-dot" aria-label=${t('newComments')}></i>`}</span>
+      </div>
+      ${hiddenNote(p)}
+      <${CommentText} text=${p.t} maxSec=${0} />
+      <div className="post-acts">
+        <${HeartButton} count=${heartCount(p.id)} mine=${myHeart(p.id)} onToggle=${() => toggleHeart(p.id)} />
+        <button className=${'act-btn' + (open ? ' on' : '')} onClick=${() => setExpanded(x => ({ ...x, [p.id]: !open }))} aria-expanded=${open}>
+          <${Icon} name="chat" size=${16} />
+          <span>${open ? t('hideReplies') : rs.length ? t('repliesN', { n: rs.length }) : t('reply')}</span>
+          ${!open && newReplies > 0 && html`<i className="new-dot"></i>`}
+        </button>
+        ${menu(p, false)}
+      </div>
+      ${open && html`<div className="post-replies">
+        ${rs.length > 0 && html`<ul className="reply-list">${rs.map(r => replyItem(r, p))}</ul>`}
+        ${canWrite
+          ? html`<${CommentForm} key=${p.id + '-' + (target.n || target.a)} lid=${GENERAL_ID} compact parent=${{ id: p.id, ...target }}
+              onDone=${() => setReplyTo(x => ({ ...x, [p.id]: null }))}
+              onCancel=${replyTo[p.id] ? () => setReplyTo(x => ({ ...x, [p.id]: null })) : null} />`
+          : html`<button className="link-btn" onClick=${() => go('#/account')}>${t('createNameShort')}</button>`}
+      </div>`}
+    </article>`;
+  };
+
+  const shown = posts.filter(visible);
+
+  return html`<div className="page community" onClick=${(e) => { if (menuFor && !e.target.closest('.post-menu')) setMenuFor(null); }}>
     <div className="topbar">
       <${BackButton} to="#/" />
       <div className="top-left"><${NameChip} /></div>
     </div>
-    <h1 className="acc-title center-text">${t('generalComments')}</h1>
-    <${CommentsBox} lid=${GENERAL_ID} list=${comments} startOpen title=${t('comments')} />
+    <h1 className="acc-title center-text">${t('community')}</h1>
+
+    <div className="composer">
+      ${!canWrite
+        ? html`<div className="c-login">
+            <p>${account.loggedIn ? t('commentPreparing') : t('commentNeedName')}</p>
+            ${!account.loggedIn && html`<button className="small-btn" onClick=${() => go('#/account')}>${t('createNameShort')}</button>`}
+          </div>`
+        : composing
+          ? html`<${CommentForm} lid=${GENERAL_ID} placeholder=${t('writePost')} submitLabel=${t('publish')} autoFocus
+              onDone=${() => { setComposing(false); setSort('new'); }} onCancel=${() => setComposing(false)} />`
+          : html`<button className="composer-fake" onClick=${() => setComposing(true)}>${t('writePost')}</button>`}
+    </div>
+
+    ${shown.length > 1 && html`<div className="pill-sort">
+      <button className=${sort === 'active' ? 'on' : ''} onClick=${() => setSort('active')}>${t('sortActive')}</button>
+      <button className=${sort === 'new' ? 'on' : ''} onClick=${() => setSort('new')}>${t('sortNewest')}</button>
+    </div>`}
+
+    ${notice && html`<p className="toast">${notice}</p>`}
+    ${shown.length === 0 && html`<p className="hint center-text">${t('noPosts')}</p>`}
+    <div className="post-list">${shown.map(postItem)}</div>
   </div>`;
 }
 
@@ -1931,7 +2113,7 @@ function AccountPage({ returnTo }) {
 
   // بعد النجاح: رسالة قصيرة ثم العودة إلى الصفحة السابقة
   useEffect(() => {
-    if (!success) return;
+    if (!success || success === 'savedAs') return;   // بعد الإنشاء تبقى شاشة «احفظ رمزك» حتى يؤكد الحفظ
     const id = setTimeout(() => go(returnTo), 1800);
     return () => clearTimeout(id);
   }, [success, returnTo]);
@@ -1947,6 +2129,13 @@ function AccountPage({ returnTo }) {
 
   const warn = html`<p className="name-warn">${t('nameWarning')}</p>`;
   const continueBtn = html`<button className="cta" onClick=${() => go(returnTo)}>${t('continueListening')}</button>`;
+
+  if (success === 'savedAs' && account.loggedIn) {
+    return html`<div className="page account">
+      <div className="topbar"></div>
+      <${SaveCodeScreen} code=${account.name} onDone=${() => go(returnTo)} />
+    </div>`;
+  }
 
   if (success && account.loggedIn) {
     return html`<div className="page account">
@@ -2017,12 +2206,11 @@ function AccountPage({ returnTo }) {
         <input className="name-input" dir="ltr" value=${value} autoComplete="off" autoCapitalize="none"
           spellCheck="false" placeholder=${tab === 'new' ? t('namePlaceholderNew') : t('namePlaceholderLogin')}
           onInput=${e => setValue(e.target.value)} aria-label=${t('accountTitle')} />
-        ${tab === 'new' && html`<div className="name-tools">
-          <span className="hint">${t('nameRules')}</span>
-          <button type="button" className="link-btn" onClick=${() => { setValue(suggestName()); setError(null); }}>${t('suggestName')}</button>
-        </div>`}
+        ${tab === 'new' && html`<div className="name-tools"><span className="hint">${t('nameRules')}</span></div>`}
         ${error && html`<p className="form-error">${t(error)}</p>`}
-        ${tab === 'new' && warn}
+        ${tab === 'new' && html`<ul className="code-notes">
+          <li>${t('codeNote1')}</li><li>${t('codeNote2')}</li><li>${t('codeNote3')}</li><li>${t('codeNote4')}</li>
+        </ul>`}
         <button className="cta" type="submit" disabled=${busy || !value.trim()}>
           ${busy ? t('pleaseWait') : (tab === 'new' ? t('createName') : t('loginName'))}
         </button>
@@ -2045,6 +2233,51 @@ function TitleEditor({ value, setValue, msg, onSave }) {
     </label>
     ${msg ? html`<p className=${msg.err ? 'form-error' : 'hint title-ok'}>${msg.text}</p>` : html`<p className="hint">${t('titleHint')}</p>`}
   </form>`;
+}
+
+// شاشة «احفظ رمزك» بعد إنشاء رمز جديد: نسخ، وحفظه كصورة، وتأكيد قبل المتابعة
+function SaveCodeScreen({ code, onDone }) {
+  const [copied, setCopied] = useState(false);
+  const [checked, setChecked] = useState(false);
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(code); }
+    catch (e) {
+      const ta = document.createElement('textarea'); ta.value = code; document.body.appendChild(ta);
+      ta.select(); try { document.execCommand('copy'); } catch (e2) {} ta.remove();
+    }
+    setCopied(true); setTimeout(() => setCopied(false), 2000);
+  };
+  const saveImage = () => {
+    const c = document.createElement('canvas');
+    c.width = 1080; c.height = 640;
+    const x = c.getContext('2d');
+    x.fillStyle = '#0F1A17'; x.fillRect(0, 0, c.width, c.height);
+    x.direction = 'rtl'; x.textAlign = 'center';
+    x.fillStyle = '#A8C99B'; x.font = 'bold 52px Tajawal, sans-serif';
+    x.fillText(t('codeImageTitle'), c.width / 2, 170);
+    x.direction = 'ltr'; x.fillStyle = '#EEF2EC'; x.font = 'bold 96px monospace';
+    x.fillText(code, c.width / 2, 340);
+    x.direction = 'rtl'; x.fillStyle = '#A3B2A9'; x.font = '38px Tajawal, sans-serif';
+    x.fillText(t('codeImageNote'), c.width / 2, 470);
+    const a = document.createElement('a');
+    a.href = c.toDataURL('image/png'); a.download = 'code.png';
+    document.body.appendChild(a); a.click(); a.remove();
+  };
+  return html`<div className="panel center save-code">
+    <span className="success-icon"><${Icon} name="check" size=${28} /></span>
+    <h1 className="acc-title">${t('saveCodeTitle')}</h1>
+    <p className="acc-line">${t('saveCodeHint')}</p>
+    <bdi className="code-big" dir="ltr">${code}</bdi>
+    <div className="nav">
+      <button className="small-btn" onClick=${copy}>${copied ? t('copied') : t('copyCode')}</button>
+      <button className="small-btn" onClick=${saveImage}>${t('saveCodeImage')}</button>
+    </div>
+    <label className="code-check">
+      <input type="checkbox" checked=${checked} onChange=${e => setChecked(e.target.checked)} />
+      <span>${t('savedCodeCheck')}</span>
+    </label>
+    <button className="cta" disabled=${!checked} onClick=${onDone}>${t('continueListening')}</button>
+  </div>`;
 }
 
 const SYNC_KEY = { syncing: 'syncSyncing', synced: 'syncSynced', error: 'syncError', idle: 'syncIdle' };
@@ -2107,7 +2340,7 @@ function App() {
       : route.page === 'course' ? t('coursePageTitle')
       : route.page === 'account' ? t('accountTitle')
       : route.page === 'report' ? t('report')
-      : route.page === 'general' ? t('generalComments')
+      : route.page === 'general' ? t('community')
       : route.page === 'staff' ? t('staffTitle')
       : route.page === 'lecture' ? shortTitle(route.id)
       : IS_STANDALONE ? t('appShortName') : t('appName');
@@ -2123,7 +2356,7 @@ function App() {
   } else if (route.page === 'report') {
     page = html`<${ReportPage} />`;
   } else if (route.page === 'general') {
-    page = html`<${GeneralPage} />`;
+    page = html`<${CommunityPage} />`;
   } else if (route.page === 'staff') {
     page = html`<${StaffPage} />`;
   } else if (route.page === 'lecture') {
