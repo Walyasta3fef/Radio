@@ -1366,7 +1366,7 @@ function HomePage({ player, now, users }) {
           </div>
           ${otherPlaying
             ? html`<small className="seg-hint seg-hint-playing">${t('otherModePlaying', { name: t(radioPlaying === 'fast' ? 'fastRadio' : 'normalRadio') })}</small>`
-            : html`<small className=${'seg-hint' + (mode === 'normal' ? '' : ' seg-hint-off')}>${t('normalCountsHint')}</small>`}
+            : html`<small className="seg-hint seg-hint-mode">${t(mode === 'normal' ? 'normalCountsHint' : 'fastReviewHint')}</small>`}
           <div className="now">
             <small>${t('nowPlayingLabel')}</small>
             <p className="now-title">${rv.s.track.title}</p>
