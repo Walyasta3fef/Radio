@@ -1638,20 +1638,6 @@ function useReactionTree(watchFn) {
   return tree;
 }
 
-// مفاتيح المستخدم السرية لكل منشور (لمعرفة قلبه وبلاغه)
-function useMyKeys(ids) {
-  const [keys, setKeys] = useState({});
-  const sig = ids.join(',') + '|' + (account.name || '');
-  useEffect(() => {
-    if (!account.name) { setKeys({}); return; }
-    let alive = true;
-    Promise.all(ids.map(async id => [id, await reactions.keyFor('heart', id), await reactions.keyFor('report', id)]))
-      .then(rows => { if (alive) setKeys(Object.fromEntries(rows.map(([id, h, r]) => [id, { h, r }]))); });
-    return () => { alive = false; };
-  }, [sig]);
-  return keys;
-}
-
 function HeartButton({ count, mine, onToggle, small }) {
   return html`<button className=${'heart-btn' + (mine ? ' on' : '') + (small ? ' small' : '')} onClick=${onToggle}
     aria-pressed=${mine} aria-label=${mine ? t('unheart') : t('heart')}>
@@ -1675,7 +1661,6 @@ function CommunityPage() {
   const [menuFor, setMenuFor] = useState(null);
   const [notice, setNotice] = useState(null);
   const canWrite = commentsApi.canWrite();
-  const keys = useMyKeys(list.map(c => c.id));
 
   // الجديد منذ آخر زيارة، ثم يُعلَّم كمقروء
   const [seenBase, setSeenBase] = useState(null);
@@ -1686,10 +1671,11 @@ function CommunityPage() {
   }, [list]);
   const isNew = (c) => seenBase != null && (c.ts || 0) > seenBase && !isMine(c);
 
-  const heartCount = (id) => Object.keys(hearts[id] || {}).length;
-  const myHeart = (id) => !!(keys[id] && hearts[id] && hearts[id][keys[id].h]);
-  const reportCount = (id) => Object.keys(reports[id] || {}).length;
-  const myReport = (id) => !!(keys[id] && reports[id] && reports[id][keys[id].r]);
+  const me = reactions.mine();
+  const heartCount = (id) => reactions.count(hearts[id]);
+  const myHeart = (id) => !!(me && hearts[id] && hearts[id][me]);
+  const reportCount = (id) => reactions.count(reports[id]);
+  const myReport = (id) => !!(me && reports[id] && reports[id][me]);
   const hidden = (id) => reportCount(id) >= REPORT_HIDE_AT;
   const visible = (c) => staff.isMod || !hidden(c.id);
 

@@ -178,7 +178,10 @@ const commentsApi = {
       if (parent.pf) item.rp = parent.pf;
     }
     try {
-      const ref = this.ref(lid).push();
+      // المشترك يكتب باتصال حسابه حتى تتحقق القواعد من ملكية رقمه
+      const db = staff.isStaff ? database : account.db;
+      if (!staff.isStaff && !account.uid) return { error: 'commentPreparing' };
+      const ref = db.ref('/comments/' + lid).push();
       await ref.set(item);
       storage.set(COMMENT_LAST_KEY, String(Date.now()));
       if (LECTURE_BY_ID[lid]) {
@@ -187,7 +190,7 @@ const commentsApi = {
         try { const v = (await ref.child('ts').once('value')).val(); if (typeof v === 'number') ts = v; } catch (e) {}
         const recent = { l: lid, c: parent ? parent.id : ref.key, i: ref.key, t: text.slice(0, 200), ts };
         ['n', 'a', 'r', 'ra', 's', 'pf', 'rp'].forEach(k => { if (item[k] != null) recent[k] = item[k]; });
-        database.ref('/recent').push(recent).catch(() => {});
+        db.ref('/recent').push(recent).catch(() => {});
         database.ref('/counts/' + lid).transaction(v => (v || 0) + 1).catch(() => {});
       }
       logEvent(parent ? 'reply_added' : 'comment_added');
@@ -244,35 +247,28 @@ function hasContact(text) {
 // =====================
 const REPORT_HIDE_AT = 3;
 const reactions = (() => {
-  const cache = {};
-  async function keyFor(kind, cid) {
-    const name = account.name;
-    if (!name || !cid) return null;
-    const id = kind + '|' + cid + '|' + name;
-    if (cache[id]) return cache[id];
-    const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('afaf-' + kind + '|' + name + '|' + cid));
-    cache[id] = Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('').slice(0, 32);
-    return cache[id];
-  }
   const watch = (path, cb) => {
     const ref = database.ref(path);
     const h = ref.on('value', snap => cb(snap.val() || {}), () => cb({}));
     return () => ref.off('value', h);
   };
+  const mine = () => account.uid;
   return {
-    keyFor,
+    mine,
+    // المفاتيح القديمة (32 حرفًا) من قبل نظام الدخول الحقيقي لا تُحتسب حتى لا يتكرر قلب الشخص نفسه
+    count: (node) => Object.keys(node || {}).filter(k => !/^[a-f0-9]{32}$/.test(k)).length,
     watchHearts: (cb) => watch('/hearts', cb),
     watchReports: (cb) => watch('/reports', cb),
     async setHeart(cid, on) {
-      const k = await keyFor('heart', cid);
-      if (!k) return;
-      const ref = database.ref('/hearts/' + cid + '/' + k);
+      const uid = mine();
+      if (!uid) return false;
+      const ref = account.db.ref('/hearts/' + cid + '/' + uid);
       try { await (on ? ref.set(true) : ref.remove()); return true; } catch (e) { return false; }
     },
     async report(cid) {
-      const k = await keyFor('report', cid);
-      if (!k) return false;
-      try { await database.ref('/reports/' + cid + '/' + k).set(true); return true; } catch (e) { return false; }
+      const uid = mine();
+      if (!uid) return false;
+      try { await account.db.ref('/reports/' + cid + '/' + uid).set(true); return true; } catch (e) { return false; }
     },
     // للمشرف: إلغاء البلاغات وإظهار المنشور
     clearReports(cid) { return database.ref('/reports/' + cid).remove().catch(() => {}); },

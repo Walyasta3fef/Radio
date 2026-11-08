@@ -31,21 +31,46 @@ function validateName(name) {
   return null;
 }
 
-const SUGGEST_WORDS = ['noor', 'najm', 'qamar', 'fajr', 'sabr', 'amal', 'salam', 'yaqeen', 'sanad', 'hilm', 'rawda', 'nakheel'];
-function suggestName() {
-  const w = SUGGEST_WORDS[Math.floor(Math.random() * SUGGEST_WORDS.length)];
-  const n = String(Math.floor(1000 + Math.random() * 9000));
-  return w + n;
-}
-
-async function hashName(name) {
-  const data = new TextEncoder().encode(NAME_SALT + name);
-  const buf = await crypto.subtle.digest('SHA-256', data);
+async function sha256Hex(text) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
   return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
+// بصمة النظام القديم: تُستخدم فقط للعثور على الحسابات القديمة ونقلها
+const hashName = (name) => sha256Hex(NAME_SALT + name);
+
+// =====================
+// الدخول الحقيقي عبر Firebase Auth
+// رمز الدخول هو كلمة المرور، والبريد مشتق منه بطريقة سرية لا يعرفها غير صاحبه
+// تطبيق Firebase منفصل للحسابات، حتى لا يتعارض مع دخول المشرفين بحساب Google
+// =====================
+const acctApp = firebase.initializeApp(firebaseConfig, 'acct');
+const acctAuth = acctApp.auth();
+const acctDb = acctApp.database();
+// اتصال الحساب يُفتح عند الحاجة فقط ثم يُغلق بعد فترة سكون، حتى لا يستهلك كل مستخدم اتصالين دائمين
+// (الخطة المجانية في Firebase تسمح بعدد محدود من الاتصالات المتزامنة)
+acctDb.goOffline();
+let acctIdleTimer = null;
+function acctDbNow() {
+  acctDb.goOnline();
+  clearTimeout(acctIdleTimer);
+  acctIdleTimer = setTimeout(() => acctDb.goOffline(), 20000);
+  return acctDb;
+}
+const AUTH_EMAIL_DOMAIN = '@u.walyasta3fef.app';
+const authEmail = async (name) => (await sha256Hex('afaf-auth|' + name)).slice(0, 40) + AUTH_EMAIL_DOMAIN;
+
+// أخطاء «لا يوجد حساب بهذا الرمز» تختلف حسب إعدادات المشروع
+function isNoUser(e) {
+  const c = (e && e.code) || '', m = (e && e.message) || '';
+  return c === 'auth/user-not-found' || c === 'auth/invalid-credential' || c === 'auth/invalid-login-credentials'
+    || m.includes('INVALID_LOGIN_CREDENTIALS') || m.includes('EMAIL_NOT_FOUND');
+}
+const authError = (e) => ((e && e.code) === 'auth/too-many-requests' ? 'tooManyTries'
+  : (e && e.code) === 'auth/network-request-failed' ? 'needOnline' : 'syncFailed');
+
 const account = (() => {
-  let acc = storage.getJSON(ACCOUNT_KEY);   // { name, hash }
+  let acc = storage.getJSON(ACCOUNT_KEY);   // { name, hash, uid, nick, pf, m }
   let syncStatus = acc ? 'idle' : 'none';   // none | idle | syncing | synced | error
   let lastSync = 0;
   let pushedRev = -1;
@@ -55,15 +80,48 @@ const account = (() => {
   const notify = () => listeners.forEach(fn => fn());
   const setStatus = (s) => { syncStatus = s; notify(); };
 
-  const ref = (hash) => database.ref('/progress/' + hash);
-  const nickRef = (n) => database.ref('/nicks/' + n);
+  // بيانات الحساب في /users/{uid}: لا يقرؤها ولا يكتبها إلا صاحبها
+  const userRef = (uid) => acctDbNow().ref('/users/' + uid);
   // k: رقم الاسم المعروض في التعليقات (أخ 4821)، ثابت للحساب على كل الأجهزة
+  // m: بصمة الحساب القديم إن كان منقولًا منه، ليُسمح له باستعادة رقمه القديم
   const payload = () => {
     const p = { d: progress.exportState(), u: firebase.database.ServerValue.TIMESTAMP };
     if (acc && acc.nick) p.k = acc.nick;
     if (acc && acc.pf) p.pf = acc.pf;
+    if (acc && acc.m) p.m = acc.m;
     return p;
   };
+
+  // الاتصال بالحساب: دخول، أو إنشاء، أو نقل حساب قديم تلقائيًا
+  // mode: 'create' للإنشاء، و'login' للدخول أو النقل
+  async function connect(name, mode) {
+    const email = await authEmail(name);
+    const cur = acctAuth.currentUser;
+    if (cur && cur.email === email) return { uid: cur.uid };
+    if (cur) await acctAuth.signOut();
+    if (mode === 'create') {
+      const c = await acctAuth.createUserWithEmailAndPassword(email, name);
+      return { uid: c.user.uid, created: true };
+    }
+    try {
+      const c = await acctAuth.signInWithEmailAndPassword(email, name);
+      return { uid: c.user.uid };
+    } catch (e) { if (!isNoUser(e)) throw e; }
+    // لا يوجد حساب جديد بهذا الرمز: هل هو حساب قديم لم يُنقل بعد؟
+    const hash = await hashName(name);
+    const snap = await database.ref('/progress/' + hash).once('value');
+    if (!snap.exists()) return { notFound: true };
+    try {
+      const c = await acctAuth.createUserWithEmailAndPassword(email, name);
+      return { uid: c.user.uid, legacy: snap.val(), legacyHash: hash };
+    } catch (e) {
+      if (e && e.code === 'auth/email-already-in-use') {
+        const c = await acctAuth.signInWithEmailAndPassword(email, name);
+        return { uid: c.user.uid };
+      }
+      throw e;
+    }
+  }
 
   // اللقب الذي يسبق الرقم في التعليقات (افتراضيًا «أخ»): حروف ومسافات فقط، دون أرقام حتى لا يلتبس بالرقم الحقيقي
   function checkTitle(raw) {
@@ -85,32 +143,41 @@ const account = (() => {
     return { ok: true };
   }
 
-  // حجز رقم عشوائي غير مستخدم للاسم المعروض
-  async function claimNick(hash) {
+  // ملكية الأرقام في /owners/{رقم} = uid، لا يقرؤها غير صاحبها، والقواعد تتحقق منها عند كل تعليق
+  const ownerRef = (n) => acctDbNow().ref('/owners/' + n);
+  async function ownsNick(n) {
+    try { return (await ownerRef(n).once('value')).val() === acc.uid; } catch (e) { return false; }
+  }
+  async function takeNick(n) {
+    try { await ownerRef(n).set(acc.uid); return true; } catch (e) { return ownsNick(n); }
+  }
+  // حجز رقم عشوائي غير مستخدم، مع تجنّب أرقام الحسابات القديمة التي لم تُنقل بعد
+  async function claimNick() {
     for (let i = 0; i < 25; i++) {
       const n = NICK_MIN + Math.floor(Math.random() * (NICK_MAX - NICK_MIN + 1));
-      try {
-        const res = await nickRef(n).transaction(cur => (cur === null ? hash : undefined));
-        if (res.committed) return n;
-      } catch (e) { return null; }
+      try { if ((await database.ref('/nicks/' + n).once('value')).exists()) continue; } catch (e) {}
+      if (await takeNick(n)) return n;
     }
     return null;
   }
 
-  // التأكد من وجود رقم للحساب: من المحفوظ على الخادم، وإلا حجز رقم جديد
+  // التأكد من وجود رقم للحساب: رقمه المحفوظ أو رقمه القديم، وإلا حجز رقم جديد
+  // nickOk: تأكدنا أن الرقم مسجّل باسم هذا الحساب في /owners (الحسابات القديمة لديها رقم دون ملكية)
   async function ensureNick(remote) {
-    if (!acc || acc.nick) return;
-    let n = remote && Number.isInteger(remote.k) ? remote.k : null;
-    if (!n) n = await claimNick(acc.hash);
+    if (!acc || !acc.uid || (acc.nick && acc.nickOk)) return;
+    let n = acc.nick || (remote && Number.isInteger(remote.k) ? remote.k : null);
+    if (n && !(await takeNick(n))) n = null;
+    if (!n) n = await claimNick();
     if (!n || !acc) return;
     acc.nick = n;
+    acc.nickOk = true;
     storage.setJSON(ACCOUNT_KEY, acc);
     pushedRev = -1;
     notify();
   }
 
   async function push() {
-    if (!acc || !navigator.onLine) return;
+    if (!acc || !acc.uid || !navigator.onLine || !acctAuth.currentUser) return;
     const rev = progress.rev, nrev = notes.rev;
     if (rev === pushedRev && nrev === pushedNotesRev) return;
     try {
@@ -118,7 +185,7 @@ const account = (() => {
       const p = payload();
       const e = (await notes.encrypt(acc.name)) || remoteNotes;
       if (e) { p.e = e; remoteNotes = e; }
-      await ref(acc.hash).set(p);
+      await userRef(acc.uid).set(p);
       pushedRev = rev;
       pushedNotesRev = nrev;
       lastSync = Date.now();
@@ -132,8 +199,11 @@ const account = (() => {
     if (!navigator.onLine) { setStatus('error'); return; }
     try {
       setStatus('syncing');
-      const snap = await ref(acc.hash).once('value');
-      const v = snap.val();
+      const r = await connect(acc.name, 'login');
+      if (r.notFound) { setStatus('error'); return; }
+      await adopt(r);
+      const snap = await userRef(acc.uid).once('value');
+      const v = snap.val() || r.legacy;
       if (v && v.d) progress.merge(v.d);
       if (v && v.e) { remoteNotes = v.e; await notes.decryptMerge(acc.name, v.e); }
       if (v && typeof v.pf === 'string' && v.pf !== acc.pf) { acc.pf = v.pf; storage.setJSON(ACCOUNT_KEY, acc); notify(); }
@@ -148,6 +218,25 @@ const account = (() => {
     storage.setJSON(ACCOUNT_KEY, acc);
   }
 
+  // حفظ uid الحساب، ومع الحساب القديم: بصمته ورقمه ولقبه وملاحظاته
+  async function adopt(r) {
+    acc.uid = r.uid;
+    if (r.legacyHash) {
+      acc.m = r.legacyHash;
+      const v = r.legacy || {};
+      if (v.d) progress.merge(v.d);
+      if (typeof v.pf === 'string') acc.pf = v.pf;
+      if (v.e) { remoteNotes = v.e; await notes.decryptMerge(acc.name, v.e); }
+      storage.setJSON(ACCOUNT_KEY, acc);
+      // يُرفع الحساب أولًا ومعه m، ثم يُحجز رقمه القديم
+      pushedRev = -1; pushedNotesRev = -1;
+      await push();
+      await ensureNick(v);
+      logEvent('account_migrated');
+    }
+    storage.setJSON(ACCOUNT_KEY, acc);
+  }
+
   // إنشاء اسم جديد بشرط ألا يكون مستخدمًا
   async function create(raw) {
     const name = normalizeName(raw);
@@ -156,12 +245,17 @@ const account = (() => {
     if (!navigator.onLine) return { error: 'needOnline' };
     try {
       const hash = await hashName(name);
-      const res = await ref(hash).transaction(cur => (cur === null ? payload() : undefined));
-      if (!res.committed) return { error: 'nameTaken' };
+      // الرمز مأخوذ إذا كان لحساب قديم لم يُنقل بعد
+      if ((await database.ref('/progress/' + hash).once('value')).exists()) return { error: 'nameTaken' };
+      let r;
+      try { r = await connect(name, 'create'); }
+      catch (e) { return { error: e && e.code === 'auth/email-already-in-use' ? 'nameTaken' : authError(e) }; }
       remember(name, hash);
-      pushedRev = progress.rev;
+      acc.uid = r.uid;
+      storage.setJSON(ACCOUNT_KEY, acc);
+      pushedRev = -1; pushedNotesRev = -1;
+      await push();
       lastSync = Date.now();
-      setStatus('synced');
       await ensureNick(null);
       await push();
       database.ref('/stats/subscribers').set(firebase.database.ServerValue.increment(1)).catch(() => {});
@@ -177,13 +271,14 @@ const account = (() => {
     if (!navigator.onLine) return { error: 'needOnline' };
     try {
       const hash = await hashName(name);
-      const snap = await ref(hash).once('value');
-      if (!snap.exists()) return { error: 'nameNotFound' };
+      let r;
+      try { r = await connect(name, 'login'); } catch (e) { return { error: authError(e) }; }
+      if (r.notFound) return { error: 'nameNotFound' };
       remember(name, hash);
-      const v = snap.val();
+      await adopt(r);
+      const v = (await userRef(acc.uid).once('value')).val() || r.legacy;
       if (v && v.d) progress.merge(v.d);
-      remoteNotes = (v && v.e) || null;
-      if (remoteNotes) await notes.decryptMerge(name, remoteNotes);
+      if (v && v.e) { remoteNotes = v.e; await notes.decryptMerge(name, v.e); }
       if (v && typeof v.pf === 'string') { acc.pf = v.pf; storage.setJSON(ACCOUNT_KEY, acc); }
       await ensureNick(v);
       pushedRev = -1; pushedNotesRev = -1;
@@ -204,6 +299,7 @@ const account = (() => {
     progress.reset();
     notes.reset();
     remoteNotes = null;
+    try { await acctAuth.signOut(); } catch (e) {}
     setStatus('none');
   }
 
@@ -229,6 +325,9 @@ const account = (() => {
     get title() { return (acc && acc.pf) || t('nickPrefix'); },
     get customTitle() { return (acc && acc.pf) || null; },
     get hash() { return acc && acc.hash; },
+    get uid() { return (acc && acc.uid) || null; },
+    // قاعدة البيانات المتصلة بحساب المستخدم (للكتابة باسمه)
+    get db() { return acctDbNow(); },
     get loggedIn() { return !!acc; },
     get status() { return syncStatus; },
     get lastSync() { return lastSync; },

@@ -53,13 +53,16 @@ const staff = (() => {
     } catch (e) { return { error: 'staffSaveFailed' }; }
   }
 
-  // للمالك فقط: عدّ الأسماء الخاصة الموجودة (مفاتيح progress فقط بلا بياناتها) وحفظ العدد
+  // للمالك فقط: عدّ الحسابات من أرقامها (القديمة والجديدة معًا دون تكرار)، بالمفاتيح فقط دون البيانات
   async function countSubscribers() {
     try {
       const token = await auth.currentUser.getIdToken();
-      const res = await fetch(firebaseConfig.databaseURL + '/progress.json?shallow=true&auth=' + encodeURIComponent(token));
-      if (!res.ok) return { error: 'staffCountFailed' };
-      const n = Object.keys((await res.json()) || {}).length;
+      const keysOf = async (path) => {
+        const res = await fetch(firebaseConfig.databaseURL + path + '.json?shallow=true&auth=' + encodeURIComponent(token));
+        if (!res.ok) throw new Error('count');
+        return Object.keys((await res.json()) || {});
+      };
+      const n = new Set([...(await keysOf('/nicks')), ...(await keysOf('/owners'))]).size;
       await database.ref('/stats/subscribers').set(n);
       return { ok: true, n };
     } catch (e) { return { error: 'staffCountFailed' }; }

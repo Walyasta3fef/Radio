@@ -172,6 +172,7 @@ const STRINGS = {
   reply: 'رد',
   sendReply: 'إرسال الرد',
   replyTo: 'ردًا على',
+  tooManyTries: 'محاولات كثيرة، انتظر قليلًا ثم حاول مرة أخرى.',
   reportProblem: 'الإبلاغ عن مشكلة',
   feedbackTitle: 'الإبلاغ عن مشكلة',
   feedbackIntro: 'إذا واجهتك مشكلة في الموقع فأخبرنا بها، لنصلحها في أقرب وقت.',
