@@ -142,6 +142,9 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid 
 
 .tint-course { border-color: var(--course-line); }
 .tint-course .title-icon { background: var(--course-soft); color: var(--course); }
+/* المجتمع: لون محايد يميزه عن ألوان الاستماع */
+.tint-community { border-color: var(--line-2); }
+.tint-community .title-icon { background: rgba(238, 242, 236, .08); color: var(--text); }
 .tint-course.card-active { border-color: var(--course); box-shadow: 0 10px 30px -14px rgba(168, 201, 155, .6); }
 .tint-radio { border-color: var(--radio-line); }
 .tint-radio .title-icon { background: var(--radio-soft); color: var(--radio); }

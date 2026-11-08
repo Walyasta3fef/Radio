@@ -1286,6 +1286,7 @@ function HomePage({ player, users }) {
   const lectureNew = feed.filter(c => isNewComment(c, c.l)).length;
   const repliesToMe = feed.filter(c => isReplyToMe(c, c.l)).length;
   const generalNew = general.filter(c => isNewComment(c, GENERAL_ID)).length;
+  const generalToMe = general.filter(c => isReplyToMe(c, GENERAL_ID)).length;
 
   // الكارت يضيء أثناء الاستماع إلى لقاء
   const courseActive = player.isPlaying && player.mode === 'lecture';
@@ -1379,9 +1380,20 @@ function HomePage({ player, users }) {
       </div>
     </section>
 
+    <section className="section">
+      <button className="card tint-community card-link" onClick=${() => go('#/general')}>
+        <div className="card-row">
+          <span className="card-toggle">
+            <span className="title-icon"><${Icon} name="chat" size=${18} /></span>
+            <span className="card-title">${t('community')}${generalNew > 0 && html`<span className="new-dot" aria-label=${t('newComments')}></span>`}</span>
+            ${generalToMe > 0 && html`<span className="to-me">${t('repliedToYou')}</span>`}
+            <span className="row-arrow" aria-hidden="true">‹</span>
+          </span>
+        </div>
+      </button>
+    </section>
+
     <footer className="foot">
-      <button className="foot-btn" onClick=${() => go('#/general')}><${Icon} name="chat" size=${16} />${t('community')}
-        ${generalNew > 0 && html`<span className="badge-new">${generalNew}</span>`}</button>
       <${InstallButton} />
       <${FacebookLink} />
     </footer>
