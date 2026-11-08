@@ -3,7 +3,7 @@
 // يسجّل الموقع آخر 5 أخطاء على الجهاز نفسه، وتُرفق بالبلاغ إن وافق المستخدم
 // البلاغات تُحفظ في Firebase ولا يقرؤها إلا المالك
 // =====================
-const APP_VERSION = '37';
+const APP_VERSION = '38';
 const ERR_LOG_KEY = 'errLog';
 const FEEDBACK_LAST_KEY = 'feedbackLast';
 const FEEDBACK_GAP_MS = 60000;
