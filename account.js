@@ -65,17 +65,12 @@ const account = (() => {
     return p;
   };
 
-  // اللقب الذي يسبق الرقم في التعليقات (افتراضيًا «أخ»): حروف ومسافات فقط، دون ما يوهم بأنه مشرف
-  const TITLE_BLOCK = ['kareem', 'كريم', 'مشرف', 'ادار', 'admin', 'mod', 'مدير', 'staff', 'مصطفيحسان', 'حسان', 'مسؤول', 'دعم'];
-  const normTitle = (s) => s.toLowerCase().replace(/[\u064B-\u0652\u0640\s]/g, '').replace(/[أإآ]/g, 'ا').replace(/ى/g, 'ي').replace(/ة/g, 'ه');
+  // اللقب الذي يسبق الرقم في التعليقات (افتراضيًا «أخ»): حروف ومسافات فقط، دون أرقام حتى لا يلتبس بالرقم الحقيقي
   function checkTitle(raw) {
     const v = String(raw || '').replace(/\s+/g, ' ').trim();
     if (!v) return { error: 'titleEmpty' };
     if (v.length > TITLE_MAX) return { error: 'titleTooLong' };
     if (!/^[\u0621-\u064Aa-zA-Z ]+$/.test(v)) return { error: 'titleChars' };
-    const n = normTitle(v);
-    const staffNames = (typeof staff !== 'undefined' ? staff.names() : []).map(normTitle);
-    if (TITLE_BLOCK.some(w => n.includes(normTitle(w))) || staffNames.some(w => w && n.includes(w))) return { error: 'titleBlocked' };
     return { ok: true, value: v };
   }
   async function setTitle(raw) {

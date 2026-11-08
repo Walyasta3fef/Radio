@@ -1915,6 +1915,19 @@ function AccountPage({ returnTo }) {
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
   const [confirmOut, setConfirmOut] = useState(false);
+  // اسم التعليقات: ما دام معدّلًا ولم يُحفظ يصبح الزر الكبير «حفظ»
+  const [titleValue, setTitleValue] = useState(() => account.title);
+  const [titleMsg, setTitleMsg] = useState(null);
+  // إذا وصل اسم محفوظ من جهاز آخر يُعرض بدل القديم
+  useEffect(() => { setTitleValue(account.title); }, [account.title]);
+  const titleDirty = account.loggedIn && titleValue.trim() !== account.title;
+  const saveTitle = async () => {
+    const r = await account.setTitle(titleValue);
+    if (r.error) return setTitleMsg({ err: true, text: t(r.error) });
+    setTitleValue(account.title);
+    setTitleMsg({ text: t('titleSaved') });
+    setTimeout(() => setTitleMsg(m => (m && !m.err ? null : m)), 3000);
+  };
 
   // بعد النجاح: رسالة قصيرة ثم العودة إلى الصفحة السابقة
   useEffect(() => {
@@ -1967,8 +1980,11 @@ function AccountPage({ returnTo }) {
           <button className="link-btn" onClick=${() => account.sync()}>${t('syncNow')}</button>
         </p>
         <p className="acc-line">${t('doneOf', { done: sum.done, count: sum.count })} · <${Pct} value=${sum.percent} /></p>
-        ${account.nick && html`<${TitleEditor} />`}
-        ${continueBtn}
+        ${account.nick && html`<${TitleEditor} value=${titleValue} msg=${titleMsg}
+          setValue=${(v) => { setTitleValue(v); setTitleMsg(null); }} onSave=${saveTitle} />`}
+        ${titleDirty
+          ? html`<button className="cta" onClick=${saveTitle} disabled=${!titleValue.trim()}>${t('save')}</button>`
+          : continueBtn}
         <div className="acc-out">
           ${confirmOut
             ? html`<div>
@@ -2017,27 +2033,17 @@ function AccountPage({ returnTo }) {
   </div>`;
 }
 
-// تغيير اللقب الذي يسبق الرقم في التعليقات
-function TitleEditor() {
-  const [value, setValue] = useState(account.title);
-  const [msg, setMsg] = useState(null);
-  const [busy, setBusy] = useState(false);
-  const save = async (e) => {
-    e.preventDefault();
-    setBusy(true);
-    const r = await account.setTitle(value);
-    setBusy(false);
-    setMsg(r.error ? { err: true, text: t(r.error) } : { text: t('titleSaved') });
-  };
-  return html`<form className="title-edit" onSubmit=${save}>
+// تغيير اللقب الذي يسبق الرقم في التعليقات؛ الحفظ من الزر الكبير أسفل الصفحة أو بزر الإدخال
+function TitleEditor({ value, setValue, msg, onSave }) {
+  return html`<form className="title-edit" onSubmit=${(e) => { e.preventDefault(); onSave(); }}>
     <label><small>${t('titleLabel')}</small>
       <div className="title-row">
-        <input value=${value} maxLength=${TITLE_MAX} onInput=${e => { setValue(e.target.value); setMsg(null); }} aria-label=${t('titleLabel')} />
+        <input value=${value} maxLength=${TITLE_MAX} enterKeyHint="done"
+          onInput=${e => setValue(e.target.value)} aria-label=${t('titleLabel')} />
         <bdi className="title-num">${account.nick}</bdi>
-        <button className="small-btn" type="submit" disabled=${busy || !value.trim() || value.trim() === account.title}>${t('save')}</button>
       </div>
     </label>
-    ${msg ? html`<p className=${msg.err ? 'form-error' : 'hint'}>${msg.text}</p>` : html`<p className="hint">${t('titleHint')}</p>`}
+    ${msg ? html`<p className=${msg.err ? 'form-error' : 'hint title-ok'}>${msg.text}</p>` : html`<p className="hint">${t('titleHint')}</p>`}
   </form>`;
 }
 

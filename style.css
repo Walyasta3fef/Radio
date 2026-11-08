@@ -611,3 +611,4 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid 
 .title-row { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
 .title-row input { flex: 1; min-width: 0; padding: 9px 10px; border-radius: 10px; font: inherit; font-size: 14px; background: var(--sunken); color: var(--text); border: 1px solid var(--line-2); }
 .title-num { font-weight: 800; color: var(--course); }
+.title-ok { color: var(--course); font-weight: 700; }

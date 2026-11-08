@@ -179,7 +179,6 @@ const STRINGS = {
   titleEmpty: 'اكتب الاسم أولًا.',
   titleTooLong: 'الاسم أطول من 15 حرفًا.',
   titleChars: 'استخدم حروفًا ومسافات فقط، دون أرقام أو رموز.',
-  titleBlocked: 'هذا الاسم غير متاح، اختر اسمًا آخر.',
   otherModePlaying: '{name} يعمل الآن',
   introTitle: 'ابدأ من هنا',
   introNever: 'لا تظهر مرة أخرى',
