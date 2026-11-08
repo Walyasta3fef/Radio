@@ -77,8 +77,31 @@ function isNoUser(e) {
 const authError = (e) => ((e && e.code) === 'auth/too-many-requests' ? 'tooManyTries'
   : (e && e.code) === 'auth/network-request-failed' ? 'needOnline' : 'syncFailed');
 
+// =====================
+// أسماء التعليقات: /titles/{رقم} = الاسم المختار بدل «أخ»
+// تُعرض كل التعليقات بالاسم الحالي لصاحب الرقم، فتغييره يغيّر القديم والجديد معًا
+// لا يكتب اسم رقمٍ إلا صاحبه (القواعد تتحقق من /owners)
+// =====================
+const titles = (() => {
+  let map = {};
+  let version = 0;
+  const listeners = new Set();
+  try { map = JSON.parse(localStorage.getItem('titlesCache') || '{}') || {}; } catch (e) {}
+  database.ref('/titles').on('value', snap => {
+    map = snap.val() || {};
+    version++;
+    try { localStorage.setItem('titlesCache', JSON.stringify(map)); } catch (e) {}
+    listeners.forEach(fn => fn());
+  }, () => {});
+  return {
+    get: (n) => (n != null && typeof map[n] === 'string' ? map[n] : null),
+    get version() { return version; },
+    subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn); },
+  };
+})();
+
 const account = (() => {
-  let acc = storage.getJSON(ACCOUNT_KEY);   // { name, uid, nick, pf }
+  let acc = storage.getJSON(ACCOUNT_KEY);   // { name, uid, nick }
   let syncStatus = acc ? 'idle' : 'none';   // none | idle | syncing | synced | error
   let lastSync = 0;
   let pushedRev = -1;
@@ -94,7 +117,6 @@ const account = (() => {
   const payload = () => {
     const p = { d: progress.exportState(), u: firebase.database.ServerValue.TIMESTAMP };
     if (acc && acc.nick) p.k = acc.nick;
-    if (acc && acc.pf) p.pf = acc.pf;
     return p;
   };
 
@@ -125,25 +147,31 @@ const account = (() => {
     if (!/^[\u0621-\u064Aa-zA-Z ]+$/.test(v)) return { error: 'titleChars' };
     return { ok: true, value: v };
   }
+  // حفظ الاسم في جدول الأسماء، ولا يُعد ناجحًا إلا بعد تأكيد Firebase
   async function setTitle(raw) {
-    if (!acc) return { error: 'commentNeedName' };
+    if (!acc || !acc.nick) return { error: 'commentNeedName' };
     const r = checkTitle(raw);
     if (r.error) return r;
-    acc.pf = r.value === t('nickPrefix') ? undefined : r.value;
-    storage.setJSON(ACCOUNT_KEY, acc);
-    pushedRev = -1;
-    notify();
-    push();
-    return { ok: true };
+    if (!navigator.onLine) return { error: 'needOnline' };
+    try {
+      if (!(await ready())) return { error: 'saveFailed' };
+      const ref = acctDbNow().ref('/titles/' + acc.nick);
+      await withTimeout(r.value === t('nickPrefix') ? ref.remove() : ref.set(r.value));
+      notify();
+      return { ok: true };
+    } catch (e) {
+      errLog.add('title save: ' + (e && (e.code || e.message)));
+      return { error: 'saveFailed' };
+    }
   }
 
   // ملكية الأرقام في /owners/{رقم} = uid، لا يقرؤها غير صاحبها، والقواعد تتحقق منها عند كل تعليق
   const ownerRef = (n) => acctDbNow().ref('/owners/' + n);
   async function ownsNick(n) {
-    try { return (await ownerRef(n).once('value')).val() === acc.uid; } catch (e) { return false; }
+    try { return (await withTimeout(ownerRef(n).once('value'))).val() === acc.uid; } catch (e) { return false; }
   }
   async function takeNick(n) {
-    try { await ownerRef(n).set(acc.uid); return true; } catch (e) { return ownsNick(n); }
+    try { await withTimeout(ownerRef(n).set(acc.uid)); return true; } catch (e) { return ownsNick(n); }
   }
   // حجز رقم عشوائي غير مستخدم
   async function claimNick() {
@@ -170,8 +198,23 @@ const account = (() => {
     notify();
   }
 
+  // التأكد أن اتصال الحساب جاهز (مسجّل الدخول) قبل أي حفظ، وإلا يُسجَّل الدخول أولًا
+  async function ready() {
+    if (!acc) return false;
+    const cur = acctAuth.currentUser;
+    if (cur && cur.uid === acc.uid) return true;
+    try {
+      const r = await withTimeout(connect(acc.name, 'login'));
+      if (!r || !r.uid) return false;
+      acc.uid = r.uid;
+      storage.setJSON(ACCOUNT_KEY, acc);
+      return true;
+    } catch (e) { errLog.add('auth: ' + (e && (e.code || e.message))); return false; }
+  }
+
   async function push() {
-    if (!acc || !acc.uid || !navigator.onLine || !acctAuth.currentUser) return;
+    if (!acc || !navigator.onLine) return;
+    if (!(await ready())) { setStatus('error'); return; }
     const rev = progress.rev, nrev = notes.rev;
     if (rev === pushedRev && nrev === pushedNotesRev) return;
     try {
@@ -179,7 +222,7 @@ const account = (() => {
       const p = payload();
       const e = (await notes.encrypt(acc.name)) || remoteNotes;
       if (e) { p.e = e; remoteNotes = e; }
-      await userRef(acc.uid).set(p);
+      await withTimeout(userRef(acc.uid).set(p));
       pushedRev = rev;
       pushedNotesRev = nrev;
       lastSync = Date.now();
@@ -200,7 +243,6 @@ const account = (() => {
       const v = (await userRef(acc.uid).once('value')).val();
       if (v && v.d) progress.merge(v.d);
       if (v && v.e) { remoteNotes = v.e; await notes.decryptMerge(acc.name, v.e); }
-      if (v && typeof v.pf === 'string' && v.pf !== acc.pf) { acc.pf = v.pf; storage.setJSON(ACCOUNT_KEY, acc); notify(); }
       await ensureNick(v);
       pushedRev = -1; pushedNotesRev = -1;
       await push();
@@ -247,7 +289,6 @@ const account = (() => {
       const v = (await userRef(acc.uid).once('value')).val();
       if (v && v.d) progress.merge(v.d);
       if (v && v.e) { remoteNotes = v.e; await notes.decryptMerge(name, v.e); }
-      if (v && typeof v.pf === 'string') { acc.pf = v.pf; storage.setJSON(ACCOUNT_KEY, acc); }
       await ensureNick(v);
       pushedRev = -1; pushedNotesRev = -1;
       await push();
@@ -290,14 +331,13 @@ const account = (() => {
   return {
     get name() { return acc && acc.name; },
     get nick() { return acc && acc.nick; },
-    get title() { return (acc && acc.pf) || t('nickPrefix'); },
-    get customTitle() { return (acc && acc.pf) || null; },
+    get title() { return (acc && titles.get(acc.nick)) || t('nickPrefix'); },
     get uid() { return (acc && acc.uid) || null; },
     // قاعدة البيانات المتصلة بحساب المستخدم (للكتابة باسمه)
     get db() { return acctDbNow(); },
     get loggedIn() { return !!acc; },
     get status() { return syncStatus; },
     get lastSync() { return lastSync; },
-    create, login, logout, sync, isHidden, setHidden, subscribe, setTitle,
+    create, login, logout, sync, isHidden, setHidden, subscribe, setTitle, ready,
   };
 })();

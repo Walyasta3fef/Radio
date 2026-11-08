@@ -3,7 +3,7 @@
 // يسجّل الموقع آخر 5 أخطاء على الجهاز نفسه، وتُرفق بالبلاغ إن وافق المستخدم
 // البلاغات تُحفظ في Firebase ولا يقرؤها إلا المالك
 // =====================
-const APP_VERSION = '33';
+const APP_VERSION = '34';
 const ERR_LOG_KEY = 'errLog';
 const FEEDBACK_LAST_KEY = 'feedbackLast';
 const FEEDBACK_GAP_MS = 60000;
@@ -55,15 +55,16 @@ const feedbackApi = {
     }
     try {
       // ختم آخر بلاغ: لكل حساب على حدة، وللزوار دون حساب ختم عام واحد
-      const db = account.uid ? account.db : database;
+      const mine = account.loggedIn && (await account.ready());
+      const db = mine ? account.db : database;
       const key = db.ref('/feedback').push().key;
-      await db.ref().update({
+      await withTimeout(db.ref().update({
         ['feedback/' + key]: item,
-        ['frate/' + (account.uid || 'anon')]: firebase.database.ServerValue.TIMESTAMP,
-      });
+        ['frate/' + (mine ? account.uid : 'anon')]: firebase.database.ServerValue.TIMESTAMP,
+      }));
       storage.set(FEEDBACK_LAST_KEY, String(Date.now()));
       return { ok: true };
-    } catch (e) { return { error: 'feedbackFailed' }; }
+    } catch (e) { errLog.add('feedback: ' + (e && (e.code || e.message))); return { error: 'feedbackFailed' }; }
   },
   // للمالك فقط
   watch(cb) {

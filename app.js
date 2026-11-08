@@ -892,7 +892,8 @@ function useStaffVersion() {
 
 // اسم صاحب التعليق: الاسم المميز بعلامة، أو «أخ ...»
 // الاسم الظاهر: اسم المشرف، أو اللقب (افتراضيًا «أخ») ثم الرقم
-const authorName = (n, a, pf) => (a && staff.nameOf(a)) || t('nickName', { p: pf || t('nickPrefix'), n });
+// الاسم من جدول الأسماء حسب الرقم، ثم الاسم القديم المكتوب في التعليق إن وُجد
+const authorName = (n, a, pf) => (a && staff.nameOf(a)) || t('nickName', { p: titles.get(n) || pf || t('nickPrefix'), n });
 function CommentAuthor({ c, toMe }) {
   const special = c.a && staff.nameOf(c.a);
   return html`<b className=${special ? 'staff-name' : ''}>
@@ -1001,7 +1002,7 @@ function CommentForm({ lid, parent, getTime, onDone, onCancel, compact, placehol
   };
 
   return html`<form className=${'c-form' + (compact ? ' reply-form' : '')} onSubmit=${submit}>
-    ${!compact && html`<div className="c-as">${t('commentAs')} <b>${staff.isStaff ? staff.name : authorName(account.nick, null, account.customTitle)}</b></div>`}
+    ${!compact && html`<div className="c-as">${t('commentAs')} <b>${staff.isStaff ? staff.name : authorName(account.nick, null, null)}</b></div>`}
     <textarea value=${text} maxLength=${COMMENT_MAX} rows=${compact ? 2 : 3}
       placeholder=${placeholder || (compact ? t('replyPlaceholder', { name: authorName(parent.n, parent.a, parent.pf) }) : (withTime ? t('commentPlaceholder') : t('commentPlaceholderGeneral')))}
       autoFocus=${!!autoFocus}
@@ -2184,7 +2185,7 @@ function InstallButton() {
 function AccountPage({ returnTo }) {
   useAccountVersion();
   useProgressVersion();
-  const [tab, setTab] = useState('new');
+  const [tab, setTab] = useState('login');
   const [value, setValue] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
@@ -2290,10 +2291,10 @@ function AccountPage({ returnTo }) {
       <p className="acc-line">${t('accountIntro')}</p>
 
       <div className="seg" role="tablist">
-        <button role="tab" aria-selected=${tab === 'new'} className=${tab === 'new' ? 'on' : ''}
-          onClick=${() => { setTab('new'); setError(null); }}>${t('tabNew')}</button>
         <button role="tab" aria-selected=${tab === 'login'} className=${tab === 'login' ? 'on' : ''}
           onClick=${() => { setTab('login'); setError(null); }}>${t('tabLogin')}</button>
+        <button role="tab" aria-selected=${tab === 'new'} className=${tab === 'new' ? 'on' : ''}
+          onClick=${() => { setTab('new'); setError(null); }}>${t('tabNew')}</button>
       </div>
 
       <form onSubmit=${submit}>
@@ -2406,10 +2407,44 @@ function MiniPlayer({ player, route }) {
 }
 
 // =====================
+// شبكة أمان: إذا تعطلت صفحة يظهر تنبيه بدل شاشة متوقفة، ويُسجَّل الخطأ ليُرفق بالبلاغ
+// =====================
+class PageBoundary extends React.Component {
+  constructor(props) { super(props); this.state = { error: null }; }
+  static getDerivedStateFromError(error) { return { error }; }
+  componentDidCatch(error, info) {
+    const where = ((info && info.componentStack) || '').trim().split('\n')[0] || '';
+    try { errLog.add('page: ' + (error && error.message) + ' ' + where.trim()); } catch (e) {}
+  }
+  render() {
+    if (!this.state.error) return this.props.children;
+    const msg = String((this.state.error && this.state.error.message) || '');
+    return html`<div className="page account">
+      <div className="panel center">
+        <h1 className="acc-title">${t('pageErrorTitle')}</h1>
+        <p className="acc-line">${t('pageErrorHint')}</p>
+        <p className="hint" dir="ltr">${msg.slice(0, 160)}</p>
+        <button className="cta" onClick=${() => { this.setState({ error: null }); }}>${t('retry')}</button>
+        <div className="nav">
+          <button className="link-btn" onClick=${() => { this.setState({ error: null }); go('#/'); }}>${t('backHome')}</button>
+          <button className="link-btn" onClick=${() => { this.setState({ error: null }); go('#/feedback'); }}>${t('reportProblem')}</button>
+        </div>
+      </div>
+    </div>`;
+  }
+}
+
+function useTitlesVersion() {
+  const [, setV] = useState(0);
+  useEffect(() => titles.subscribe(() => setV(v => v + 1)), []);
+}
+
+// =====================
 // التطبيق الرئيسي
 // =====================
 function App() {
   const route = useRoute();
+  useTitlesVersion();
   // مستوى الصوت يُضبط من أزرار الجهاز
   const player = usePlayer(1);
   mentionPlayer = player;
@@ -2462,12 +2497,12 @@ function App() {
   return html`<div className="app" onContextMenu=${e => e.preventDefault()}>
     <${Stars} />
     <audio ref=${player.audioRef} preload="none" controlsList="nodownload" />
-    ${page}
+    <${PageBoundary} key=${location.hash}>${page}<//>
     <${MiniPlayer} player=${player} route=${route} />
   </div>`;
 }
 
-ReactDOM.createRoot(document.getElementById('root')).render(html`<${App} />`);
+ReactDOM.createRoot(document.getElementById('root')).render(html`<${PageBoundary}><${App} /><//>`);
 
 // تسجيل ملف التطبيق (يحفظ واجهة الموقع لتفتح أسرع)
 if ('serviceWorker' in navigator && location.protocol === 'https:') {

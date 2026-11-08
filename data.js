@@ -34,6 +34,16 @@ database.ref('.info/serverTimeOffset').on('value', snap => {
 });
 const serverNow = () => Date.now() + SERVER_OFFSET;
 
+// أي حفظ ينتظر 10 ثوانٍ على الأكثر، ثم يُعد فاشلًا بدل أن يبقى معلقًا
+const SAVE_TIMEOUT_MS = 10000;
+function withTimeout(promise, ms = SAVE_TIMEOUT_MS) {
+  let timer;
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('timeout')), ms); }),
+  ]).finally(() => clearTimeout(timer));
+}
+
 // =====================
 // تخزين محلي آمن لا يتعطل في وضع التصفح الخاص
 // =====================

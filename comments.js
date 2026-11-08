@@ -165,36 +165,32 @@ const commentsApi = {
     const TS = firebase.database.ServerValue.TIMESTAMP;
     const item = { t: text, ts: TS };
     if (staff.isStaff) item.a = staff.uid;
-    else {
-      item.n = account.nick;
-      if (account.customTitle) item.pf = account.customTitle;
-    }
+    else item.n = account.nick;
     const s = firstTime(text, maxSecOf(lid));
     if (s != null) item.s = s;
     if (parent) {
       item.p = parent.id;
       if (parent.n) item.r = parent.n;
       if (parent.a) item.ra = parent.a;
-      if (parent.pf) item.rp = parent.pf;
     }
     try {
       // المشترك يكتب باتصال حسابه حتى تتحقق القواعد من ملكية رقمه
       const db = staff.isStaff ? database : account.db;
-      if (!staff.isStaff && !account.uid) return { error: 'commentPreparing' };
+      if (!staff.isStaff && !(await account.ready())) return { error: 'saveFailed' };
       const ref = db.ref('/comments/' + lid).push();
-      if (staff.isStaff) await ref.set(item);
-      else await db.ref().update({
+      if (staff.isStaff) await withTimeout(ref.set(item));
+      else await withTimeout(db.ref().update({
         ['comments/' + lid + '/' + ref.key]: item,
         // ختم آخر تعليق: القواعد ترفض تعليقًا جديدًا قبل مرور 30 ثانية
         ['rate/' + account.uid]: firebase.database.ServerValue.TIMESTAMP,
-      });
+      }));
       storage.set(COMMENT_LAST_KEY, String(Date.now()));
       if (LECTURE_BY_ID[lid]) {
         // نسخة مختصرة لقسم أحدث التعليقات بنفس وقت التعليق، وزيادة عدّاد اللقاء
         let ts = Date.now();
         try { const v = (await ref.child('ts').once('value')).val(); if (typeof v === 'number') ts = v; } catch (e) {}
         const recent = { l: lid, c: parent ? parent.id : ref.key, i: ref.key, t: text.slice(0, 200), ts };
-        ['n', 'a', 'r', 'ra', 's', 'pf', 'rp'].forEach(k => { if (item[k] != null) recent[k] = item[k]; });
+        ['n', 'a', 'r', 'ra', 's'].forEach(k => { if (item[k] != null) recent[k] = item[k]; });
         db.ref('/recent').push(recent).catch(() => {});
         database.ref('/counts/' + lid).transaction(v => (v || 0) + 1).catch(() => {});
       }
@@ -263,15 +259,15 @@ const reactions = (() => {
     watchHearts: (cb) => watch('/hearts', cb),
     watchReports: (cb) => watch('/reports', cb),
     async setHeart(cid, on) {
-      const uid = mine();
-      if (!uid) return false;
-      const ref = account.db.ref('/hearts/' + cid + '/' + uid);
-      try { await (on ? ref.set(true) : ref.remove()); return true; } catch (e) { return false; }
+      if (!(await account.ready())) return false;
+      const ref = account.db.ref('/hearts/' + cid + '/' + mine());
+      try { await withTimeout(on ? ref.set(true) : ref.remove()); return true; }
+      catch (e) { errLog.add('heart: ' + (e && (e.code || e.message))); return false; }
     },
     async report(cid) {
-      const uid = mine();
-      if (!uid) return false;
-      try { await account.db.ref('/reports/' + cid + '/' + uid).set(true); return true; } catch (e) { return false; }
+      if (!(await account.ready())) return false;
+      try { await withTimeout(account.db.ref('/reports/' + cid + '/' + mine()).set(true)); return true; }
+      catch (e) { errLog.add('report: ' + (e && (e.code || e.message))); return false; }
     },
     // للمشرف: إلغاء البلاغات وإظهار المنشور
     clearReports(cid) { return database.ref('/reports/' + cid).remove().catch(() => {}); },

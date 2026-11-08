@@ -3,7 +3,7 @@
 // يُجلب الأحدث من الإنترنت أولًا، والنسخة المحفوظة تُستخدم فقط عند انقطاع الاتصال
 // الملفات الصوتية وFirebase لا تُحفظ هنا
 // =====================
-const CACHE = 'shell-v33';
+const CACHE = 'shell-v34';
 const SHELL = [
   './', 'index.html', 'style.css', 'i18n.js', 'data.js', 'radio.js', 'progress.js',
   'notes.js', 'account.js', 'staff.js', 'comments.js', 'feedback.js', 'app.js', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png',
