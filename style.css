@@ -661,3 +661,15 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid 
 .fb-item { background: var(--sunken); border-radius: 12px; padding: 10px 12px; }
 .fb-info { font-size: 11px; white-space: pre-wrap; word-break: break-all; color: var(--muted); background: rgba(0,0,0,.25); padding: 8px; border-radius: 8px; }
 .toast-float { position: fixed; left: 50%; transform: translateX(-50%); bottom: 90px; z-index: 40; background: var(--surface-2); border: 1px solid var(--line-2); border-radius: 999px; padding: 8px 16px; box-shadow: 0 10px 30px -10px rgba(0,0,0,.7); max-width: calc(100% - 32px); }
+
+/* مؤشر قوة رمز الدخول */
+.code-tip { margin: 2px 0 6px; }
+.strength { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; font-size: 12px; font-weight: 700; }
+.strength-bar { display: inline-flex; gap: 3px; }
+.strength-bar i { width: 26px; height: 5px; border-radius: 3px; background: var(--line-2); }
+.strength-weak { color: var(--live); }
+.strength-weak .strength-bar i:nth-child(1) { background: var(--live); }
+.strength-medium { color: var(--radio); }
+.strength-medium .strength-bar i:nth-child(-n+2) { background: var(--radio); }
+.strength-strong { color: var(--course); }
+.strength-strong .strength-bar i { background: var(--course); }

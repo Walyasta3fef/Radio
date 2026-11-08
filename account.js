@@ -31,6 +31,18 @@ function validateName(name) {
   return null;
 }
 
+// قوة رمز الدخول: إرشادية فقط ولا تمنع الحفظ
+// ضعيف: قصير، أو كلمة يليها رقم قصير، أو أرقام متتالية أو مكررة، أو سنة في آخره
+function codeStrength(raw) {
+  const s = normalizeName(raw);
+  if (!s) return null;
+  const weak = s.length < 10 || /^\p{L}+\d{1,4}$/u.test(s) || /^\d+\p{L}+$/u.test(s) || /(.)\1{3,}/.test(s)
+    || /(0123|1234|2345|3456|4567|5678|6789|9876|8765|4321)/.test(s) || /(19|20)\d\d$/.test(s);
+  if (weak) return 'weak';
+  const mixed = /\p{L}.*\d.*\p{L}|\d.*\p{L}.*\d/u.test(s);
+  return s.length >= 12 && mixed ? 'strong' : 'medium';
+}
+
 async function sha256Hex(text) {
   const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
   return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
@@ -199,8 +211,16 @@ const account = (() => {
     if (!navigator.onLine) { setStatus('error'); return; }
     try {
       setStatus('syncing');
-      const r = await connect(acc.name, 'login');
-      if (r.notFound) { setStatus('error'); return; }
+      let r = await connect(acc.name, 'login');
+      if (r.notFound) {
+        // لا يوجد حساب بهذا الرمز على الخادم (حُذفت البيانات القديمة قبل نقلها)،
+        // لكن الرمز والتقدم محفوظان هنا: يُنشأ الحساب من جديد ويستعيد رقمه القديم إن كان متاحًا
+        try { r = await connect(acc.name, 'create'); }
+        catch (e) { if (e && e.code === 'auth/email-already-in-use') r = await connect(acc.name, 'login'); else throw e; }
+        if (!r || !r.uid) { setStatus('error'); return; }
+        acc.nickOk = false;
+        logEvent('account_recreated');
+      }
       await adopt(r);
       const snap = await userRef(acc.uid).once('value');
       const v = snap.val() || r.legacy;

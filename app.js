@@ -2270,6 +2270,11 @@ function AccountPage({ returnTo }) {
           spellCheck="false" placeholder=${tab === 'new' ? t('namePlaceholderNew') : t('namePlaceholderLogin')}
           onInput=${e => setValue(e.target.value)} aria-label=${t('accountTitle')} />
         ${tab === 'new' && html`<div className="name-tools"><span className="hint">${t('nameRules')}</span></div>`}
+        ${tab === 'new' && html`<p className="hint code-tip">${t('codeTip')}</p>`}
+        ${tab === 'new' && codeStrength(value) && html`<div className=${'strength strength-' + codeStrength(value)} aria-live="polite">
+          <span className="strength-bar"><i></i><i></i><i></i></span>
+          <span className="strength-label">${t('strength_' + codeStrength(value))}</span>
+        </div>`}
         ${error && html`<p className="form-error">${t(error)}</p>`}
         ${tab === 'new' && html`<ul className="code-notes">
           <li>${t('codeNote1')}</li><li>${t('codeNote2')}</li><li>${t('codeNote3')}</li><li>${t('codeNote4')}</li>
