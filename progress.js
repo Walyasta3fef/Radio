@@ -139,6 +139,7 @@ const progress = (() => {
   // إحصاءات فترة: من يوم إلى يوم (مفاتيح YYYYMMDD، شاملة)
   function stats(fromKey, toKey) {
     const byDay = {};
+    const bySrc = {};   // لكل يوم: { c, n, f }
     const lec = {};
     let c = 0, n = 0, f = 0;
     Object.values(state.daily).forEach(days => {
@@ -146,6 +147,8 @@ const progress = (() => {
         if (day < fromKey || day > toKey || !d) return;
         const total = (d.c || 0) + (d.n || 0) + (d.f || 0);
         byDay[day] = (byDay[day] || 0) + total;
+        const b = bySrc[day] || (bySrc[day] = { c: 0, n: 0, f: 0 });
+        b.c += d.c || 0; b.n += d.n || 0; b.f += d.f || 0;
         c += d.c || 0; n += d.n || 0; f += d.f || 0;
         Object.entries(d.l || {}).forEach(([id, s]) => { lec[id] = (lec[id] || 0) + s; });
       });
@@ -155,7 +158,7 @@ const progress = (() => {
     const completed = Object.entries(state.lectures)
       .filter(([id, e]) => e.d && e.da && e.da >= fromKey && e.da <= toKey && LECTURE_BY_ID[id]).length;
     const activeDays = Object.values(byDay).filter(s => s >= 60).length;
-    return { total: c + n + f, c, n, f, byDay, top, completed, activeDays };
+    return { total: c + n + f, c, n, f, byDay, bySrc, top, completed, activeDays };
   }
 
   // آخر تعليق قرأه المستخدم في كل مكان (بتوقيت الخادم)، لمعرفة الجديد

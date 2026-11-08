@@ -741,7 +741,9 @@ function TotalStats() {
   return html`<div className="chip stats">
     <div><b>${fmtCount(stats.subscribers)}</b><small>${t('subscribersStat')}</small></div>
     <span className="divider"></span>
-    <div><b>${fmtCount(stats.listen_seconds / 3600)}</b><small>${t('listenHoursStat')}</small></div>
+    ${stats.listen_seconds < 3600
+      ? html`<div><b>${fmtCount(stats.listen_seconds / 60)}</b><small>${t('listenMinutesStat')}</small></div>`
+      : html`<div><b>${fmtCount(stats.listen_seconds / 3600)}</b><small>${t('listenHoursStat')}</small></div>`}
   </div>`;
 }
 
@@ -1781,9 +1783,11 @@ function ReportPage() {
 
   const bars = r.buckets.map(b => {
     const from = dayKey(b.from), to = dayKey(b.to);
-    let s = 0;
-    Object.entries(st.byDay).forEach(([k, v]) => { if (k >= from && k <= to) s += v; });
-    return { ...b, s };
+    const src = { c: 0, n: 0, f: 0 };
+    Object.entries(st.bySrc).forEach(([k, v]) => {
+      if (k >= from && k <= to) { src.c += v.c; src.n += v.n; src.f += v.f; }
+    });
+    return { ...b, src, s: src.c + src.n + src.f };
   });
   const maxBar = Math.max(60, ...bars.map(b => b.s));
 
@@ -1827,7 +1831,11 @@ function ReportPage() {
 
             ${bars.length > 0 && html`<div className=${'chart chart-' + period} role="img" aria-label=${t('chartLabel')}>
               ${bars.map((b, i) => html`<div key=${i} className=${'col' + (b.today ? ' col-today' : '')}>
-                <div className="col-bar"><span style=${{ height: (b.s / maxBar * 100) + '%' }}></span></div>
+                <div className="col-bar">
+                  <div className="col-stack" style=${{ height: (b.s / maxBar * 100) + '%' }}>
+                    ${SOURCES.map(s => b.src[s.key] > 0 && html`<span key=${s.key} className=${s.cls} style=${{ flexGrow: b.src[s.key] }}></span>`)}
+                  </div>
+                </div>
                 ${(period !== 'month' || i % 5 === 0 || b.today) && html`<small>${b.label}</small>`}
               </div>`)}
             </div>`}

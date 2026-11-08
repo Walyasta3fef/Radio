@@ -58,6 +58,7 @@ const STRINGS = {
   visits: 'زيارات',
   subscribersStat: 'مشترك',
   listenHoursStat: 'ساعة استماع',
+  listenMinutesStat: 'دقيقة استماع',
   totalListeners: 'مستمعين',
   back: 'رجوع',
   playingHere: 'تستمع الآن',

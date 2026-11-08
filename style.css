@@ -487,10 +487,11 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid 
 .chart-month { gap: 1px; }
 .col { flex: 1; min-width: 0; height: 100%; display: flex; flex-direction: column; align-items: center; gap: 4px; }
 .col-bar { flex: 1; width: 100%; display: flex; align-items: flex-end; background: rgba(255, 255, 255, .04); border-radius: 6px; overflow: hidden; }
-.col-bar span { display: block; width: 100%; background: var(--course); border-radius: 6px 6px 0 0; }
-.col-today .col-bar span { background: var(--radio); }
+/* العمود مقسّم بألوان المصادر الثلاثة كالشريط العلوي */
+.col-stack { width: 100%; display: flex; flex-direction: column-reverse; border-radius: 6px 6px 0 0; overflow: hidden; }
+.col-stack span { display: block; width: 100%; flex-basis: 0; min-height: 2px; }
 .col small { font-size: 10px; color: var(--faint); white-space: nowrap; height: 14px; }
-.col-today small { color: var(--text); font-weight: 700; }
+.col-today small { color: var(--text); font-weight: 800; text-decoration: underline; text-underline-offset: 4px; }
 .rep-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .rep-grid div { display: flex; flex-direction: column; align-items: center; background: var(--sunken); border: 1px solid var(--line); border-radius: 12px; padding: 10px 4px; }
 .rep-grid b { font-size: 20px; }
