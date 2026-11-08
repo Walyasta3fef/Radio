@@ -8,7 +8,6 @@ const MODE_INFO = { normal: 'normalInfo', fast: 'fastInfo' };
 const SKIP_SECONDS = 15;
 const BEHIND_SECONDS = 20;
 const RADIO_MODE_KEY = 'radio_mode';
-const HOME_OPEN_KEY = 'home_open_card';
 
 const STATIONS = Object.fromEntries(MODES.map(mode => [mode, createStation(mode,
   LECTURES.map(l => ({ id: l.id, title: l.title, duration: l[mode], from: l.radioFrom ? Date.parse(l.radioFrom + 'T00:00:00Z') : 0 })))]));
@@ -1266,13 +1265,11 @@ function HomePage({ player, users }) {
   const showNudge = !showIntro && !nudgeOff && !account.loggedIn && progress.stats('0000', '9999').total >= NUDGE_AFTER_SEC;
   const closeNudge = () => { storage.set(NUDGE_KEY, String(Date.now())); setNudgeOff(true); };
 
-  // كارت واحد مفتوح في المرة، ويُحفظ آخر اختيار
-  // إذا كان الراديو يعمل يُفتح كارته تلقائيًا
-  const [open, setOpenState] = useState(() =>
-    (player.isPlaying && MODES.includes(player.mode)) ? 'radio' : (storage.get(HOME_OPEN_KEY) || ''));
+  // كارت واحد مفتوح في المرة، ويبدأ مطويًا دائمًا عند دخول الصفحة الرئيسية
+  const [open, setOpenState] = useState('');
   // عند طي كارت الراديو يعود الاختيار إلى السرعة المشغّلة، فيبقى العنوان والزر صحيحين
   const setOpen = (v) => {
-    setOpenState(v); storage.set(HOME_OPEN_KEY, v);
+    setOpenState(v);
     if (v !== 'radio' && otherPlaying) setModeState(radioPlaying);
   };
   const toggle = (k) => setOpen(open === k ? '' : k);
