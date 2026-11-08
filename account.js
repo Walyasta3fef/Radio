@@ -171,7 +171,8 @@ const account = (() => {
     try { return (await withTimeout(ownerRef(n).once('value'))).val() === acc.uid; } catch (e) { return false; }
   }
   async function takeNick(n) {
-    try { await withTimeout(ownerRef(n).set(acc.uid)); return true; } catch (e) { return ownsNick(n); }
+    try { await withTimeout(ownerRef(n).set(acc.uid)); return true; }
+    catch (e) { errLog.add('nick set ' + n + ': ' + (e && (e.code || e.message))); return ownsNick(n); }
   }
   // حجز رقم عشوائي غير مستخدم
   async function claimNick() {
@@ -184,13 +185,22 @@ const account = (() => {
 
   // التأكد من وجود رقم للحساب: رقمه المحفوظ أو رقمه القديم، وإلا حجز رقم جديد
   // التأكد من رقم الحساب: رقمه المحفوظ، وإلا حجز رقم جديد
-  // nv: تأكدنا مرة أن الرقم مسجّل باسم هذا الحساب في /owners
+  // رقم الحساب يُحجز مرة واحدة فقط عند إنشائه، ثم لا يتغير أبدًا
+  // nv: تأكدنا مرة أن الرقم مسجّل باسم هذا الحساب في /owners. إن فشل التأكد يبقى الرقم كما هو ويُسجَّل السبب
   async function ensureNick(remote) {
-    if (!acc || !acc.uid || (acc.nick && acc.nv)) return;
-    let n = acc.nick || (remote && Number.isInteger(remote.k) ? remote.k : null);
-    if (n && !(await takeNick(n))) n = null;
-    if (!n) n = await claimNick();
-    if (!n || !acc) return;
+    if (!acc || !acc.uid) return;
+    const known = acc.nick || (remote && Number.isInteger(remote.k) ? remote.k : null);
+    if (known) {
+      if (acc.nick !== known) { acc.nick = known; storage.setJSON(ACCOUNT_KEY, acc); pushedRev = -1; notify(); }
+      if (!acc.nv) {
+        if (await takeNick(known)) { acc.nv = true; storage.setJSON(ACCOUNT_KEY, acc); }
+        else errLog.add('nick check failed: ' + known);
+      }
+      return;
+    }
+    // حساب بلا رقم بعد: حجز رقم جديد
+    const n = await claimNick();
+    if (!n || !acc) { errLog.add('nick claim failed'); return; }
     acc.nick = n;
     acc.nv = true;
     storage.setJSON(ACCOUNT_KEY, acc);
