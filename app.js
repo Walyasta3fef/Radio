@@ -690,13 +690,24 @@ function CountryFlags({ users }) {
 
 // العدادات الظاهرة: عدد المشتركين وساعات الاستماع من الجميع
 // (الزيارات والمستمعون القدامى ما زالوا يُحسبون في القاعدة لكن لا يظهرون)
+// آخر قراءة تُحفظ على الجهاز وتظهر فورًا، حتى دون اتصال، ثم تتحدّث عند وصول الجديد
+const STATS_CACHE_KEY = 'statsCache';
 function TotalStats() {
-  const [stats, setStats] = useState({ subscribers: 0, listen_seconds: 0 });
+  const [stats, setStats] = useState(() => {
+    try {
+      const c = JSON.parse(storage.get(STATS_CACHE_KEY) || 'null');
+      if (c && typeof c.subscribers === 'number') return c;
+    } catch (e) {}
+    return { subscribers: 0, listen_seconds: 0 };
+  });
   useEffect(() => {
     const ref = database.ref('/stats');
     const l = ref.on('value', snap => {
       const d = snap.val();
-      if (d) setStats({ subscribers: d.subscribers || 0, listen_seconds: d.listen_seconds || 0 });
+      if (!d) return;
+      const next = { subscribers: d.subscribers || 0, listen_seconds: d.listen_seconds || 0 };
+      setStats(next);
+      storage.set(STATS_CACHE_KEY, JSON.stringify(next));
     });
     return () => ref.off('value', l);
   }, []);
