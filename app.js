@@ -715,7 +715,8 @@ function CountryFlags({ users }) {
 // (الزيارات والمستمعون القدامى ما زالوا يُحسبون في القاعدة لكن لا يظهرون)
 // آخر قراءة تُحفظ على الجهاز وتظهر فورًا، حتى دون اتصال، ثم تتحدّث عند وصول الجديد
 const STATS_CACHE_KEY = 'statsCache';
-const INTRO_KEY = 'introSeen';
+const INTRO_NEVER_KEY = 'introNever';
+const INTRO_DAY_KEY = 'introClosedDay';
 const NUDGE_KEY = 'nameNudgeClosedAt';
 const NUDGE_AFTER_SEC = 20 * 60;
 const NUDGE_AGAIN_MS = 7 * 24 * 3600 * 1000;
@@ -883,11 +884,12 @@ function useStaffVersion() {
 }
 
 // اسم صاحب التعليق: الاسم المميز بعلامة، أو «أخ ...»
-const authorName = (n, a) => (a && staff.nameOf(a)) || t('nickName', { n });
+// الاسم الظاهر: اسم المشرف، أو اللقب (افتراضيًا «أخ») ثم الرقم
+const authorName = (n, a, pf) => (a && staff.nameOf(a)) || t('nickName', { p: pf || t('nickPrefix'), n });
 function CommentAuthor({ c, toMe }) {
   const special = c.a && staff.nameOf(c.a);
   return html`<b className=${special ? 'staff-name' : ''}>
-    ${special ? html`<span className="staff-check" aria-hidden="true"><${Icon} name="check" size=${11} /></span>` : ''}${authorName(c.n, c.a)}
+    ${special ? html`<span className="staff-check" aria-hidden="true"><${Icon} name="check" size=${11} /></span>` : ''}${authorName(c.n, c.a, c.pf)}
     ${toMe ? html`<span className="to-me">${t('repliedToYou')}</span>` : ''}
   </b>`;
 }
@@ -992,9 +994,9 @@ function CommentForm({ lid, parent, getTime, onDone, onCancel, compact }) {
   };
 
   return html`<form className=${'c-form' + (compact ? ' reply-form' : '')} onSubmit=${submit}>
-    ${!compact && html`<div className="c-as">${t('commentAs')} <b>${staff.isStaff ? staff.name : t('nickName', { n: account.nick })}</b></div>`}
+    ${!compact && html`<div className="c-as">${t('commentAs')} <b>${staff.isStaff ? staff.name : authorName(account.nick, null, account.customTitle)}</b></div>`}
     <textarea value=${text} maxLength=${COMMENT_MAX} rows=${compact ? 2 : 3}
-      placeholder=${compact ? t('replyPlaceholder', { name: authorName(parent.n, parent.a) }) : (withTime ? t('commentPlaceholder') : t('commentPlaceholderGeneral'))}
+      placeholder=${compact ? t('replyPlaceholder', { name: authorName(parent.n, parent.a, parent.pf) }) : (withTime ? t('commentPlaceholder') : t('commentPlaceholderGeneral'))}
       aria-label=${t('commentPlaceholderGeneral')}
       onInput=${e => { setText(e.target.value); setSent(false); }}></textarea>
     <div className="c-tools">
@@ -1079,11 +1081,11 @@ function CommentsBox({ lid, list, getTime, onTime, startOpen, title }) {
     return { tops, replies };
   }, [list, sort]);
 
-  const replyButton = (top, target) => canWrite && html`<button onClick=${() => setReplyFor({ top: top.id, n: target.n, a: target.a })}>${t('reply')}</button>`;
+  const replyButton = (top, target) => canWrite && html`<button onClick=${() => setReplyFor({ top: top.id, n: target.n, a: target.a, pf: target.pf })}>${t('reply')}</button>`;
 
   const item = (c, top, isReply) => html`<li key=${c.id} id=${'c-' + c.id} className=${'c-item' + (highlight === c.id ? ' focus' : '') + (wasNew(c) ? ' is-new' : '')}>
     <div className="c-meta"><${CommentAuthor} c=${c} toMe=${toMe(c)} /><span>${relTime(c.ts)}</span></div>
-    <${CommentText} text=${c.t} maxSec=${maxSec} onTime=${onTime} replyTo=${isReply && (c.r || c.ra) ? authorName(c.r, c.ra) : null} />
+    <${CommentText} text=${c.t} maxSec=${maxSec} onTime=${onTime} replyTo=${isReply && (c.r || c.ra) ? authorName(c.r, c.ra, c.rp) : null} />
     <div className="c-foot">
       ${replyButton(top, c)}
       ${staff.isMod && html`<button className="c-del" onClick=${() => del(c, isReply)}>${t('delete')}</button>`}
@@ -1094,7 +1096,7 @@ function CommentsBox({ lid, list, getTime, onTime, startOpen, title }) {
     ${!isReply && (expanded[c.id] || replyFor && replyFor.top === c.id) && html`<ul className="replies">
       ${expanded[c.id] && (replies[c.id] || []).map(r => item(r, c, true))}
       ${replyFor && replyFor.top === c.id && html`<li key="form">
-        <${CommentForm} lid=${lid} compact parent=${{ id: c.id, n: replyFor.n, a: replyFor.a }} getTime=${getTime}
+        <${CommentForm} lid=${lid} compact parent=${{ id: c.id, n: replyFor.n, a: replyFor.a, pf: replyFor.pf }} getTime=${getTime}
           onDone=${() => { setReplyFor(null); setExpanded(x => ({ ...x, [c.id]: true })); }}
           onCancel=${() => setReplyFor(null)} />
       </li>`}
@@ -1239,10 +1241,14 @@ function HomePage({ player, now, users }) {
   const rv = radioView(player, mode, now);
   const count = users.filter(u => u.at === mode).length;
 
-  // «ابدأ من هنا»: للزائر الجديد فقط، ويختفي نهائيًا بعد إغلاقه
-  const [introSeen, setIntroSeen] = useState(() => storage.get(INTRO_KEY) === '1');
-  const closeIntro = () => { storage.set(INTRO_KEY, '1'); setIntroSeen(true); };
-  const showIntro = !introSeen && !started && !account.loggedIn;
+  // «ابدأ من هنا»: رسالة للجميع؛ «حسنًا» تخفيها حتى الغد، و«لا تظهر مرة أخرى» نهائيًا
+  const [introOff, setIntroOff] = useState(() =>
+    storage.get(INTRO_NEVER_KEY) === '1' || storage.get(INTRO_DAY_KEY) === dayKey());
+  const closeIntro = (never) => {
+    storage.set(never ? INTRO_NEVER_KEY : INTRO_DAY_KEY, never ? '1' : dayKey());
+    setIntroOff(true);
+  };
+  const showIntro = !introOff;
 
   // تذكير بالاسم الخاص بعد 20 دقيقة استماع دون حساب، ويعود بعد أسبوع إن أُغلق
   const [nudgeOff, setNudgeOff] = useState(() => Date.now() - parseInt(storage.get(NUDGE_KEY) || '0', 10) < NUDGE_AGAIN_MS);
@@ -1273,14 +1279,10 @@ function HomePage({ player, now, users }) {
   const repliesToMe = feed.filter(c => isReplyToMe(c, c.l)).length;
   const generalNew = general.filter(c => isNewComment(c, GENERAL_ID)).length;
 
-  // الكورس: تشغيل من حيث توقف أو إيقاف
+  // الكارت يضيء أثناء الاستماع إلى لقاء
   const courseActive = player.isPlaying && player.mode === 'lecture';
-  const courseToggle = () => {
-    if (courseActive) return player.stop();
-    if (!contId) return;
-    player.playLecture(contId);
-    go('#/lecture/' + contId);
-  };
+
+
 
   return html`<div className="page home">
     <div className="topbar">
@@ -1295,16 +1297,18 @@ function HomePage({ player, now, users }) {
       <h1>${t('appName')}</h1>
     </header>
 
-    ${showIntro && html`<div className="intro">
-      <p className="intro-title">${t('introTitle')}</p>
-      <ul>
-        <li>${t('intro1')}</li>
-        <li>${t('intro2')}</li>
-        <li>${t('intro3')}</li>
-      </ul>
-      <div className="c-actions">
-        <button className="small-btn" onClick=${() => { closeIntro(); courseToggle(); }}>${t('introStart')}</button>
-        <button className="link-btn muted" onClick=${closeIntro}>${t('introGotIt')}</button>
+    ${showIntro && html`<div className="modal-back" role="presentation">
+      <div className="modal intro" role="dialog" aria-modal="true" aria-labelledby="intro-title">
+        <p className="intro-title" id="intro-title">${t('introTitle')}</p>
+        <ul>
+          <li>${t('courseInfo')}</li>
+          <li>${t('intro2')}</li>
+          ${!account.loggedIn && html`<li>${t('intro3')}</li>`}
+        </ul>
+        <div className="modal-actions">
+          <button className="small-btn" onClick=${() => closeIntro(false)}>${t('introOk')}</button>
+          <button className="link-btn muted" onClick=${() => closeIntro(true)}>${t('introNever')}</button>
+        </div>
       </div>
     </div>`}
 
@@ -1317,33 +1321,17 @@ function HomePage({ player, now, users }) {
     </div>`}
 
     <section className="section">
-      <div className=${'card tint-course' + (courseActive ? ' card-active' : '')}>
+      <button className=${'card tint-course card-link' + (courseActive ? ' card-active' : '')} onClick=${() => go('#/course')}>
         <div className="card-row">
-          <button className="card-toggle" onClick=${() => toggle('course')} aria-expanded=${open === 'course'}>
+          <span className="card-toggle">
             <span className="title-icon"><${Icon} name="book" size=${18} /></span>
             <span className="card-title">${t('course')}${lectureNew > 0 && html`<span className="new-dot" aria-label=${t('newComments')}></span>`}</span>
             ${repliesToMe > 0 && html`<span className="to-me">${t('repliedToYou')}</span>`}
             <span className="pct"><${Pct} value=${sum.percent} /></span>
-            <span className=${'chev' + (open === 'course' ? ' chev-open' : '')} aria-hidden="true">⌄</span>
-          </button>
-          ${contId && html`<${PlayButton} size=${46} active=${courseActive} status=${courseActive ? player.status : 'idle'} onClick=${courseToggle} />`}
-        </div>
-        ${open === 'course' && html`<div className="card-body">
-          <${MiniBar} value=${sum.percent} />
-          ${contId && html`<button className="continue" onClick=${() => go('#/lecture/' + contId)}>
-            <span className="continue-text">
-              <small>${started ? t('continueFrom') : t('startCourse')}</small>
-              <b>${LECTURE_BY_ID[contId].title}</b>
-            </span>
-          </button>`}
-          <button className="lessons-btn" onClick=${() => go('#/course')}>
-            <${Icon} name="list" size=${16} />
-            <span className="lessons-label">${t('openCourse')}</span>
-            <small className="lessons-count">${t('doneShort', { done: sum.done, count: sum.count })}</small>
             <span className="row-arrow" aria-hidden="true">‹</span>
-          </button>
-        </div>`}
-      </div>
+          </span>
+        </div>
+      </button>
     </section>
 
     <section className="section">
@@ -1979,6 +1967,7 @@ function AccountPage({ returnTo }) {
           <button className="link-btn" onClick=${() => account.sync()}>${t('syncNow')}</button>
         </p>
         <p className="acc-line">${t('doneOf', { done: sum.done, count: sum.count })} · <${Pct} value=${sum.percent} /></p>
+        ${account.nick && html`<${TitleEditor} />`}
         ${continueBtn}
         <div className="acc-out">
           ${confirmOut
@@ -2026,6 +2015,30 @@ function AccountPage({ returnTo }) {
       </form>
     </div>
   </div>`;
+}
+
+// تغيير اللقب الذي يسبق الرقم في التعليقات
+function TitleEditor() {
+  const [value, setValue] = useState(account.title);
+  const [msg, setMsg] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const save = async (e) => {
+    e.preventDefault();
+    setBusy(true);
+    const r = await account.setTitle(value);
+    setBusy(false);
+    setMsg(r.error ? { err: true, text: t(r.error) } : { text: t('titleSaved') });
+  };
+  return html`<form className="title-edit" onSubmit=${save}>
+    <label><small>${t('titleLabel')}</small>
+      <div className="title-row">
+        <input value=${value} maxLength=${TITLE_MAX} onInput=${e => { setValue(e.target.value); setMsg(null); }} aria-label=${t('titleLabel')} />
+        <bdi className="title-num">${account.nick}</bdi>
+        <button className="small-btn" type="submit" disabled=${busy || !value.trim() || value.trim() === account.title}>${t('save')}</button>
+      </div>
+    </label>
+    ${msg ? html`<p className=${msg.err ? 'form-error' : 'hint'}>${msg.text}</p>` : html`<p className="hint">${t('titleHint')}</p>`}
+  </form>`;
 }
 
 const SYNC_KEY = { syncing: 'syncSyncing', synced: 'syncSynced', error: 'syncError', idle: 'syncIdle' };

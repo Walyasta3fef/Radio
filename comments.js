@@ -153,7 +153,7 @@ const commentsApi = {
   // هل يستطيع المستخدم الكتابة: باسم خاص، أو كمميز داخل بحساب Google
   canWrite: () => staff.isStaff || (account.loggedIn && !!account.nick),
 
-  // parent: التعليق الأصلي عند الرد { id, n, a }
+  // parent: التعليق الأصلي عند الرد { id, n, a, pf }
   async add(lid, text, parent) {
     text = String(text || '').trim();
     if (!this.canWrite()) return { error: 'commentNeedName' };
@@ -164,13 +164,17 @@ const commentsApi = {
     const TS = firebase.database.ServerValue.TIMESTAMP;
     const item = { t: text, ts: TS };
     if (staff.isStaff) item.a = staff.uid;
-    else item.n = account.nick;
+    else {
+      item.n = account.nick;
+      if (account.customTitle) item.pf = account.customTitle;
+    }
     const s = firstTime(text, maxSecOf(lid));
     if (s != null) item.s = s;
     if (parent) {
       item.p = parent.id;
       if (parent.n) item.r = parent.n;
       if (parent.a) item.ra = parent.a;
+      if (parent.pf) item.rp = parent.pf;
     }
     try {
       const ref = this.ref(lid).push();
@@ -181,7 +185,7 @@ const commentsApi = {
         let ts = Date.now();
         try { const v = (await ref.child('ts').once('value')).val(); if (typeof v === 'number') ts = v; } catch (e) {}
         const recent = { l: lid, c: parent ? parent.id : ref.key, i: ref.key, t: text.slice(0, 200), ts };
-        ['n', 'a', 'r', 'ra', 's'].forEach(k => { if (item[k] != null) recent[k] = item[k]; });
+        ['n', 'a', 'r', 'ra', 's', 'pf', 'rp'].forEach(k => { if (item[k] != null) recent[k] = item[k]; });
         database.ref('/recent').push(recent).catch(() => {});
         database.ref('/counts/' + lid).transaction(v => (v || 0) + 1).catch(() => {});
       }

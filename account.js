@@ -9,7 +9,9 @@ const NAME_HIDDEN_KEY = 'afaf_name_hidden_day';
 const NAME_SALT = 'afaf-radio-v1|';
 const NAME_MIN = 8;
 const PUSH_EVERY_MS = 30000;
-const NICK_MAX = 10000;
+const NICK_MIN = 1000;   // الأرقام الجديدة من 4 خانات (الأرقام القديمة الأصغر تبقى كما هي)
+const NICK_MAX = 9999;
+const TITLE_MAX = 15;
 
 // توحيد الكتابة: إزالة المسافات، وتحويل الأرقام العربية، وعدم التفريق بين الحروف الكبيرة والصغيرة
 function normalizeName(raw) {
@@ -59,13 +61,39 @@ const account = (() => {
   const payload = () => {
     const p = { d: progress.exportState(), u: firebase.database.ServerValue.TIMESTAMP };
     if (acc && acc.nick) p.k = acc.nick;
+    if (acc && acc.pf) p.pf = acc.pf;
     return p;
   };
+
+  // اللقب الذي يسبق الرقم في التعليقات (افتراضيًا «أخ»): حروف ومسافات فقط، دون ما يوهم بأنه مشرف
+  const TITLE_BLOCK = ['kareem', 'كريم', 'مشرف', 'ادار', 'admin', 'mod', 'مدير', 'staff', 'مصطفيحسان', 'حسان', 'مسؤول', 'دعم'];
+  const normTitle = (s) => s.toLowerCase().replace(/[\u064B-\u0652\u0640\s]/g, '').replace(/[أإآ]/g, 'ا').replace(/ى/g, 'ي').replace(/ة/g, 'ه');
+  function checkTitle(raw) {
+    const v = String(raw || '').replace(/\s+/g, ' ').trim();
+    if (!v) return { error: 'titleEmpty' };
+    if (v.length > TITLE_MAX) return { error: 'titleTooLong' };
+    if (!/^[\u0621-\u064Aa-zA-Z ]+$/.test(v)) return { error: 'titleChars' };
+    const n = normTitle(v);
+    const staffNames = (typeof staff !== 'undefined' ? staff.names() : []).map(normTitle);
+    if (TITLE_BLOCK.some(w => n.includes(normTitle(w))) || staffNames.some(w => w && n.includes(w))) return { error: 'titleBlocked' };
+    return { ok: true, value: v };
+  }
+  async function setTitle(raw) {
+    if (!acc) return { error: 'commentNeedName' };
+    const r = checkTitle(raw);
+    if (r.error) return r;
+    acc.pf = r.value === t('nickPrefix') ? undefined : r.value;
+    storage.setJSON(ACCOUNT_KEY, acc);
+    pushedRev = -1;
+    notify();
+    push();
+    return { ok: true };
+  }
 
   // حجز رقم عشوائي غير مستخدم للاسم المعروض
   async function claimNick(hash) {
     for (let i = 0; i < 25; i++) {
-      const n = 1 + Math.floor(Math.random() * NICK_MAX);
+      const n = NICK_MIN + Math.floor(Math.random() * (NICK_MAX - NICK_MIN + 1));
       try {
         const res = await nickRef(n).transaction(cur => (cur === null ? hash : undefined));
         if (res.committed) return n;
@@ -113,6 +141,7 @@ const account = (() => {
       const v = snap.val();
       if (v && v.d) progress.merge(v.d);
       if (v && v.e) { remoteNotes = v.e; await notes.decryptMerge(acc.name, v.e); }
+      if (v && typeof v.pf === 'string' && v.pf !== acc.pf) { acc.pf = v.pf; storage.setJSON(ACCOUNT_KEY, acc); notify(); }
       await ensureNick(v);
       pushedRev = -1; pushedNotesRev = -1;
       await push();
@@ -160,6 +189,7 @@ const account = (() => {
       if (v && v.d) progress.merge(v.d);
       remoteNotes = (v && v.e) || null;
       if (remoteNotes) await notes.decryptMerge(name, remoteNotes);
+      if (v && typeof v.pf === 'string') { acc.pf = v.pf; storage.setJSON(ACCOUNT_KEY, acc); }
       await ensureNick(v);
       pushedRev = -1; pushedNotesRev = -1;
       await push();
@@ -201,10 +231,12 @@ const account = (() => {
   return {
     get name() { return acc && acc.name; },
     get nick() { return acc && acc.nick; },
+    get title() { return (acc && acc.pf) || t('nickPrefix'); },
+    get customTitle() { return (acc && acc.pf) || null; },
     get hash() { return acc && acc.hash; },
     get loggedIn() { return !!acc; },
     get status() { return syncStatus; },
     get lastSync() { return lastSync; },
-    create, login, logout, sync, isHidden, setHidden, subscribe,
+    create, login, logout, sync, isHidden, setHidden, subscribe, setTitle,
   };
 })();

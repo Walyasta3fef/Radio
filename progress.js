@@ -8,7 +8,7 @@
 const PROGRESS_KEY = 'afaf_progress_v1';
 const DEVICE_KEY = 'afaf_device';
 const SLOT_SECONDS = 5;
-const DONE_RATIO = 0.9;
+const DONE_RATIO = 0.95;
 
 // معرّف عشوائي لهذا المتصفح، لجمع وقت الاستماع من الأجهزة المختلفة دون تكرار
 const DEVICE_ID = (() => {

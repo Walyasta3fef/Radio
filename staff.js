@@ -79,6 +79,7 @@ const staff = (() => {
     get name() { const m = me(); return m && m.name; },
     get list() { return list; },
     nameOf: (uid) => (list[uid] && list[uid].name) || null,
+    names: () => Object.values(list).map(s => s && s.name).filter(Boolean),
     signIn, signOut, add, remove, countSubscribers,
     subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn); },
   };
