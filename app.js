@@ -46,6 +46,7 @@ function parseRoute() {
   if (h === '#/account') return { page: 'account' };
   if (h === '#/report') return { page: 'report' };
   if (h === '#/general' || h === '#/community') return { page: 'general' };
+  if (h.startsWith('#/community?c=')) return { page: 'general', focus: h.slice('#/community?c='.length) };
   if (h === '#/staff') return { page: 'staff' };
   if (h === '#/feedback') return { page: 'feedback' };
   m = /^#\/lecture\/(\w+)$/.exec(h);
@@ -346,7 +347,7 @@ function usePlayer(volume) {
       const ct = audio.currentTime;
       // حماية إضافية: الوقت يتقدّم فالصوت يعمل، فلا داعي لعلامة التحميل
       if (wantPlayRef.current && statusRef.current === 'loading' && !audio.paused) updateStatus('playing');
-      setCurrentTime(ct);
+      setCurrentTime(prev => (Math.floor(prev) === Math.floor(ct) ? prev : ct));
       const id = trackedId();
       if (!audio.paused && !audio.seeking) {
         const prev = lastSampleRef.current;
@@ -572,7 +573,7 @@ function usePresence(at) {
 
     const register = () => {
       if (disposed || !connected || !code || myRefHolder.current) return;
-      const ref = database.ref('/status').push();
+      const ref = database.ref('/status/d' + DEVICE_ID);
       myRefHolder.current = ref;
       ref.onDisconnect().remove()
         .then(() => ref.set({ countryCode: code, at: atRef.current, since: firebase.database.ServerValue.TIMESTAMP }))
@@ -1227,7 +1228,8 @@ function LiveBadge({ behind, onGoLive }) {
 // =====================
 // الصفحة الرئيسية
 // =====================
-function HomePage({ player, now, users }) {
+function HomePage({ player, users }) {
+  const now = useClock();   // الساعة هنا فقط، لا في الموقع كله
   useProgressVersion();
   const sum = progress.summary();
   const contId = progress.continueId();
@@ -1392,7 +1394,8 @@ function HomePage({ player, now, users }) {
 // =====================
 // صفحة الراديو
 // =====================
-function RadioPage({ mode, player, now, users }) {
+function RadioPage({ mode, player, users }) {
+  const now = useClock();
   const modeUsers = users.filter(u => u.at === mode);
   const rv = radioView(player, mode, now);
   const { s, time } = rv;
@@ -1646,7 +1649,7 @@ function HeartButton({ count, mine, onToggle, small }) {
   </button>`;
 }
 
-function CommunityPage() {
+function CommunityPage({ focus }) {
   useAccountVersion();
   useStaffVersion();
   useProgressVersion();
@@ -1676,8 +1679,7 @@ function CommunityPage() {
   const myHeart = (id) => !!(me && hearts[id] && hearts[id][me]);
   const reportCount = (id) => reactions.count(reports[id]);
   const myReport = (id) => !!(me && reports[id] && reports[id][me]);
-  const hidden = (id) => reportCount(id) >= REPORT_HIDE_AT;
-  const visible = (c) => staff.isMod || !hidden(c.id);
+  const visible = () => true;
 
   const { posts, replies } = useMemo(() => {
     const posts = [], replies = {};
@@ -1716,8 +1718,8 @@ function CommunityPage() {
     const items = [];
     if (account.loggedIn && !mine && !c.a) items.push(myReport(c.id)
       ? html`<span key="r" className="menu-item muted">${t('reported')}</span>`
-      : html`<button key="r" className="menu-item" onClick=${() => report(c.id)}>${t('report')}</button>`);
-    if (staff.isMod && hidden(c.id)) items.push(html`<button key="s" className="menu-item" onClick=${() => { setMenuFor(null); reactions.clearReports(c.id); }}>${t('unhidePost')}</button>`);
+      : html`<button key="r" className="menu-item" onClick=${() => report(c.id)}>${t('reportPost')}</button>`);
+    if (staff.isMod && reportCount(c.id) > 0) items.push(html`<button key="s" className="menu-item" onClick=${() => { setMenuFor(null); reactions.clearReports(c.id); }}>${t('ignoreReports')}</button>`);
     if (staff.isMod) items.push(html`<button key="d" className="menu-item danger" onClick=${() => del(c, isReply)}>${t('delete')}</button>`);
     if (!items.length) return null;
     return html`<span className="post-menu">
@@ -1728,7 +1730,8 @@ function CommunityPage() {
     </span>`;
   };
 
-  const hiddenNote = (c) => staff.isMod && hidden(c.id) && html`<p className="hidden-note">${t('hiddenByReports', { n: reportCount(c.id) })}</p>`;
+  // عدد البلاغات يظهر للمشرفين فقط، والقرار لهم
+  const hiddenNote = (c) => staff.isMod && reportCount(c.id) > 0 && html`<p className="hidden-note">${t('reportsCount', { n: reportCount(c.id) })}</p>`;
 
   const replyItem = (c, post) => html`<li key=${c.id} className=${'reply' + (isNew(c) ? ' is-new' : '')}>
     <div className="c-meta"><${CommentAuthor} c=${c} toMe=${isNew(c) && ((account.nick && c.r === account.nick) || (staff.uid && c.ra === staff.uid))} /><span>${relTime(c.ts)}</span></div>
@@ -1774,6 +1777,16 @@ function CommunityPage() {
   };
 
   const shown = posts.filter(visible);
+
+  // فتح منشور محدد (من قائمة البلاغات): يُفتح منشوره ويُمرَّر إليه
+  useEffect(() => {
+    if (!focus || !list.length) return;
+    const c = list.find(x => x.id === focus);
+    if (!c) return;
+    const top = c.p || c.id;
+    setExpanded(x => ({ ...x, [top]: true }));
+    setTimeout(() => { const el = document.getElementById('c-' + top); if (el) el.scrollIntoView({ block: 'center' }); }, 100);
+  }, [focus, list.length]);
 
   return html`<div className="page community" onClick=${(e) => { if (menuFor && !e.target.closest('.post-menu')) setMenuFor(null); }}>
     <div className="topbar">
@@ -1851,6 +1864,22 @@ function FeedbackPage() {
       <button className="cta" type="submit" disabled=${busy || !type}>${busy ? t('pleaseWait') : t('feedbackSend')}</button>
     </form>
   </div>`;
+}
+
+// منشورات المجتمع التي عليها بلاغات (للمشرفين)
+function ReportedPosts() {
+  const list = useComments(GENERAL_ID);
+  const reports = useReactionTree(reactions.watchReports);
+  const rows = list.map(c => ({ c, n: reactions.count(reports[c.id]) })).filter(r => r.n > 0).sort((a, b) => b.n - a.n);
+  if (!rows.length) return html`<p className="hint">${t('reportedNone')}</p>`;
+  return html`<ul className="fb-list">${rows.map(({ c, n }) => html`<li key=${c.id} className="fb-item">
+    <div className="c-meta"><${CommentAuthor} c=${c} /><span>${t('reportsCount', { n })}</span></div>
+    <p className="c-text">${c.t}</p>
+    <div className="c-actions">
+      <button className="small-btn" onClick=${() => go('#/community?c=' + c.id)}>${t('openPost')}</button>
+      <button className="link-btn muted" onClick=${() => reactions.clearReports(c.id)}>${t('ignoreReports')}</button>
+    </div>
+  </li>`)}</ul>`;
 }
 
 // قائمة البلاغات في صفحة المالك
@@ -1942,6 +1971,8 @@ function StaffPage() {
             ${!s.owner && html`<button className="link-btn muted" onClick=${() => window.confirm(t('staffRemoveConfirm', { name: s.name })) && staff.remove(id)}>${t('delete')}</button>`}
           </li>`)}
         </ul>
+        <h2>${t('reportedPostsTitle')}</h2>
+        <${ReportedPosts} />
         <h2>${t('feedbackListTitle')}</h2>
         <${FeedbackList} />
         <h2>${t('staffCountTitle')}</h2>
@@ -2266,9 +2297,10 @@ function AccountPage({ returnTo }) {
       </div>
 
       <form onSubmit=${submit}>
-        <input className="name-input" dir="ltr" value=${value} autoComplete="off" autoCapitalize="none"
-          spellCheck="false" placeholder=${tab === 'new' ? t('namePlaceholderNew') : t('namePlaceholderLogin')}
+        <input className="name-input" dir="ltr" lang="en" value=${value} autoComplete="off" autoCapitalize="none"
+          autoCorrect="off" spellCheck="false" placeholder=${tab === 'new' ? t('namePlaceholderNew') : t('namePlaceholderLogin')}
           onInput=${e => setValue(e.target.value)} aria-label=${t('accountTitle')} />
+        ${tab === 'new' && /[\u0600-\u06FF]/.test(value.replace(/[٠-٩۰-۹]/g, '')) && html`<p className="form-error">${t('nameLatinOnly')}</p>`}
         ${tab === 'new' && html`<div className="name-tools"><span className="hint">${t('nameRules')}</span></div>`}
         ${tab === 'new' && html`<p className="hint code-tip">${t('codeTip')}</p>`}
         ${tab === 'new' && codeStrength(value) && html`<div className=${'strength strength-' + codeStrength(value)} aria-live="polite">
@@ -2378,7 +2410,6 @@ function MiniPlayer({ player, route }) {
 // =====================
 function App() {
   const route = useRoute();
-  const now = useClock();
   // مستوى الصوت يُضبط من أزرار الجهاز
   const player = usePlayer(1);
   mentionPlayer = player;
@@ -2393,15 +2424,6 @@ function App() {
   const at = player.isPlaying ? (player.mode === 'lecture' ? 'course' : player.mode) : pageAt;
   const users = usePresence(at);
 
-  // الإحصائيات الكلية
-  useEffect(() => {
-    const statsRef = database.ref('/stats');
-    statsRef.child('total_visits').set(firebase.database.ServerValue.increment(1)).catch(() => {});
-    if (!storage.get('hasVisitedRadio')) {
-      statsRef.child('total_listeners').set(firebase.database.ServerValue.increment(1)).catch(() => {});
-      storage.set('hasVisitedRadio', 'true');
-    }
-  }, []);
 
   // عنوان التبويب محايد مراعاةً للخصوصية
   useEffect(() => {
@@ -2418,7 +2440,7 @@ function App() {
 
   let page;
   if (route.page === 'radio') {
-    page = html`<${RadioPage} mode=${route.mode} player=${player} now=${now} users=${users} />`;
+    page = html`<${RadioPage} mode=${route.mode} player=${player} users=${users} />`;
   } else if (route.page === 'course') {
     page = html`<${CoursePage} player=${player} users=${users} />`;
   } else if (route.page === 'account') {
@@ -2426,7 +2448,7 @@ function App() {
   } else if (route.page === 'report') {
     page = html`<${ReportPage} />`;
   } else if (route.page === 'general') {
-    page = html`<${CommunityPage} />`;
+    page = html`<${CommunityPage} focus=${route.focus} />`;
   } else if (route.page === 'staff') {
     page = html`<${StaffPage} />`;
   } else if (route.page === 'feedback') {
@@ -2434,7 +2456,7 @@ function App() {
   } else if (route.page === 'lecture') {
     page = html`<${LecturePage} key=${route.id} id=${route.id} player=${player} />`;
   } else {
-    page = html`<${HomePage} player=${player} now=${now} users=${users} />`;
+    page = html`<${HomePage} player=${player} users=${users} />`;
   }
 
   return html`<div className="app" onContextMenu=${e => e.preventDefault()}>

@@ -74,23 +74,8 @@ function countryFromTimezone() {
   } catch (e) { return 'XX'; }
 }
 
-// يحفظ الدولة يومًا كاملًا لتقليل الطلبات على الخدمة الخارجية
-async function getCountryCode() {
-  const cached = storage.getJSON('radio_country');
-  if (cached && cached.code && Date.now() - cached.at < 86400000) return cached.code;
-  try {
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 4000);
-    const r = await fetch('https://ipapi.co/json/', { signal: ctrl.signal });
-    clearTimeout(timer);
-    const d = await r.json();
-    if (d && typeof d.country_code === 'string' && /^[A-Z]{2}$/.test(d.country_code)) {
-      storage.setJSON('radio_country', { code: d.country_code, at: Date.now() });
-      return d.country_code;
-    }
-  } catch (e) {}
-  return countryFromTimezone();
-}
+// البلد من المنطقة الزمنية للجهاز فقط، فلا يُرسل عنوان IP الزائر إلى أي خدمة خارجية
+async function getCountryCode() { return countryFromTimezone(); }
 
 // =====================
 // اللقاءات

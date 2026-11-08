@@ -1,3 +1,13 @@
+/* خط Tajawal محفوظ داخل الموقع، فلا يعرف Google زوار الموقع */
+@font-face { font-family: 'Tajawal'; font-style: normal; font-weight: 400; font-display: swap; src: url('fonts/tajawal-arabic-400-normal.woff2') format('woff2'); unicode-range: U+0600-06FF,U+0750-077F,U+0870-088E,U+0890-0891,U+0897-08E1,U+08E3-08FF,U+200C-200E,U+2010-2011,U+204F,U+2E41,U+FB50-FDFF,U+FE70-FE74,U+FE76-FEFC,U+102E0-102FB,U+10E60-10E7E,U+10EC2-10EC4,U+10EFC-10EFF,U+1EE00-1EE03,U+1EE05-1EE1F,U+1EE21-1EE22,U+1EE24,U+1EE27,U+1EE29-1EE32,U+1EE34-1EE37,U+1EE39,U+1EE3B,U+1EE42,U+1EE47,U+1EE49,U+1EE4B,U+1EE4D-1EE4F,U+1EE51-1EE52,U+1EE54,U+1EE57,U+1EE59,U+1EE5B,U+1EE5D,U+1EE5F,U+1EE61-1EE62,U+1EE64,U+1EE67-1EE6A,U+1EE6C-1EE72,U+1EE74-1EE77,U+1EE79-1EE7C,U+1EE7E,U+1EE80-1EE89,U+1EE8B-1EE9B,U+1EEA1-1EEA3,U+1EEA5-1EEA9,U+1EEAB-1EEBB,U+1EEF0-1EEF1; }
+@font-face { font-family: 'Tajawal'; font-style: normal; font-weight: 400; font-display: swap; src: url('fonts/tajawal-latin-400-normal.woff2') format('woff2'); unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+@font-face { font-family: 'Tajawal'; font-style: normal; font-weight: 500; font-display: swap; src: url('fonts/tajawal-arabic-500-normal.woff2') format('woff2'); unicode-range: U+0600-06FF,U+0750-077F,U+0870-088E,U+0890-0891,U+0897-08E1,U+08E3-08FF,U+200C-200E,U+2010-2011,U+204F,U+2E41,U+FB50-FDFF,U+FE70-FE74,U+FE76-FEFC,U+102E0-102FB,U+10E60-10E7E,U+10EC2-10EC4,U+10EFC-10EFF,U+1EE00-1EE03,U+1EE05-1EE1F,U+1EE21-1EE22,U+1EE24,U+1EE27,U+1EE29-1EE32,U+1EE34-1EE37,U+1EE39,U+1EE3B,U+1EE42,U+1EE47,U+1EE49,U+1EE4B,U+1EE4D-1EE4F,U+1EE51-1EE52,U+1EE54,U+1EE57,U+1EE59,U+1EE5B,U+1EE5D,U+1EE5F,U+1EE61-1EE62,U+1EE64,U+1EE67-1EE6A,U+1EE6C-1EE72,U+1EE74-1EE77,U+1EE79-1EE7C,U+1EE7E,U+1EE80-1EE89,U+1EE8B-1EE9B,U+1EEA1-1EEA3,U+1EEA5-1EEA9,U+1EEAB-1EEBB,U+1EEF0-1EEF1; }
+@font-face { font-family: 'Tajawal'; font-style: normal; font-weight: 500; font-display: swap; src: url('fonts/tajawal-latin-500-normal.woff2') format('woff2'); unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+@font-face { font-family: 'Tajawal'; font-style: normal; font-weight: 700; font-display: swap; src: url('fonts/tajawal-arabic-700-normal.woff2') format('woff2'); unicode-range: U+0600-06FF,U+0750-077F,U+0870-088E,U+0890-0891,U+0897-08E1,U+08E3-08FF,U+200C-200E,U+2010-2011,U+204F,U+2E41,U+FB50-FDFF,U+FE70-FE74,U+FE76-FEFC,U+102E0-102FB,U+10E60-10E7E,U+10EC2-10EC4,U+10EFC-10EFF,U+1EE00-1EE03,U+1EE05-1EE1F,U+1EE21-1EE22,U+1EE24,U+1EE27,U+1EE29-1EE32,U+1EE34-1EE37,U+1EE39,U+1EE3B,U+1EE42,U+1EE47,U+1EE49,U+1EE4B,U+1EE4D-1EE4F,U+1EE51-1EE52,U+1EE54,U+1EE57,U+1EE59,U+1EE5B,U+1EE5D,U+1EE5F,U+1EE61-1EE62,U+1EE64,U+1EE67-1EE6A,U+1EE6C-1EE72,U+1EE74-1EE77,U+1EE79-1EE7C,U+1EE7E,U+1EE80-1EE89,U+1EE8B-1EE9B,U+1EEA1-1EEA3,U+1EEA5-1EEA9,U+1EEAB-1EEBB,U+1EEF0-1EEF1; }
+@font-face { font-family: 'Tajawal'; font-style: normal; font-weight: 700; font-display: swap; src: url('fonts/tajawal-latin-700-normal.woff2') format('woff2'); unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+@font-face { font-family: 'Tajawal'; font-style: normal; font-weight: 800; font-display: swap; src: url('fonts/tajawal-arabic-800-normal.woff2') format('woff2'); unicode-range: U+0600-06FF,U+0750-077F,U+0870-088E,U+0890-0891,U+0897-08E1,U+08E3-08FF,U+200C-200E,U+2010-2011,U+204F,U+2E41,U+FB50-FDFF,U+FE70-FE74,U+FE76-FEFC,U+102E0-102FB,U+10E60-10E7E,U+10EC2-10EC4,U+10EFC-10EFF,U+1EE00-1EE03,U+1EE05-1EE1F,U+1EE21-1EE22,U+1EE24,U+1EE27,U+1EE29-1EE32,U+1EE34-1EE37,U+1EE39,U+1EE3B,U+1EE42,U+1EE47,U+1EE49,U+1EE4B,U+1EE4D-1EE4F,U+1EE51-1EE52,U+1EE54,U+1EE57,U+1EE59,U+1EE5B,U+1EE5D,U+1EE5F,U+1EE61-1EE62,U+1EE64,U+1EE67-1EE6A,U+1EE6C-1EE72,U+1EE74-1EE77,U+1EE79-1EE7C,U+1EE7E,U+1EE80-1EE89,U+1EE8B-1EE9B,U+1EEA1-1EEA3,U+1EEA5-1EEA9,U+1EEAB-1EEBB,U+1EEF0-1EEF1; }
+@font-face { font-family: 'Tajawal'; font-style: normal; font-weight: 800; font-display: swap; src: url('fonts/tajawal-latin-800-normal.woff2') format('woff2'); unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+
 /* =====================
    الألوان: «غابة هادئة»
    أخضر داكن للخلفية، مريمي للكورس، كهرماني للراديو
@@ -54,7 +64,6 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid 
   display: flex; flex-direction: column;
 }
 .center { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; }
-.center-self { align-self: center; }
 .pct-num { unicode-bidi: isolate; }
 
 /* النجوم: خفيفة جدًا */
@@ -124,9 +133,7 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid 
   border: 1px solid var(--line); border-radius: 20px; padding: 16px;
   transition: border-color .2s, box-shadow .2s;
 }
-.card-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 .card-title { display: inline-flex; align-items: center; gap: 8px; font-size: 18px; font-weight: 800; }
-.card-count { color: var(--faint); font-size: 12px; }
 .title-icon {
   width: 32px; height: 32px; border-radius: 10px; flex-shrink: 0;
   display: inline-flex; align-items: center; justify-content: center;
@@ -154,58 +161,22 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid 
 .card-body .now small { color: var(--muted); font-size: 12px; }
 .card-body .status { margin: 0; min-height: 0; text-align: center; }
 .card .status { margin-top: 8px; margin-bottom: 0; min-height: 0; text-align: center; }
-.card-body .continue { border: 0; border-radius: 12px; padding: 10px 12px; }
 .row-link {
   width: 100%; display: flex; justify-content: space-between; align-items: center; gap: 8px;
   padding: 10px 12px; margin: -4px 0; border-radius: 12px; font-size: 13px; color: var(--muted); text-align: right;
   transition: background .15s;
 }
 .row-link:hover, .row-link:active { background: var(--surface-2); color: var(--text); }
-.lessons-btn {
-  width: 100%; display: flex; align-items: center; gap: 8px; margin-top: 8px;
-  padding: 11px 12px; border-radius: 12px; border: 1px solid rgba(168, 201, 155, .3);
-  color: var(--course); font-size: 14px; font-weight: 700; text-align: right; transition: background .15s;
-}
-.lessons-btn:hover, .lessons-btn:active { background: var(--surface-2); }
-.lessons-label { flex: 1; }
-.lessons-count { color: var(--muted); font-size: 12px; font-weight: 500; }
-.lessons-btn .row-arrow { color: var(--course); }
 .row-arrow { font-size: 20px; line-height: 1; color: var(--faint); }
 .live-mini { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
 .live-mini.behind .live-dot { background: var(--radio); }
-
-/* الكورس في الرئيسية */
-.course-card { padding: 0; overflow: hidden; }
-.card-main { width: 100%; text-align: right; padding: 16px 16px 12px; display: block; }
-.card-main .bar { margin: 10px 0 6px; }
 .pct { font-size: 18px; font-weight: 800; color: var(--course); }
-.continue {
-  width: 100%; display: flex; justify-content: space-between; align-items: center; gap: 10px;
-  padding: 12px 16px; border-top: 1px solid var(--line);
-  background: var(--course-soft); font-size: 13px; text-align: right;
-}
-.continue:hover { background: rgba(168, 201, 155, .22); }
-.continue-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.continue-text small { color: var(--muted); font-size: 12px; }
-.continue-text b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.continue-play { flex-shrink: 0; width: 40px; height: 40px; border-radius: 50%; background: var(--course); color: var(--course-ink); display: flex; align-items: center; justify-content: center; }
-
-/* الراديو في الرئيسية */
-.radio-card { display: flex; flex-direction: column; gap: 12px; }
-.radio-card .now { margin: 0; text-align: center; }
-.radio-card .now small { color: var(--muted); font-size: 12px; }
-.radio-card .play { margin: 4px auto 0; }
-.radio-card .status { margin: 0; min-height: 0; text-align: center; }
-.radio-card .live { margin: 0; }
-.radio-foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
-.radio-foot .link-btn { color: var(--radio); }
 
 .seg { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; background: var(--sunken); border-radius: 14px; padding: 4px; }
 .seg button { padding: 10px; border-radius: 10px; font-size: 14px; font-weight: 700; color: var(--muted); }
 .seg .on { background: var(--course); color: var(--course-ink); font-weight: 800; }
 .tint-radio .seg .on { background: var(--radio); color: var(--radio-ink); }
 .seg-hint { display: block; margin-top: -6px; font-size: 12px; line-height: 1.6; color: var(--muted); text-align: center; }
-.seg-hint-off { visibility: hidden; }
 /* وصف نوع الراديو بلونه، فيبدو جزءًا من الاختيار نفسه */
 .seg-hint-mode { color: var(--radio); }
 .seg-hint-playing { color: var(--text-2, var(--muted)); font-weight: 700; }
@@ -273,7 +244,6 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid 
 
 .status { min-height: 20px; margin-bottom: 12px; font-size: 12px; color: var(--muted); }
 .status .warn, .msg.warn { color: var(--warn); }
-.msg { font-size: 14px; color: var(--muted); }
 
 .small-btn {
   margin-top: 8px; font-size: 12px; background: var(--surface-2);

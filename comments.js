@@ -182,7 +182,12 @@ const commentsApi = {
       const db = staff.isStaff ? database : account.db;
       if (!staff.isStaff && !account.uid) return { error: 'commentPreparing' };
       const ref = db.ref('/comments/' + lid).push();
-      await ref.set(item);
+      if (staff.isStaff) await ref.set(item);
+      else await db.ref().update({
+        ['comments/' + lid + '/' + ref.key]: item,
+        // ختم آخر تعليق: القواعد ترفض تعليقًا جديدًا قبل مرور 30 ثانية
+        ['rate/' + account.uid]: firebase.database.ServerValue.TIMESTAMP,
+      });
       storage.set(COMMENT_LAST_KEY, String(Date.now()));
       if (LECTURE_BY_ID[lid]) {
         // نسخة مختصرة لقسم أحدث التعليقات بنفس وقت التعليق، وزيادة عدّاد اللقاء
@@ -245,7 +250,6 @@ function hasContact(text) {
 // تفاعلات المجتمع: القلوب والبلاغات
 // كل مستخدم له مفتاح سري لكل منشور مشتق من رمز دخوله، فيظهر العدد فقط دون معرفة صاحبه
 // =====================
-const REPORT_HIDE_AT = 3;
 const reactions = (() => {
   const watch = (path, cb) => {
     const ref = database.ref(path);
@@ -255,8 +259,7 @@ const reactions = (() => {
   const mine = () => account.uid;
   return {
     mine,
-    // المفاتيح القديمة (32 حرفًا) من قبل نظام الدخول الحقيقي لا تُحتسب حتى لا يتكرر قلب الشخص نفسه
-    count: (node) => Object.keys(node || {}).filter(k => !/^[a-f0-9]{32}$/.test(k)).length,
+    count: (node) => Object.keys(node || {}).length,
     watchHearts: (cb) => watch('/hearts', cb),
     watchReports: (cb) => watch('/reports', cb),
     async setHeart(cid, on) {

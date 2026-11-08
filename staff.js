@@ -53,7 +53,7 @@ const staff = (() => {
     } catch (e) { return { error: 'staffSaveFailed' }; }
   }
 
-  // للمالك فقط: عدّ الحسابات من أرقامها (القديمة والجديدة معًا دون تكرار)، بالمفاتيح فقط دون البيانات
+  // للمالك فقط: عدّ الحسابات من أرقامها، بالمفاتيح فقط دون البيانات
   async function countSubscribers() {
     try {
       const token = await auth.currentUser.getIdToken();
@@ -62,7 +62,7 @@ const staff = (() => {
         if (!res.ok) throw new Error('count');
         return Object.keys((await res.json()) || {});
       };
-      const n = new Set([...(await keysOf('/nicks')), ...(await keysOf('/owners'))]).size;
+      const n = (await keysOf('/owners')).length;
       await database.ref('/stats/subscribers').set(n);
       return { ok: true, n };
     } catch (e) { return { error: 'staffCountFailed' }; }

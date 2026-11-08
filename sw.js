@@ -3,12 +3,13 @@
 // يُجلب الأحدث من الإنترنت أولًا، والنسخة المحفوظة تُستخدم فقط عند انقطاع الاتصال
 // الملفات الصوتية وFirebase لا تُحفظ هنا
 // =====================
-const CACHE = 'shell-v32';
+const CACHE = 'shell-v33';
 const SHELL = [
   './', 'index.html', 'style.css', 'i18n.js', 'data.js', 'radio.js', 'progress.js',
   'notes.js', 'account.js', 'staff.js', 'comments.js', 'feedback.js', 'app.js', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png',
   'lib/react.production.min.js', 'lib/react-dom.production.min.js', 'lib/htm.umd.js',
   'lib/firebase-app-compat.js', 'lib/firebase-database-compat.js', 'lib/firebase-auth-compat.js',
+  'fonts/tajawal-arabic-400-normal.woff2', 'fonts/tajawal-latin-400-normal.woff2', 'fonts/tajawal-arabic-500-normal.woff2', 'fonts/tajawal-latin-500-normal.woff2', 'fonts/tajawal-arabic-700-normal.woff2', 'fonts/tajawal-latin-700-normal.woff2', 'fonts/tajawal-arabic-800-normal.woff2', 'fonts/tajawal-latin-800-normal.woff2',
 ];
 
 self.addEventListener('install', (e) => {
