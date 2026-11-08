@@ -206,6 +206,7 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid 
 .tint-radio .seg .on { background: var(--radio); color: var(--radio-ink); }
 .seg-hint { display: block; margin-top: -6px; font-size: 12px; line-height: 1.6; color: var(--muted); text-align: center; }
 .seg-hint-off { visibility: hidden; }
+.seg-hint-playing { color: var(--text-2, var(--muted)); font-weight: 700; }
 .seg-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); margin-bottom: 16px; }
 .seg-4 button { padding: 8px 4px; font-size: 13px; }
 

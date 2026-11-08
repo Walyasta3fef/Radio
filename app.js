@@ -1226,10 +1226,10 @@ function HomePage({ player, now, users }) {
     return storage.get(RADIO_MODE_KEY) === 'fast' ? 'fast' : 'normal';
   });
   // اختيار السرعة الأخرى أثناء التشغيل ينقل البث إليها فورًا، فيبقى الزر مطابقًا لما يُسمع
-  const pickMode = (m) => {
-    setModeState(m); storage.set(RADIO_MODE_KEY, m);
-    if (player.isPlaying && MODES.includes(player.mode) && player.mode !== m) player.toggleRadio(m);
-  };
+  // اختيار السرعة يغيّر العرض فقط ولا يلمس الصوت؛ التبديل يحدث عند الضغط على التشغيل
+  const pickMode = (m) => { setModeState(m); storage.set(RADIO_MODE_KEY, m); };
+  const radioPlaying = player.isPlaying && MODES.includes(player.mode) ? player.mode : null;
+  const otherPlaying = radioPlaying && radioPlaying !== mode;
   // إذا تغيّرت السرعة المشغّلة من مكان آخر يتبعها الاختيار
   useEffect(() => {
     if (player.isPlaying && MODES.includes(player.mode) && player.mode !== mode) setModeState(player.mode);
@@ -1251,7 +1251,11 @@ function HomePage({ player, now, users }) {
   // إذا كان الراديو يعمل يُفتح كارته تلقائيًا
   const [open, setOpenState] = useState(() =>
     (player.isPlaying && MODES.includes(player.mode)) ? 'radio' : (storage.get(HOME_OPEN_KEY) || ''));
-  const setOpen = (v) => { setOpenState(v); storage.set(HOME_OPEN_KEY, v); };
+  // عند طي كارت الراديو يعود الاختيار إلى السرعة المشغّلة، فيبقى العنوان والزر صحيحين
+  const setOpen = (v) => {
+    setOpenState(v); storage.set(HOME_OPEN_KEY, v);
+    if (v !== 'radio' && otherPlaying) setModeState(radioPlaying);
+  };
   const toggle = (k) => setOpen(open === k ? '' : k);
 
   // تشغيل الراديو من الكارت المطوي يفتحه في الضغطة نفسها
@@ -1360,7 +1364,9 @@ function HomePage({ player, now, users }) {
             ${MODES.map(m => html`<button key=${m} role="tab" aria-selected=${mode === m}
                 className=${mode === m ? 'on' : ''} onClick=${() => pickMode(m)}>${t(MODE_SHORT[m])}</button>`)}
           </div>
-          <small className=${'seg-hint' + (mode === 'normal' ? '' : ' seg-hint-off')}>${t('normalCountsHint')}</small>
+          ${otherPlaying
+            ? html`<small className="seg-hint seg-hint-playing">${t('otherModePlaying', { name: t(radioPlaying === 'fast' ? 'fastRadio' : 'normalRadio') })}</small>`
+            : html`<small className=${'seg-hint' + (mode === 'normal' ? '' : ' seg-hint-off')}>${t('normalCountsHint')}</small>`}
           <div className="now">
             <small>${t('nowPlayingLabel')}</small>
             <p className="now-title">${rv.s.track.title}</p>

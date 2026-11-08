@@ -169,6 +169,7 @@ const STRINGS = {
   reply: 'رد',
   sendReply: 'إرسال الرد',
   replyTo: 'ردًا على',
+  otherModePlaying: '{name} يعمل الآن',
   introTitle: 'ابدأ من هنا',
   intro1: 'ابدأ بالكورس الأساسي بالترتيب.',
   intro2: 'الاستماع العادي هو الذي يُحسب في تقدمك.',
