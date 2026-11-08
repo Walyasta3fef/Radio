@@ -11,7 +11,7 @@ const RADIO_MODE_KEY = 'radio_mode';
 const HOME_OPEN_KEY = 'home_open_card';
 
 const STATIONS = Object.fromEntries(MODES.map(mode => [mode, createStation(mode,
-  LECTURES.map(l => ({ id: l.id, title: l.title, duration: l[mode] })))]));
+  LECTURES.map(l => ({ id: l.id, title: l.title, duration: l[mode], from: l.radioFrom ? Date.parse(l.radioFrom + 'T00:00:00Z') : 0 })))]));
 
 const fmtTime = (s) => {
   if (isNaN(s)) return '0:00';
@@ -47,6 +47,7 @@ function parseRoute() {
   if (h === '#/report') return { page: 'report' };
   if (h === '#/general' || h === '#/community') return { page: 'general' };
   if (h === '#/staff') return { page: 'staff' };
+  if (h === '#/feedback') return { page: 'feedback' };
   m = /^#\/lecture\/(\w+)$/.exec(h);
   if (m && LECTURE_BY_ID[m[1]]) return { page: 'lecture', id: m[1] };
   return { page: 'home' };
@@ -63,9 +64,9 @@ function useRoute() {
 const go = (hash) => { location.hash = hash; };
 
 function useClock() {
-  const [now, setNow] = useState(Date.now());
+  const [now, setNow] = useState(serverNow());
   useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 1000);
+    const id = setInterval(() => setNow(serverNow()), 1000);
     return () => clearInterval(id);
   }, []);
   return now;
@@ -430,6 +431,7 @@ function usePlayer(volume) {
       progress.save();
     };
     const onError = () => {
+      if (audio.error) errLog.add('audio ' + (audio.error.code || '') + ' ' + modeRef.current + (navigator.onLine ? '' : ' offline'));
       if (wantPlayRef.current && audio.getAttribute('src')) updateStatus(navigator.onLine ? 'error' : 'offline');
     };
     const onOffline = () => { if (wantPlayRef.current) updateStatus('offline'); };
@@ -1197,6 +1199,7 @@ function StatusLine({ active, status, idleText, onRetry }) {
     ${active && STATUS_KEY[status] && html`<p className=${isWarn ? 'warn' : ''}>${t(STATUS_KEY[status])}</p>`}
     ${!active && idleText && html`<p>${idleText}</p>`}
     ${active && status === 'error' && html`<button className="small-btn" onClick=${onRetry}>${t('retry')}</button>`}
+    ${active && status === 'error' && html`<button className="link-btn muted" onClick=${() => go('#/feedback')}>${t('reportProblem')}</button>`}
   </div>`;
 }
 
@@ -1382,6 +1385,7 @@ function HomePage({ player, now, users }) {
       <${InstallButton} />
       <${FacebookLink} />
     </footer>
+    <p className="foot-link"><button className="link-btn muted" onClick=${() => go('#/feedback')}>${t('reportProblem')}</button></p>
   </div>`;
 }
 
@@ -1702,15 +1706,17 @@ function CommunityPage() {
     return { posts, replies };
   }, [list, sort]);
 
-  const toggleHeart = (id) => {
+  const flash = (msg) => { setNotice(msg); setTimeout(() => setNotice(null), 3000); };
+  const toggleHeart = async (id) => {
     if (!account.loggedIn) return go('#/account');
-    reactions.setHeart(id, !myHeart(id));
+    if (!navigator.onLine) return flash(t('needOnline'));
+    const ok = await reactions.setHeart(id, !myHeart(id));
+    if (ok === false) flash(t('saveFailed'));
   };
   const report = async (id) => {
     setMenuFor(null);
-    await reactions.report(id);
-    setNotice(t('reportSent'));
-    setTimeout(() => setNotice(null), 3000);
+    const ok = await reactions.report(id);
+    flash(ok ? t('reportSent') : t('saveFailed'));
   };
   const del = async (c, isReply) => {
     setMenuFor(null);
@@ -1807,10 +1813,78 @@ function CommunityPage() {
       <button className=${sort === 'new' ? 'on' : ''} onClick=${() => setSort('new')}>${t('sortNewest')}</button>
     </div>`}
 
-    ${notice && html`<p className="toast">${notice}</p>`}
+    ${notice && html`<p className="toast toast-float" role="status">${notice}</p>`}
     ${shown.length === 0 && html`<p className="hint center-text">${t('noPosts')}</p>`}
     <div className="post-list">${shown.map(postItem)}</div>
   </div>`;
+}
+
+// =====================
+// الإبلاغ عن مشكلة
+// =====================
+function FeedbackPage() {
+  const [type, setType] = useState(null);
+  const [text, setText] = useState('');
+  const [tech, setTech] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+  const [done, setDone] = useState(false);
+  const submit = async (e) => {
+    e.preventDefault();
+    setBusy(true); setError(null);
+    const r = await feedbackApi.send({ type, text, tech });
+    setBusy(false);
+    if (r.error) setError(t(r.error, { s: Math.ceil(feedbackApi.waitLeft() / 1000) }));
+    else setDone(true);
+  };
+  if (done) return html`<div className="page account">
+    <div className="topbar"><${BackButton} to="#/" /></div>
+    <div className="panel center">
+      <span className="success-icon"><${Icon} name="check" size=${28} /></span>
+      <p className="success-text">${t('feedbackThanks')}</p>
+      <button className="cta" onClick=${() => go('#/')}>${t('continueListening')}</button>
+    </div>
+  </div>`;
+  return html`<div className="page account">
+    <div className="topbar"><${BackButton} to="#/" /></div>
+    <form className="panel feedback" onSubmit=${submit}>
+      <h1 className="acc-title">${t('feedbackTitle')}</h1>
+      <p className="acc-line">${t('feedbackIntro')}</p>
+      <div className="fb-types" role="radiogroup" aria-label=${t('feedbackTypeLabel')}>
+        ${FEEDBACK_TYPES.map(k => html`<button type="button" key=${k} role="radio" aria-checked=${type === k}
+          className=${type === k ? 'on' : ''} onClick=${() => { setType(k); setError(null); }}>${t('fbType_' + k)}</button>`)}
+      </div>
+      <textarea className="fb-text" value=${text} maxLength=${FEEDBACK_MAX} rows="5" placeholder=${t('feedbackPlaceholder')}
+        onInput=${e => setText(e.target.value)} aria-label=${t('feedbackPlaceholder')}></textarea>
+      <label className="code-check fb-tech">
+        <input type="checkbox" checked=${tech} onChange=${e => setTech(e.target.checked)} />
+        <span>${t('feedbackTech')}</span>
+      </label>
+      <p className="hint">${t('feedbackTechHint')}</p>
+      ${error && html`<p className="form-error">${error}</p>`}
+      <button className="cta" type="submit" disabled=${busy || !type}>${busy ? t('pleaseWait') : t('feedbackSend')}</button>
+    </form>
+  </div>`;
+}
+
+// قائمة البلاغات في صفحة المالك
+function FeedbackList() {
+  const [list, setList] = useState(null);
+  const [openId, setOpenId] = useState(null);
+  useEffect(() => feedbackApi.watch(setList), []);
+  if (!list) return html`<p className="hint">${t('pleaseWait')}</p>`;
+  if (!list.length) return html`<p className="hint">${t('feedbackNone')}</p>`;
+  return html`<ul className="fb-list">${list.map(f => {
+    let info = null;
+    try { info = f.i ? JSON.parse(f.i) : null; } catch (e) {}
+    return html`<li key=${f.id} className="fb-item">
+      <div className="c-meta"><b>${t('fbType_' + f.ty)}</b><span>${relTime(f.ts)} · v${f.v}</span></div>
+      ${f.t && html`<p className="c-text">${f.t}</p>`}
+      ${info && html`<button className="link-btn muted" onClick=${() => setOpenId(openId === f.id ? null : f.id)}>${t('feedbackDetails')}</button>`}
+      ${info && openId === f.id && html`<pre className="fb-info" dir="ltr">${JSON.stringify(info, null, 1)}</pre>`}
+      <div className="c-actions"><button className="small-btn" onClick=${() => feedbackApi.resolve(f.id)}>${t('feedbackResolved')}</button></div>
+    </li>`;
+  })}</ul>`;
 }
 
 // =====================
@@ -1882,6 +1956,8 @@ function StaffPage() {
             ${!s.owner && html`<button className="link-btn muted" onClick=${() => window.confirm(t('staffRemoveConfirm', { name: s.name })) && staff.remove(id)}>${t('delete')}</button>`}
           </li>`)}
         </ul>
+        <h2>${t('feedbackListTitle')}</h2>
+        <${FeedbackList} />
         <h2>${t('staffCountTitle')}</h2>
         <p className="acc-line">${t('staffCountHint')}</p>
         <button className="small-btn" disabled=${busy} onClick=${countSubs}>${busy ? t('pleaseWait') : t('staffCountBtn')}</button>
@@ -2185,6 +2261,7 @@ function AccountPage({ returnTo }) {
               </div>`
             : html`<button className="link-btn muted" onClick=${() => setConfirmOut(true)}>${t('logout')}</button>`}
         </div>
+        <p className="foot-link"><button className="link-btn muted" onClick=${() => go('#/feedback')}>${t('reportProblem')}</button></p>
       </div>
     </div>`;
   }
@@ -2314,6 +2391,7 @@ function App() {
   // مستوى الصوت يُضبط من أزرار الجهاز
   const player = usePlayer(1);
   mentionPlayer = player;
+  feedbackContext = { page: route.page, mode: player.mode || null, st: player.status || null, playing: !!player.isPlaying };
 
   // آخر صفحة قبل صفحة الاسم، للعودة إليها بعد الحفظ
   const returnRef = useRef('#/');
@@ -2342,6 +2420,7 @@ function App() {
       : route.page === 'report' ? t('report')
       : route.page === 'general' ? t('community')
       : route.page === 'staff' ? t('staffTitle')
+      : route.page === 'feedback' ? t('feedbackTitle')
       : route.page === 'lecture' ? shortTitle(route.id)
       : IS_STANDALONE ? t('appShortName') : t('appName');
   }, [route]);
@@ -2359,6 +2438,8 @@ function App() {
     page = html`<${CommunityPage} />`;
   } else if (route.page === 'staff') {
     page = html`<${StaffPage} />`;
+  } else if (route.page === 'feedback') {
+    page = html`<${FeedbackPage} />`;
   } else if (route.page === 'lecture') {
     page = html`<${LecturePage} key=${route.id} id=${route.id} player=${player} />`;
   } else {

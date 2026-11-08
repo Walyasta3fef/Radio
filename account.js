@@ -5,7 +5,7 @@
 // فلا يمكن لأحد معرفة الأسماء أو عرض قائمة بها
 // =====================
 const ACCOUNT_KEY = 'afaf_account_v1';
-const NAME_HIDDEN_KEY = 'afaf_name_hidden_day';
+const NAME_SHOWN_KEY = 'afaf_code_shown_day';   // الرمز مخفي افتراضيًا لأنه كلمة مرور
 const NAME_SALT = 'afaf-radio-v1|';
 const NAME_MIN = 8;
 const PUSH_EVERY_MS = 30000;
@@ -200,7 +200,7 @@ const account = (() => {
     await push();
     acc = null;
     storage.set(ACCOUNT_KEY, '');
-    storage.set(NAME_HIDDEN_KEY, '');
+    storage.set(NAME_SHOWN_KEY, '');
     progress.reset();
     notes.reset();
     remoteNotes = null;
@@ -208,8 +208,8 @@ const account = (() => {
   }
 
   // إخفاء الاسم يستمر طوال اليوم فقط، ثم يظهر من جديد حتى لا يُنسى
-  const isHidden = () => storage.get(NAME_HIDDEN_KEY) === dayKey();
-  function setHidden(h) { storage.set(NAME_HIDDEN_KEY, h ? dayKey() : ''); notify(); }
+  const isHidden = () => storage.get(NAME_SHOWN_KEY) !== dayKey();
+  function setHidden(h) { storage.set(NAME_SHOWN_KEY, h ? '' : dayKey()); notify(); }
 
   function subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn); }
 

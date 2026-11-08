@@ -267,12 +267,12 @@ const reactions = (() => {
       const k = await keyFor('heart', cid);
       if (!k) return;
       const ref = database.ref('/hearts/' + cid + '/' + k);
-      try { await (on ? ref.set(true) : ref.remove()); } catch (e) {}
+      try { await (on ? ref.set(true) : ref.remove()); return true; } catch (e) { return false; }
     },
     async report(cid) {
       const k = await keyFor('report', cid);
-      if (!k) return;
-      try { await database.ref('/reports/' + cid + '/' + k).set(true); logEvent('post_reported'); } catch (e) {}
+      if (!k) return false;
+      try { await database.ref('/reports/' + cid + '/' + k).set(true); return true; } catch (e) { return false; }
     },
     // للمشرف: إلغاء البلاغات وإظهار المنشور
     clearReports(cid) { return database.ref('/reports/' + cid).remove().catch(() => {}); },

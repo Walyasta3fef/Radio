@@ -3,10 +3,12 @@
 // يُجلب الأحدث من الإنترنت أولًا، والنسخة المحفوظة تُستخدم فقط عند انقطاع الاتصال
 // الملفات الصوتية وFirebase لا تُحفظ هنا
 // =====================
-const CACHE = 'shell-v29';
+const CACHE = 'shell-v30';
 const SHELL = [
   './', 'index.html', 'style.css', 'i18n.js', 'data.js', 'radio.js', 'progress.js',
-  'notes.js', 'account.js', 'staff.js', 'comments.js', 'app.js', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png',
+  'notes.js', 'account.js', 'staff.js', 'comments.js', 'feedback.js', 'app.js', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png',
+  'lib/react.production.min.js', 'lib/react-dom.production.min.js', 'lib/htm.umd.js',
+  'lib/firebase-app-compat.js', 'lib/firebase-database-compat.js', 'lib/firebase-auth-compat.js',
 ];
 
 self.addEventListener('install', (e) => {

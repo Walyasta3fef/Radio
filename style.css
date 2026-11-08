@@ -649,3 +649,15 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid 
 .reply .c-text { margin: 2px 0 4px; }
 .hidden-note { font-size: 12px; color: var(--warn, var(--live)); margin: 0 0 4px; }
 .toast { text-align: center; font-size: 13px; color: var(--course); margin: 0 0 10px; }
+
+/* الإبلاغ عن مشكلة */
+.foot-link { text-align: center; margin: 14px 0 0; }
+.fb-types { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 12px; }
+.fb-types button { padding: 8px 14px; border-radius: 999px; font-size: 14px; color: var(--muted); border: 1px solid var(--line-2); }
+.fb-types .on { background: var(--course-soft); color: var(--course); border-color: var(--course-line); font-weight: 700; }
+.fb-text { width: 100%; min-height: 110px; padding: 10px 12px; border-radius: 12px; background: var(--sunken); color: var(--text); border: 1px solid var(--line-2); font: inherit; font-size: 14px; line-height: 1.7; resize: vertical; }
+.fb-tech { justify-content: flex-start; margin: 12px 0 2px; font-weight: 500; }
+.fb-list { list-style: none; padding: 0; margin: 0 0 14px; display: flex; flex-direction: column; gap: 8px; }
+.fb-item { background: var(--sunken); border-radius: 12px; padding: 10px 12px; }
+.fb-info { font-size: 11px; white-space: pre-wrap; word-break: break-all; color: var(--muted); background: rgba(0,0,0,.25); padding: 8px; border-radius: 8px; }
+.toast-float { position: fixed; left: 50%; transform: translateX(-50%); bottom: 90px; z-index: 40; background: var(--surface-2); border: 1px solid var(--line-2); border-radius: 999px; padding: 8px 16px; box-shadow: 0 10px 30px -10px rgba(0,0,0,.7); max-width: calc(100% - 32px); }

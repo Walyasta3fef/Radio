@@ -7,7 +7,7 @@
   <title>وليستعفف - مصطفى حسان</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=29">
+  <link rel="stylesheet" href="style.css?v=30">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icon-192.png" type="image/png">
   <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -19,25 +19,26 @@
 <body>
   <div id="root"></div>
 
-  <!-- المكتبات: React بدون مترجم داخل المتصفح، وhtm لكتابة الواجهة -->
-  <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"></script>
-  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
-  <script src="https://unpkg.com/htm@3.1.1/dist/htm.umd.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.6.7/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.6.7/firebase-analytics-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.6.7/firebase-database-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.6.7/firebase-auth-compat.js"></script>
+  <!-- المكتبات محفوظة داخل الموقع نفسه، فيفتح البرنامج المثبّت دون اتصال ولا يتأثر بحجب المواقع الخارجية -->
+  <!-- React 18.3.1 وhtm 3.1.1 وFirebase 9.6.7 -->
+  <script src="lib/react.production.min.js"></script>
+  <script src="lib/react-dom.production.min.js"></script>
+  <script src="lib/htm.umd.js"></script>
+  <script src="lib/firebase-app-compat.js"></script>
+  <script src="lib/firebase-database-compat.js"></script>
+  <script src="lib/firebase-auth-compat.js"></script>
 
   <!-- ملفات الموقع بالترتيب -->
   <!-- عند كل تحديث يُرفع رقم النسخة v ليصل التحديث إلى المستخدمين فورًا -->
-  <script src="i18n.js?v=29"></script>
-  <script src="data.js?v=29"></script>
-  <script src="radio.js?v=29"></script>
-  <script src="progress.js?v=29"></script>
-  <script src="notes.js?v=29"></script>
-  <script src="account.js?v=29"></script>
-  <script src="staff.js?v=29"></script>
-  <script src="comments.js?v=29"></script>
-  <script src="app.js?v=29"></script>
+  <script src="i18n.js?v=30"></script>
+  <script src="data.js?v=30"></script>
+  <script src="feedback.js?v=30"></script>
+  <script src="radio.js?v=30"></script>
+  <script src="progress.js?v=30"></script>
+  <script src="notes.js?v=30"></script>
+  <script src="account.js?v=30"></script>
+  <script src="staff.js?v=30"></script>
+  <script src="comments.js?v=30"></script>
+  <script src="app.js?v=30"></script>
 </body>
 </html>

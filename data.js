@@ -12,12 +12,27 @@ const firebaseConfig = {
   databaseURL: "https://walyast3fef-default-rtdb.europe-west1.firebasedatabase.app"
 };
 firebase.initializeApp(firebaseConfig);
-const analytics = firebase.analytics();
 const database = firebase.database();
 
-function logEvent(name) {
-  try { analytics.logEvent(name); } catch (e) {}
-}
+// أُلغيت إحصاءات Google احترامًا لخصوصية المستمعين؛ الدالة باقية حتى لا يتغير باقي الكود
+function logEvent(name) {}
+
+// =====================
+// وقت الخادم: البث يُحسب منه بدل ساعة الجهاز، فيسمع الجميع الموضع نفسه حتى لو كانت ساعة الجهاز خاطئة
+// =====================
+let SERVER_OFFSET = 0;
+try {
+  const saved = parseInt(localStorage.getItem('serverOffset') || '0', 10);
+  if (Math.abs(saved) < 86400000) SERVER_OFFSET = saved;
+} catch (e) {}
+database.ref('.info/serverTimeOffset').on('value', snap => {
+  const v = snap.val();
+  if (typeof v === 'number' && Math.abs(v) < 86400000 * 365) {
+    SERVER_OFFSET = v;
+    try { localStorage.setItem('serverOffset', String(Math.round(v))); } catch (e) {}
+  }
+});
+const serverNow = () => Date.now() + SERVER_OFFSET;
 
 // =====================
 // تخزين محلي آمن لا يتعطل في وضع التصفح الخاص
@@ -82,6 +97,7 @@ async function getCountryCode() {
 // normal و fast: مدة النسختين بالثواني (تُقاس بصفحة durations.html)
 // لإضافة لقاء جديد: أضف سطرًا في آخر القائمة بالمدتين والعنوان
 // =====================
+// عند إضافة لقاء جديد: أضف له radioFrom: 'YYYY-MM-DD' بتاريخ الإضافة، حتى يدخل الراديو في الدورة التالية دون أن يقفز البث
 const LECTURES = [
   { id: "c01", normal: 4963, fast: 2719, title: "الكورس الأساسي لقاء 1, الإباحية مشكلة ديناميكية الإباحية مشكلة نظامية" },
   { id: "c02", normal: 5498, fast: 2619, title: "الكورس الأساسي لقاء 2 تشوه التنبؤ و تشوه المثالية" },

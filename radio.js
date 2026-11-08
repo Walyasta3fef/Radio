@@ -31,37 +31,55 @@ function shuffled(items, seed) {
   return a;
 }
 
-// tracks: [{ id, title, duration }]
+// tracks: [{ id, title, duration, from }]
+// from: وقت إضافة اللقاء إلى البث (اختياري). اللقاءات بلا from تكوّن البث الأصلي كما كان دائمًا.
+// اللقاء الجديد يدخل البث عند أول نهاية دورة كاملة بعد تاريخ إضافته، فلا يقفز البث لمن يستمع الآن.
 function createStation(name, tracks) {
-  const total = tracks.reduce((s, tr) => s + tr.duration, 0);
   const salt = hashString(name);
-  const cache = new Map();
+  const sum = (list) => list.reduce((s, tr) => s + tr.duration, 0);
+  const eras = [];
+  const addEra = (start, list) => eras.push({ start, list, total: sum(list), idx: eras.length, cache: new Map() });
+  addEra(RADIO_EPOCH, tracks.filter(tr => !tr.from));
+  [...new Set(tracks.filter(tr => tr.from).map(tr => tr.from))].sort((a, b) => a - b).forEach(d => {
+    const prev = eras[eras.length - 1];
+    const cycles = Math.max(0, Math.ceil((d - prev.start) / 1000 / prev.total));
+    addEra(prev.start + cycles * prev.total * 1000, tracks.filter(tr => !tr.from || tr.from <= d));
+  });
 
-  const rawOrder = (k) => shuffled(tracks, (salt ^ Math.imul(k + 1, 2654435761)) >>> 0);
+  // الحقبة الأولى بالملح نفسه القديم حتى يبقى البث الحالي مطابقًا لما كان
+  const rawOrder = (era, k) => shuffled(era.list,
+    (salt ^ Math.imul(k + 1, 2654435761) ^ (era.idx ? hashString('era' + era.idx) : 0)) >>> 0);
 
-  function order(k) {
-    if (cache.has(k)) return cache.get(k);
-    const list = rawOrder(k);
+  function order(era, k) {
+    if (era.cache.has(k)) return era.cache.get(k);
+    const list = rawOrder(era, k);
     // منع تكرار اللقاء نفسه مرتين متتاليتين بين نهاية دورة وبداية التي تليها
-    const prevLast = rawOrder(k - 1)[list.length - 1];
+    const prevLast = rawOrder(era, k - 1)[list.length - 1];
     if (list.length > 2 && list[0].id === prevLast.id) {
       const m = Math.floor(list.length / 2);
       [list[0], list[m]] = [list[m], list[0]];
     }
-    if (cache.size > 6) cache.clear();
-    cache.set(k, list);
+    if (era.cache.size > 6) era.cache.clear();
+    era.cache.set(k, list);
     return list;
   }
 
-  // موضع البث الآن: اللقاء الحالي والتالي والثانية داخل اللقاء
-  function getState(now = Date.now()) {
-    const elapsed = Math.floor((now - RADIO_EPOCH) / 1000);
-    const k = Math.floor(elapsed / total);
-    let pos = elapsed - k * total;
-    const list = order(k);
+  const eraAt = (now) => {
+    let e = eras[0];
+    for (const x of eras) if (x.start <= now) e = x;
+    return e;
+  };
+
+  // موضع البث الآن: اللقاء الحالي والتالي والثانية داخل اللقاء (بتوقيت الخادم)
+  function getState(now = serverNow()) {
+    const era = eraAt(now);
+    const elapsed = Math.floor((now - era.start) / 1000);
+    const k = Math.floor(elapsed / era.total);
+    let pos = elapsed - k * era.total;
+    const list = order(era, k);
     for (let i = 0; i < list.length; i++) {
       if (pos < list[i].duration) {
-        const next = i + 1 < list.length ? list[i + 1] : order(k + 1)[0];
+        const next = i + 1 < list.length ? list[i + 1] : order(era, k + 1)[0];
         return { track: list[i], next, position: pos };
       }
       pos -= list[i].duration;
@@ -69,5 +87,5 @@ function createStation(name, tracks) {
     return { track: list[0], next: list[1], position: 0 };
   }
 
-  return { name, total, getState };
+  return { name, get total() { return eraAt(serverNow()).total; }, getState };
 }
