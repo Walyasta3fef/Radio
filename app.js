@@ -103,6 +103,8 @@ function usePlayer(volume) {
   const lastProgressRef = useRef(0);
   const lastAttemptRef = useRef(0);
   const lastSampleRef = useRef(null);    // آخر موضع مسجّل لحساب الجزء المسموع فعلًا
+  const lastGoodRef = useRef(null);      // آخر موضع كان الصوت يعمل فيه فعلًا { key, t }، للرجوع إليه بعد الانقطاع
+  const stallsRef = useRef(0);           // عدد محاولات إعادة التحميل المتتالية بسبب التعليق
 
   const [mode, setMode] = useState(null);
   const [lectureId, setLectureId] = useState(null);
@@ -157,6 +159,12 @@ function usePlayer(volume) {
     setCurrentTime(id ? progress.position(id) : 0);
   };
 
+  // آخر موضع موثوق للملف المحمّل حاليًا
+  const goodPosition = (fallback) => {
+    const g = lastGoodRef.current;
+    return g && g.key === loadedKeyRef.current ? g.t : fallback;
+  };
+
   // إعادة تحميل الملف الحالي من الموضع نفسه (بعد خطأ أو انقطاع)
   const reloadInPlace = useCallback(() => {
     const audio = audioRef.current;
@@ -165,7 +173,8 @@ function usePlayer(volume) {
     lastProgressRef.current = Date.now();
     if (!navigator.onLine) { updateStatus('offline'); return; }
     updateStatus('loading');
-    resumeRef.current = audio.currentTime;
+    // لا نأخذ موضع المشغّل بعد محاولة سابقة لأنه يعود إلى الصفر، بل آخر موضع كان يعمل فيه
+    if (resumeRef.current == null) resumeRef.current = goodPosition(audio.currentTime);
     lastSampleRef.current = null;
     audio.src = audio.getAttribute('src');
     audio.load();
@@ -227,7 +236,10 @@ function usePlayer(volume) {
 
     const key = 'lecture:' + id;
     if (forceReload || loadedKeyRef.current !== key) {
-      resumeRef.current = forceReload && loadedKeyRef.current === key ? audio.currentTime : progress.position(id);
+      // عند إعادة المحاولة: موضع لم يُطبّق بعد، أو آخر موضع كان يعمل فيه، أو الموضع المحفوظ
+      resumeRef.current = forceReload && loadedKeyRef.current === key
+        ? (resumeRef.current != null ? resumeRef.current : goodPosition(progress.position(id)))
+        : progress.position(id);
       loadedKeyRef.current = key;
       lastSampleRef.current = null;
       audio.src = mediaUrl('normal', id);
@@ -349,11 +361,17 @@ function usePlayer(volume) {
           }
         }
         lastSampleRef.current = ct;
+        // الصوت يعمل فعلًا من الموضع الصحيح: نحفظه مرجعًا لأي إعادة تحميل
+        if (resumeRef.current == null && !pendingSeekRef.current && audio.readyState >= 3) {
+          lastGoodRef.current = { key: loadedKeyRef.current, t: ct };
+        }
       }
-      if (modeRef.current === 'lecture' && id) progress.setPosition(id, ct);
+      // لا يُحفظ موضع اللقاء قبل الرجوع إلى مكانه بعد التحميل، حتى لا يُحفظ الصفر
+      if (modeRef.current === 'lecture' && id && resumeRef.current == null) progress.setPosition(id, ct);
     };
     const onSeeking = () => { lastSampleRef.current = null; };
     const onPlaying = () => {
+      stallsRef.current = 0;
       if (!wantPlayRef.current) return;
       updateStatus('playing');
       const id = loadedKeyRef.current && loadedKeyRef.current.split(':')[1];
@@ -446,12 +464,16 @@ function usePlayer(volume) {
       const st = statusRef.current;
       if (st === 'blocked' || st === 'offline') return;
 
+      // المهلة قبل إعادة التحميل تزيد مع كل محاولة متتالية (15 ثم 25 ثم 40 ثانية)، حتى تكتمل المحاولة
+      const stallWait = [15000, 25000, 40000][Math.min(stallsRef.current, 2)];
+      const stalled = Date.now() - lastProgressRef.current > stallWait && sinceAttempt > stallWait;
+
       // الكورس والبث المتأخر: لا مزامنة مع البث، بل معالجة التعليق فقط
       if (modeRef.current === 'lecture' || shiftedRef.current) {
-        const reload = modeRef.current === 'lecture' ? () => loadLecture(true) : reloadInPlace;
+        const reload = () => { stallsRef.current++; modeRef.current === 'lecture' ? loadLecture(true) : reloadInPlace(); };
         if (st === 'error') { if (sinceAttempt > 8000) reload(); return; }
         if (audio.paused) { if (sinceAttempt > 6000) { lastAttemptRef.current = Date.now(); playAudio(); } return; }
-        if (Date.now() - lastProgressRef.current > 15000 && sinceAttempt > 15000) reload();
+        if (stalled) reload();
         return;
       }
 
@@ -461,7 +483,7 @@ function usePlayer(volume) {
       if (endedRef.current) return;
       if (st === 'error') { if (sinceAttempt > 8000) syncAndPlay(true); return; }
       if (audio.paused) { if (sinceAttempt > 6000) syncAndPlay(); return; }
-      if (Date.now() - lastProgressRef.current > 15000 && sinceAttempt > 15000) return syncAndPlay(true);
+      if (stalled) { stallsRef.current++; return syncAndPlay(true); }
       if (audio.readyState >= 3 && Math.abs(audio.currentTime - s.position) > 15) {
         lastSampleRef.current = null;
         audio.currentTime = s.position;
@@ -605,6 +627,7 @@ const ICON_PATHS = {
   download: html`<g><path d="M12 3v12"></path><path d="M7 10l5 5 5-5"></path><path d="M5 21h14"></path></g>`,
   list: html`<g><path d="M9 6h11"></path><path d="M9 12h11"></path><path d="M9 18h11"></path><circle cx="4.5" cy="6" r="1"></circle><circle cx="4.5" cy="12" r="1"></circle><circle cx="4.5" cy="18" r="1"></circle></g>`,
   chat: html`<path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"></path>`,
+  note: html`<g><path d="M12 20h9"></path><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"></path></g>`,
 };
 function Icon({ name, size = 18 }) {
   return html`<svg width=${size} height=${size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -692,6 +715,10 @@ function CountryFlags({ users }) {
 // (الزيارات والمستمعون القدامى ما زالوا يُحسبون في القاعدة لكن لا يظهرون)
 // آخر قراءة تُحفظ على الجهاز وتظهر فورًا، حتى دون اتصال، ثم تتحدّث عند وصول الجديد
 const STATS_CACHE_KEY = 'statsCache';
+const INTRO_KEY = 'introSeen';
+const NUDGE_KEY = 'nameNudgeClosedAt';
+const NUDGE_AFTER_SEC = 20 * 60;
+const NUDGE_AGAIN_MS = 7 * 24 * 3600 * 1000;
 function TotalStats() {
   const [stats, setStats] = useState(() => {
     try {
@@ -1210,6 +1237,16 @@ function HomePage({ player, now, users }) {
   const rv = radioView(player, mode, now);
   const count = users.filter(u => u.at === mode).length;
 
+  // «ابدأ من هنا»: للزائر الجديد فقط، ويختفي نهائيًا بعد إغلاقه
+  const [introSeen, setIntroSeen] = useState(() => storage.get(INTRO_KEY) === '1');
+  const closeIntro = () => { storage.set(INTRO_KEY, '1'); setIntroSeen(true); };
+  const showIntro = !introSeen && !started && !account.loggedIn;
+
+  // تذكير بالاسم الخاص بعد 20 دقيقة استماع دون حساب، ويعود بعد أسبوع إن أُغلق
+  const [nudgeOff, setNudgeOff] = useState(() => Date.now() - parseInt(storage.get(NUDGE_KEY) || '0', 10) < NUDGE_AGAIN_MS);
+  const showNudge = !showIntro && !nudgeOff && !account.loggedIn && progress.stats('0000', '9999').total >= NUDGE_AFTER_SEC;
+  const closeNudge = () => { storage.set(NUDGE_KEY, String(Date.now())); setNudgeOff(true); };
+
   // كارت واحد مفتوح في المرة، ويُحفظ آخر اختيار
   // إذا كان الراديو يعمل يُفتح كارته تلقائيًا
   const [open, setOpenState] = useState(() =>
@@ -1251,6 +1288,27 @@ function HomePage({ player, now, users }) {
     <header className="hero">
       <h1>${t('appName')}</h1>
     </header>
+
+    ${showIntro && html`<div className="intro">
+      <p className="intro-title">${t('introTitle')}</p>
+      <ul>
+        <li>${t('intro1')}</li>
+        <li>${t('intro2')}</li>
+        <li>${t('intro3')}</li>
+      </ul>
+      <div className="c-actions">
+        <button className="small-btn" onClick=${() => { closeIntro(); courseToggle(); }}>${t('introStart')}</button>
+        <button className="link-btn muted" onClick=${closeIntro}>${t('introGotIt')}</button>
+      </div>
+    </div>`}
+
+    ${showNudge && html`<div className="nudge">
+      <p>${t('nudgeText')}</p>
+      <div className="c-actions">
+        <button className="small-btn" onClick=${() => go('#/account')}>${t('nudgeBtn')}</button>
+        <button className="link-btn muted" onClick=${closeNudge}>${t('introGotIt')}</button>
+      </div>
+    </div>`}
 
     <section className="section">
       <div className=${'card tint-course' + (courseActive ? ' card-active' : '')}>
@@ -1442,8 +1500,9 @@ function CoursePage({ player, users }) {
               </span>
               ${pct > 0 && !done && html`<${HeardBar} id=${id} />`}
             </span>
-            ${(done || n > 0 || newBy[id]) && html`<span className="lesson-side">
+            ${(done || n > 0 || newBy[id] || notes.has(id)) && html`<span className="lesson-side">
               ${done && html`<span className="done-badge" aria-label=${t('lectureDone')}><${Icon} name="check" size=${14} /></span>`}
+              ${notes.has(id) && html`<span className="note-badge" aria-label=${t('lectureHasNotes')}><${Icon} name="note" size=${13} /></span>`}
               ${n > 0 && html`<span className=${'c-badge' + (newBy[id] ? ' new' : '')} aria-label=${t('commentsCount', { n })}><${Icon} name="chat" size=${13} />${n}</span>`}
             </span>`}
           </button>
@@ -1451,6 +1510,47 @@ function CoursePage({ player, users }) {
       })}
     </ol>
   </div>`;
+}
+
+// ملاحظات المستخدم الخاصة على اللقاء: تُكتب وتُحفظ تلقائيًا، وتُعرض بأوقات قابلة للضغط
+function NotesBox({ id, getTime, onTime }) {
+  const [, force] = useState(0);
+  useEffect(() => notes.subscribe(() => force(x => x + 1)), []);
+  const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const text = notes.get(id);
+  const has = !!text.trim();
+  const write = (v) => { setEditing(true); notes.set(id, v); };
+  const addTime = () => write((text && !/\s$/.test(text) ? text + ' ' : text) + fmtTime(getTime()) + ' ');
+
+  return html`<section className="comments notes">
+    <button className="c-toggle" onClick=${() => setOpen(o => !o)} aria-expanded=${open}>
+      <${Icon} name="note" size=${16} />
+      <span>${t('myNotes')}</span>
+      ${has && !open && html`<span className="c-count">${t('notesHas')}</span>`}
+      <span className=${'chev' + (open ? ' chev-open' : '')} aria-hidden="true">⌄</span>
+    </button>
+    ${open && html`<div className="c-body">
+      ${editing || !has ? html`<div className="c-form">
+          <textarea value=${text} maxLength=${NOTE_MAX} rows="5" placeholder=${t('notesPlaceholder')}
+            aria-label=${t('myNotes')} onInput=${e => write(e.target.value)}></textarea>
+          <div className="c-tools">
+            <span className="hint">${text.length}/${NOTE_MAX}</span>
+            <span className="c-tool-links">
+              <button type="button" className="link-btn" onClick=${addTime}>${t('addCurrentTime')}</button>
+              ${has && html`<button type="button" className="link-btn" onClick=${() => setEditing(false)}>${t('notesDone')}</button>`}
+            </span>
+          </div>
+        </div>`
+      : html`<div className="note-view">
+          <${CommentText} text=${text} maxSec=${LECTURE_BY_ID[id].normal} onTime=${onTime} />
+          <div className="c-tools"><span></span>
+            <button type="button" className="link-btn" onClick=${() => setEditing(true)}>${t('notesEdit')}</button>
+          </div>
+        </div>`}
+      <p className="hint">${account.loggedIn ? t('notesPrivateAcc') : t('notesPrivateLocal')}</p>
+    </div>`}
+  </section>`;
 }
 
 // =====================
@@ -1514,6 +1614,7 @@ function LecturePage({ id, player }) {
         </div>
       </div>
     </div>
+    <${NotesBox} id=${id} getTime=${() => (current ? player.currentTime : progress.position(id))} onTime=${jumpTo} />
     <${CommentsBox} lid=${id} list=${comments}
       getTime=${() => (current ? player.currentTime : progress.position(id))} onTime=${jumpTo} />
   </div>`;

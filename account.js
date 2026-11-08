@@ -47,6 +47,8 @@ const account = (() => {
   let syncStatus = acc ? 'idle' : 'none';   // none | idle | syncing | synced | error
   let lastSync = 0;
   let pushedRev = -1;
+  let pushedNotesRev = -1;
+  let remoteNotes = null;   // آخر ملاحظات مشفّرة في الحساب، حتى لا يمسحها جهاز لم يكتب ملاحظات
   const listeners = new Set();
   const notify = () => listeners.forEach(fn => fn());
   const setStatus = (s) => { syncStatus = s; notify(); };
@@ -86,12 +88,16 @@ const account = (() => {
 
   async function push() {
     if (!acc || !navigator.onLine) return;
-    const rev = progress.rev;
-    if (rev === pushedRev) return;
+    const rev = progress.rev, nrev = notes.rev;
+    if (rev === pushedRev && nrev === pushedNotesRev) return;
     try {
       setStatus('syncing');
-      await ref(acc.hash).set(payload());
+      const p = payload();
+      const e = (await notes.encrypt(acc.name)) || remoteNotes;
+      if (e) { p.e = e; remoteNotes = e; }
+      await ref(acc.hash).set(p);
       pushedRev = rev;
+      pushedNotesRev = nrev;
       lastSync = Date.now();
       setStatus('synced');
     } catch (e) { setStatus('error'); }
@@ -106,8 +112,9 @@ const account = (() => {
       const snap = await ref(acc.hash).once('value');
       const v = snap.val();
       if (v && v.d) progress.merge(v.d);
+      if (v && v.e) { remoteNotes = v.e; await notes.decryptMerge(acc.name, v.e); }
       await ensureNick(v);
-      pushedRev = -1;
+      pushedRev = -1; pushedNotesRev = -1;
       await push();
     } catch (e) { setStatus('error'); }
   }
@@ -151,8 +158,10 @@ const account = (() => {
       remember(name, hash);
       const v = snap.val();
       if (v && v.d) progress.merge(v.d);
+      remoteNotes = (v && v.e) || null;
+      if (remoteNotes) await notes.decryptMerge(name, remoteNotes);
       await ensureNick(v);
-      pushedRev = -1;
+      pushedRev = -1; pushedNotesRev = -1;
       await push();
       logEvent('account_login');
       return { ok: true };
@@ -168,6 +177,8 @@ const account = (() => {
     storage.set(ACCOUNT_KEY, '');
     storage.set(NAME_HIDDEN_KEY, '');
     progress.reset();
+    notes.reset();
+    remoteNotes = null;
     setStatus('none');
   }
 
