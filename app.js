@@ -41,8 +41,7 @@ function parseRoute() {
   const h = location.hash;
   let m = /^#\/radio\/(normal|fast)$/.exec(h);
   if (m) return { page: 'radio', mode: m[1] };
-  if (h === '#/course') return { page: 'course', tab: 'normal' };
-  if (h === '#/course/fast') return { page: 'course', tab: 'fast' };
+  if (h === '#/course' || h === '#/course/fast') return { page: 'course' };
   if (h === '#/account') return { page: 'account' };
   if (h === '#/report') return { page: 'report' };
   if (h === '#/general' || h === '#/community') return { page: 'general' };
@@ -705,6 +704,8 @@ const ICON_PATHS = {
   heart: html`<path d="M12 20s-7-4.3-9-8.6C1.8 8.4 3.8 5 7 5c1.9 0 3.2 1 4 2.2h2C13.8 6 15.1 5 17 5c3.2 0 5.2 3.4 4 6.4C19 15.7 12 20 12 20z"></path>`,
   heartFill: html`<path d="M12 20s-7-4.3-9-8.6C1.8 8.4 3.8 5 7 5c1.9 0 3.2 1 4 2.2h2C13.8 6 15.1 5 17 5c3.2 0 5.2 3.4 4 6.4C19 15.7 12 20 12 20z" fill="currentColor"></path>`,
   dots: html`<g fill="currentColor" stroke="none"><circle cx="5" cy="12" r="1.8"></circle><circle cx="12" cy="12" r="1.8"></circle><circle cx="19" cy="12" r="1.8"></circle></g>`,
+  toRight: html`<g><path d="M6 5l10 7-10 7z" fill="currentColor"></path><path d="M19 5v14"></path></g>`,
+  toLeft: html`<g><path d="M18 5L8 12l10 7z" fill="currentColor"></path><path d="M5 5v14"></path></g>`,
   lock: html`<g><rect x="5" y="11" width="14" height="9" rx="2"></rect><path d="M8 11V8a4 4 0 0 1 8 0v3"></path></g>`,
   plus: html`<g><path d="M12 5v14"></path><path d="M5 12h14"></path></g>`,
   trash: html`<g><path d="M4 7h16"></path><path d="M9 7V4h6v3"></path><path d="M6 7l1 13h10l1-13"></path></g>`,
@@ -855,14 +856,19 @@ function FacebookLink() {
   </a>`;
 }
 
-// معلومة صغيرة تظهر عند الضغط على الأيقونة بدل أن تشغل مساحة في الصفحة
-// تُحسب مكانها لتبقى دائمًا داخل الشاشة
-function InfoTip({ label, text }) {
+// نافذة صغيرة تظهر عند الضغط على زر، بدل أن يشغل محتواها مساحة في الصفحة
+// يُحسب مكانها لتبقى دائمًا داخل الشاشة، وتُغلق بالضغط خارجها أو بالتمرير
+// keepOpen: الضغط داخلها لا يغلقها (لمحتوى فيه أزرار تتغير حالتها)
+function Popover({ label, btnClass, button, children, keepOpen }) {
   const [pos, setPos] = useState(null);
   const btnRef = useRef(null);
+  const popRef = useRef(null);
   useEffect(() => {
     if (!pos) return;
-    const close = () => setPos(null);
+    const close = (e) => {
+      if (keepOpen && e && e.type === 'click' && popRef.current && popRef.current.contains(e.target)) return;
+      setPos(null);
+    };
     const id = setTimeout(() => {
       document.addEventListener('click', close);
       window.addEventListener('scroll', close, { passive: true });
@@ -879,9 +885,13 @@ function InfoTip({ label, text }) {
     setPos({ top: r.bottom + 8, left, width: w });
   };
   return html`<span className="info">
-    <button ref=${btnRef} className="info-btn" aria-label=${label} aria-expanded=${!!pos} onClick=${openTip}>i</button>
-    ${pos && html`<span className="info-pop" role="tooltip" style=${pos}>${text}</span>`}
+    <button ref=${btnRef} className=${btnClass} aria-label=${label} aria-expanded=${!!pos} onClick=${openTip}>${button}</button>
+    ${pos && html`<span ref=${popRef} className="info-pop" role=${keepOpen ? 'dialog' : 'tooltip'} aria-label=${label} style=${pos}>${children}</span>`}
   </span>`;
+}
+
+function InfoTip({ label, text, children }) {
+  return html`<${Popover} label=${label} btnClass="info-btn" button="i">${text}${children}<//>`;
 }
 
 function MiniBar({ value }) {
@@ -1545,49 +1555,48 @@ function RadioPage({ mode, player, users }) {
 // حجم الملف بالميغابايت
 const fmtSize = (bytes) => t('sizeMB', { n: bytes >= 10485760 ? Math.round(bytes / 1048576) : Math.max(0.1, Math.round(bytes / 104857.6) / 10) });
 
-// تحميل لقاء للاستماع دون اتصال: زر، ثم شريط تقدّم، ثم علامة «متاح دون اتصال» مع الحذف
+// تحميل لقاء للاستماع دون اتصال: أيقونة صغيرة تتغير بحسب الحالة،
+// والضغط عليها يفتح نافذة فيها الحجم وزر التحميل أو الإلغاء أو الحذف
 function OfflineControl({ id, variant }) {
   useOfflineVersion();
   useEffect(() => { offline.loadSizes(); }, []);
   if (!offline.supported) return null;
   const s = offline.state(variant, id);
+  const pct = s.st === 'loading' && s.total ? Math.min(100, s.loaded / s.total * 100) : 0;
+  const R = 9, C = 2 * Math.PI * R;
 
-  if (s.st === 'loading') {
-    const pct = s.total ? Math.min(100, s.loaded / s.total * 100) : 0;
-    return html`<div className="dl">
-      <div className="dl-row">
-        <span className="dl-label">${t('dlLoading')}</span>
-        <bdi dir="ltr" className="dl-num">${s.total ? Math.floor(pct) + '%' : fmtSize(s.loaded)}</bdi>
-        <button className="link-btn muted" onClick=${() => offline.cancel(variant, id)}>${t('cancel')}</button>
-      </div>
-      <${MiniBar} value=${pct} />
-      <p className="hint">${t('dlKeepOpen')}</p>
-    </div>`;
-  }
-  if (s.st === 'done') {
-    return html`<div className="dl">
-      <div className="dl-row">
-        <span className="dl-label dl-done"><${Icon} name="check" size=${14} />${t('dlDone')}</span>
-        <span className="hint">${fmtSize(s.size)}</span>
-        <button className="link-btn muted" onClick=${() => { if (window.confirm(t('dlRemoveConfirm'))) offline.remove(variant, id); }}>${t('delete')}</button>
-      </div>
-    </div>`;
-  }
-  return html`<div className="dl">
-    <button className="dl-btn" onClick=${() => offline.download(variant, id)}>
-      <${Icon} name="download" size=${15} />
-      <span>${s.st === 'error' ? t('dlRetry') : t('dlButton')}</span>
-      ${s.size > 0 && html`<small>${fmtSize(s.size)}</small>`}
-    </button>
-    ${s.st === 'error' && html`<p className="form-error">${t(s.error)}</p>`}
-  </div>`;
+  const button = s.st === 'loading'
+    ? html`<svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true" className=${s.total ? '' : 'dl-spin'}>
+        <circle cx="12" cy="12" r=${R} fill="none" stroke="currentColor" strokeOpacity=".25" strokeWidth="2.5"></circle>
+        <circle cx="12" cy="12" r=${R} fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"
+          strokeDasharray=${C} strokeDashoffset=${C * (1 - (s.total ? pct / 100 : 0.25))} transform="rotate(-90 12 12)"></circle>
+      </svg>`
+    : html`<${Icon} name=${s.st === 'done' ? 'saved' : 'download'} size=${18} />`;
+
+  return html`<${Popover} label=${t('dlLabel')} btnClass=${'dl-icon dl-' + s.st} button=${button} keepOpen>
+    ${s.st === 'loading' && html`<span className="dl-pop">
+      <b>${t('dlLoading')} <bdi dir="ltr">${s.total ? Math.floor(pct) + '%' : fmtSize(s.loaded)}</bdi></b>
+      <span>${t('dlKeepOpen')}</span>
+      <button className="small-btn" onClick=${() => offline.cancel(variant, id)}>${t('cancel')}</button>
+    </span>`}
+    ${s.st === 'done' && html`<span className="dl-pop">
+      <b>${t('dlDone')}</b>
+      <span>${fmtSize(s.size)}</span>
+      <button className="small-btn danger" onClick=${() => { if (window.confirm(t('dlRemoveConfirm'))) offline.remove(variant, id); }}>${t('dlRemove')}</button>
+    </span>`}
+    ${(s.st === 'none' || s.st === 'error') && html`<span className="dl-pop">
+      <b>${t('dlButton')}</b>
+      ${s.size > 0 && html`<span>${fmtSize(s.size)}</span>`}
+      ${s.st === 'error' && html`<span className="warn">${t(s.error)}</span>`}
+      <button className="small-btn dl-go" onClick=${() => offline.download(variant, id)}>${s.st === 'error' ? t('dlRetry') : t('dlStart')}</button>
+    </span>`}
+  <//>`;
 }
 
-function CoursePage({ tab, player, users }) {
+function CoursePage({ player, users }) {
   useProgressVersion();
   useOfflineVersion();
   const online = useOnline();
-  const fast = tab === 'fast';
   const sum = progress.summary();
   const contId = progress.continueId();
   const courseUsers = users.filter(u => u.at === 'course');
@@ -1595,8 +1604,6 @@ function CoursePage({ tab, player, users }) {
   const feed = useRecentFeed(100);
   const newBy = {};
   feed.forEach(c => { if (isNewComment(c, c.l)) newBy[c.l] = true; });
-  const [lockedTip, setLockedTip] = useState(null);
-  useEffect(() => { setLockedTip(null); }, [tab]);
   const saved = offline.usage();
 
   const continueNow = () => { player.playLecture(contId); go('#/lecture/' + contId); };
@@ -1613,7 +1620,12 @@ function CoursePage({ tab, player, users }) {
 
     <div className="panel summary tint-course">
       <h1>${t('coursePageTitle')}
-        <${InfoTip} label=${t('infoLabel')} text=${t('courseInfo')} />
+        <${InfoTip} label=${t('infoLabel')} text=${t('courseInfo')}>
+          ${saved.count > 0 && html`<span className="dl-pop dl-pop-extra">
+            <span>${t('dlUsage', { n: saved.count, size: fmtSize(saved.bytes) })}</span>
+            <button className="small-btn danger" onClick=${removeAll}>${t('dlRemoveAll')}</button>
+          </span>`}
+        <//>
       </h1>
       <div className="big-pct"><${Pct} value=${sum.percent} /></div>
       <${MiniBar} value=${sum.percent} />
@@ -1626,52 +1638,17 @@ function CoursePage({ tab, player, users }) {
       </button>`}
     </div>
 
-    <div className=${'seg course-tabs' + (fast ? ' variant-fast' : '')} role="tablist" aria-label=${t('courseSpeed')}>
-      <button role="tab" aria-selected=${!fast} className=${!fast ? 'on' : ''} onClick=${() => go('#/course')}>${t('course')}</button>
-      <button role="tab" aria-selected=${fast} className=${fast ? 'on' : ''} onClick=${() => go('#/course/fast')}>${t('courseFast')}</button>
-    </div>
-    ${fast && html`<p className="tab-hint">${t('courseFastHint')}</p>`}
     ${!online && html`<p className="tab-hint warn">${t('offlineOnlySaved')}</p>`}
-    ${saved.count > 0 && html`<div className="saved-row">
-      <span className="hint"><${Icon} name="saved" size=${13} /> ${t('dlUsage', { n: saved.count, size: fmtSize(saved.bytes) })}</span>
-      <button className="link-btn muted" onClick=${removeAll}>${t('dlRemoveAll')}</button>
-    </div>`}
 
-    ${!fast && html`<${RecentComments} player=${player} />`}
+    <${RecentComments} player=${player} />
 
-    <ol className=${'lessons' + (fast ? ' variant-fast' : '')}>
+    <ol className="lessons">
       ${COURSE_ORDER.map((id) => {
         const pct = progress.percent(id);
         const done = progress.isDone(id);
         const n = counts[id] || 0;
-        const playing = player.isPlaying && player.mode === 'lecture' && player.lectureId === id && player.variant === tab;
-        const isSaved = offline.has(tab, id);
-
-        if (fast) {
-          const locked = !done;
-          return html`<li key=${id}>
-            <button className=${'lesson' + (playing ? ' lesson-playing' : '') + (locked ? ' lesson-locked' : '')}
-                aria-disabled=${locked}
-                onClick=${() => (locked ? setLockedTip(lockedTip === id ? null : id) : go('#/fast/' + id))}>
-              <span className="lesson-body">
-                <span className="lesson-title">${LECTURE_BY_ID[id].title}</span>
-                <span className="lesson-meta">
-                  ${fmtTime(LECTURE_BY_ID[id].fast)}
-                  ${playing ? html`<span> · ${t('playingHere')}</span>` : ''}
-                </span>
-              </span>
-              <span className="lesson-side">
-                ${locked && html`<span className="lock-badge" aria-label=${t('fastLockedShort')}><${Icon} name="lock" size=${14} /></span>`}
-                ${isSaved && html`<span className="note-badge" aria-label=${t('dlDone')}><${Icon} name="saved" size=${14} /></span>`}
-              </span>
-            </button>
-            ${locked && lockedTip === id && html`<div className="locked-tip" role="status">
-              <p>${t('fastLocked')}</p>
-              <button className="link-btn" onClick=${() => go('#/lecture/' + id)}>${t('openNormal')}</button>
-            </div>`}
-          </li>`;
-        }
-
+        const playing = player.isPlaying && player.mode === 'lecture' && player.lectureId === id;
+        const isSaved = offline.has('normal', id) || offline.has('fast', id);
         return html`<li key=${id}>
           <button className=${'lesson' + (playing ? ' lesson-playing' : '') + (done ? ' lesson-done' : '')}
               onClick=${() => go('#/lecture/' + id)}>
@@ -1871,60 +1848,67 @@ function LecturePage({ id, variant, player }) {
   const commit = () => { if (dragging != null) { player.seekLecture(id, dragging, variant); setDragging(null); } };
   const skipBy = (d) => (current ? player.skip(d) : player.seekLecture(id, time + d, variant));
 
-  // النسخة السريعة لا تُفتح قبل إكمال اللقاء على السرعة العادية
-  if (fast && !done) {
-    return html`<div className="page lecture">
-      <div className="topbar">
-        <${BackButton} to="#/course/fast" />
-        <div className="top-left"><${NameChip} /></div>
-      </div>
-      <div className="panel-wrap">
-        <div className="panel center">
-          <span className="title-icon big"><${Icon} name="lock" size=${24} /></span>
-          <p className="lecture-title">${lec.title}</p>
-          <p className="acc-line">${t('fastLocked')}</p>
-          <button className="cta" onClick=${() => go('#/lecture/' + id)}>${t('openNormal')}</button>
-        </div>
-      </div>
-    </div>`;
-  }
+  // مفتاح السرعة: «عالسريع» مقفل حتى يكتمل اللقاء على السرعة العادية،
+  // والضغط عليه وهو مقفل يعرض رسالة قصيرة تختفي وحدها
+  const [lockMsg, setLockMsg] = useState(false);
+  useEffect(() => {
+    if (!lockMsg) return;
+    const id2 = setTimeout(() => setLockMsg(false), 6000);
+    return () => clearTimeout(id2);
+  }, [lockMsg]);
+  const pick = (v) => {
+    if (v === variant) return;
+    if (v === 'fast' && !done) return setLockMsg(true);
+    if (active) player.stop();          // لا يبقى صوت نسخة يعمل والصفحة تعرض الأخرى
+    go(lectureHash(id, v));
+  };
 
   return html`<div className=${'page lecture' + (fast ? ' variant-fast' : '')}>
     <div className="topbar">
-      <${BackButton} to=${fast ? '#/course/fast' : '#/course'} />
+      <${BackButton} to="#/course" />
       <div className="top-left"><${NameChip} /></div>
     </div>
 
     <div className="panel-wrap">
       <div className="panel tint-course">
         <p className="lecture-title">${lec.title}</p>
-        ${fast
-          ? html`<p className="heard"><b className="variant-tag">${t('courseFast')}</b> ${t('fastNoCount')}</p>`
-          : html`<p className=${'heard' + (done ? ' heard-done' : '')}>
-              ${done ? '✓ ' + t('lectureDone') + ' · ' : ''}${t('heardLabel')} <${Pct} value=${heard + '%'} />
-            </p>`}
+
+        <div className="speed-row">
+          <div className="seg speed-seg" role="tablist" aria-label=${t('courseSpeed')}>
+            <button role="tab" aria-selected=${!fast} className=${!fast ? 'on' : ''} onClick=${() => pick('normal')}>${t('lectureNormal')}</button>
+            <button role="tab" aria-selected=${fast} aria-disabled=${!done} className=${(fast ? 'on' : '') + (!done ? ' seg-locked' : '')}
+                onClick=${() => pick('fast')}>
+              ${!done && html`<${Icon} name="lock" size=${13} />`}${t('lectureFast')}
+            </button>
+          </div>
+          <${OfflineControl} id=${id} variant=${variant} />
+        </div>
+        ${lockMsg && html`<p className="lock-msg" role="status">${t('fastLocked')}</p>`}
 
         <${SeekBar} id=${id} value=${shown} duration=${duration} marks=${fast ? [] : marks} noteMarks=${noteMarks} plain=${fast}
           onInput=${setDragging} onCommit=${commit} />
-        <div className="times"><span>${fmtTime(shown)}</span><span>${fmtTime(duration)}</span></div>
+        <div className="times">
+          <span>${fmtTime(shown)}</span>
+          ${!fast && (done || heard > 0) && html`<span className=${'times-heard' + (done ? ' heard-done' : '')}>
+            ${done ? html`<${React.Fragment}><${Icon} name="check" size=${12} /> ${t('lectureDone')}<//>`
+              : html`<${React.Fragment}>${t('heardLabel')} <${Pct} value=${heard + '%'} /><//>`}
+          </span>`}
+          <span>${fmtTime(duration)}</span>
+        </div>
 
         <div className="controls">
+          <button className="skip skip-nav" disabled=${!prev} onClick=${() => prev && go(lectureHash(prev, variant))} aria-label=${t('prevLecture')}>
+            <${Icon} name="toRight" size=${17} />
+          </button>
           <button className="skip" onClick=${() => skipBy(-SKIP_SECONDS)} aria-label=${t('back15')}>−15</button>
           <${PlayButton} active=${active} status=${status} onClick=${() => player.toggleLecture(id, variant)} />
           <button className="skip" onClick=${() => skipBy(SKIP_SECONDS)} aria-label=${t('forward15')}>+15</button>
+          <button className="skip skip-nav" disabled=${!next} onClick=${() => next && go(lectureHash(next, variant))} aria-label=${t('nextLecture')}>
+            <${Icon} name="toLeft" size=${17} />
+          </button>
         </div>
 
         <${StatusLine} active=${active} status=${status} onRetry=${player.retry} />
-
-        <${OfflineControl} id=${id} variant=${variant} />
-
-        <div className="nav">
-          <button className="small-btn" disabled=${!prev} onClick=${() => prev && go(lectureHash(prev, variant))}>${t('prevLecture')}</button>
-          <button className="small-btn" disabled=${!next} onClick=${() => next && go(lectureHash(next, variant))}>${t('nextLecture')}</button>
-        </div>
-        ${(fast || done) && html`<p className="variant-switch">
-          <button className="link-btn" onClick=${() => go(lectureHash(id, fast ? 'normal' : 'fast'))}>${t(fast ? 'openNormalShort' : 'openFast')}</button>
-        </p>`}
       </div>
     </div>
     <${NotesBox} id=${id} getTime=${getTime} onTime=${jumpTo} readOnly=${fast} />
@@ -2783,7 +2767,7 @@ function App() {
   if (route.page === 'radio') {
     page = html`<${RadioPage} mode=${route.mode} player=${player} users=${users} />`;
   } else if (route.page === 'course') {
-    page = html`<${CoursePage} tab=${route.tab} player=${player} users=${users} />`;
+    page = html`<${CoursePage} player=${player} users=${users} />`;
   } else if (route.page === 'account') {
     page = html`<${AccountPage} returnTo=${returnRef.current} />`;
   } else if (route.page === 'report') {
@@ -2795,7 +2779,9 @@ function App() {
   } else if (route.page === 'feedback') {
     page = html`<${FeedbackPage} />`;
   } else if (route.page === 'lecture') {
-    page = html`<${LecturePage} key=${route.variant + ':' + route.id} id=${route.id} variant=${route.variant} player=${player} />`;
+    // عنوان النسخة السريعة للقاء لم يكتمل بعد يفتح النسخة العادية
+    const v = route.variant === 'fast' && !progress.isDone(route.id) ? 'normal' : route.variant;
+    page = html`<${LecturePage} key=${v + ':' + route.id} id=${route.id} variant=${v} player=${player} />`;
   } else {
     page = html`<${HomePage} player=${player} users=${users} />`;
   }
