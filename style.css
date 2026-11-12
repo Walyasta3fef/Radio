@@ -749,3 +749,14 @@ span.note-time { color: var(--note); font-weight: 700; }
 .note-edit .note-del { margin-inline-start: 0; }
 .notes-foot { display: inline-flex; align-items: center; gap: 4px; }
 .sb-mark-note { background: var(--course); opacity: 1; border-radius: 2px; width: 4px; height: 8px; margin-inline-start: -2px; top: 0; }
+
+/* تقرير الاستماع والمتصلون الآن في صفحة المميزين */
+.seg-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); margin-bottom: 10px; }
+.seg-3 button { padding: 8px 4px; font-size: 12px; }
+.staff-report h3 { font-size: 13px; font-weight: 800; color: var(--muted); margin: 16px 0 8px; }
+.staff-report .rep-grid small, .staff-online .rep-grid small { text-align: center; line-height: 1.5; padding: 0 4px; }
+.staff-report .staff-list, .staff-online .staff-list { margin-top: 8px; }
+.staff-report .src-legend { margin-bottom: 0; }
+.staff-report > .link-btn { display: block; margin: 14px auto 0; }
+.staff-admin h2 { margin-top: 22px; }
+.staff-admin h2:first-child { margin-top: 0; }

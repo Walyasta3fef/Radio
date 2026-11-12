@@ -68,6 +68,21 @@ const staff = (() => {
     } catch (e) { return { error: 'staffCountFailed' }; }
   }
 
+  // للمالك فقط: قراءة بيانات كل الحسابات مرة واحدة لبناء تقرير الاستماع
+  // (الملاحظات مشفّرة ولا تُقرأ هنا). تُستدعى بزر فقط، لأنها تنزّل بيانات كل المشتركين
+  async function loadUsers() {
+    try {
+      const snap = await withTimeout(database.ref('/users').once('value'), 30000);
+      const out = [];
+      snap.forEach(ch => {
+        const v = ch.val();
+        if (!v || typeof v.d !== 'string') return;
+        try { out.push({ k: v.k || null, u: v.u || 0, d: JSON.parse(v.d) }); } catch (e) {}
+      });
+      return { ok: true, users: out };
+    } catch (e) { return { error: 'staffReportFailed' }; }
+  }
+
   async function remove(uid) {
     try { await database.ref('/staff/' + uid).remove(); return { ok: true }; }
     catch (e) { return { error: 'staffSaveFailed' }; }
@@ -83,7 +98,48 @@ const staff = (() => {
     get list() { return list; },
     nameOf: (uid) => (list[uid] && list[uid].name) || null,
     names: () => Object.values(list).map(s => s && s.name).filter(Boolean),
-    signIn, signOut, add, remove, countSubscribers,
+    signIn, signOut, add, remove, countSubscribers, loadUsers,
     subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn); },
   };
 })();
+
+// =====================
+// تقرير الاستماع لكل الحسابات (حساب بحت بلا اتصال، ليسهل اختباره)
+// users: [{ k: رقم المشترك، d: بيانات تقدّمه }]، والفترة بمفاتيح الأيام YYYYMMDD (شاملة)
+// allTime: يُضاف وقت الاستماع القديم المسجّل قبل التقرير اليومي (بلا تصنيف)
+// =====================
+function buildListenReport(users, fromKey, toKey, allTime) {
+  const r = { accounts: users.length, listeners: 0, c: 0, n: 0, f: 0, legacy: 0, lectures: [], top: [] };
+  const lec = {};      // لقاء → { sec, people, done }
+  const slot = (id) => lec[id] || (lec[id] = { id, sec: 0, people: 0, done: 0 });
+  users.forEach(u => {
+    const d = u.d || {};
+    let c = 0, n = 0, f = 0;
+    const mine = {};
+    Object.values(d.daily || {}).forEach(days => {
+      Object.entries(days || {}).forEach(([day, v]) => {
+        if (!v || day < fromKey || day > toKey) return;
+        c += v.c || 0; n += v.n || 0; f += v.f || 0;
+        Object.entries(v.l || {}).forEach(([id, s]) => { mine[id] = (mine[id] || 0) + (s || 0); });
+      });
+    });
+    let legacy = 0;
+    if (allTime) legacy = Object.values(d.sec || {}).reduce((s, x) => s + (x || 0), 0);
+    Object.entries(mine).forEach(([id, s]) => {
+      if (!LECTURE_BY_ID[id]) return;
+      const e = slot(id); e.sec += s; if (s >= 60) e.people++;
+    });
+    Object.entries(d.lectures || {}).forEach(([id, e]) => {
+      if (!e || !e.d || !LECTURE_BY_ID[id]) return;
+      // اللقاءات المكتملة قبل تسجيل تاريخ الاكتمال تظهر في «كل الوقت» فقط
+      if (allTime || (e.da && e.da >= fromKey && e.da <= toKey)) slot(id).done++;
+    });
+    const total = c + n + f + legacy;
+    r.c += c; r.n += n; r.f += f; r.legacy += legacy;
+    if (total >= 60) { r.listeners++; r.top.push({ k: u.k, sec: total }); }
+  });
+  r.total = r.c + r.n + r.f + r.legacy;
+  r.lectures = Object.values(lec).filter(e => e.sec > 0 || e.done > 0).sort((a, b) => b.sec - a.sec || b.done - a.done);
+  r.top.sort((a, b) => b.sec - a.sec);
+  return r;
+}

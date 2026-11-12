@@ -2205,7 +2205,114 @@ function FeedbackList() {
 // =====================
 // صفحة المميزين (سرية، تُفتح من الرابط فقط)
 // =====================
-function StaffPage() {
+// من هم متصلون الآن وأين (للمالك): يوضّح الفرق بين من يستمع ومن فتح الموقع فقط
+const PLACE_LABEL = { home: 'placeHome', course: 'sourceCourse', normal: 'sourceNormal', fast: 'sourceFast' };
+function StaffOnline({ users }) {
+  const by = {};
+  users.forEach(u => { const k = PLACE_LABEL[u.at] ? u.at : 'home'; by[k] = (by[k] || 0) + 1; });
+  const now = serverNow();
+  const ago = (ts) => {
+    const m = Math.max(0, Math.round((now - (ts || now)) / 60000));
+    return m < 60 ? t('minutesOnly', { m }) : t('hoursMinutes', { h: Math.floor(m / 60), m: m % 60 });
+  };
+  const sorted = [...users].sort((a, b) => (a.since || 0) - (b.since || 0));
+  return html`<div className="staff-online">
+    <div className="rep-grid">
+      <div><b>${users.filter(u => LISTEN_PLACES.includes(u.at)).length}</b><small>${t('staffOnlineListening')}</small></div>
+      <div><b>${users.length}</b><small>${t('staffOnlineAll')}</small></div>
+    </div>
+    <ul className="staff-list">
+      ${sorted.map((u, i) => html`<li key=${i}>
+        <span><bdi dir="ltr">${u.countryCode || '—'}</bdi> · ${t(PLACE_LABEL[u.at] || 'placeHome')}</span>
+        <span className="hint">${t('staffOnlineSince', { t: ago(u.since) })}</span>
+      </li>`)}
+    </ul>
+  </div>`;
+}
+
+// تقرير الاستماع من بيانات الحسابات (للمالك). يُحمَّل بزر، لا تلقائيًا، حتى لا يستهلك التنزيل
+const STAFF_PERIODS = [{ key: '7', days: 7 }, { key: '30', days: 30 }, { key: 'all', days: 0 }];
+function StaffReport() {
+  const [users, setUsers] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+  const [period, setPeriod] = useState('30');
+  const [siteSec, setSiteSec] = useState(null);
+
+  const load = async () => {
+    setBusy(true); setError(null);
+    const r = await staff.loadUsers();
+    setBusy(false);
+    if (r.error) return setError(r.error);
+    setUsers(r.users);
+    try { setSiteSec((await database.ref('/stats/listen_seconds').once('value')).val() || 0); } catch (e) {}
+  };
+
+  if (!users) {
+    return html`<div>
+      <p className="acc-line">${t('staffReportHint')}</p>
+      <button className="small-btn" disabled=${busy} onClick=${load}>${busy ? t('pleaseWait') : t('staffReportLoad')}</button>
+      ${error && html`<p className="form-error">${t(error)}</p>`}
+    </div>`;
+  }
+
+  const p = STAFF_PERIODS.find(x => x.key === period);
+  const today = new Date();
+  const r = buildListenReport(users, p.days ? dayKey(addDays(today, -(p.days - 1))) : '00000000', dayKey(today), !p.days);
+  const srcTotal = r.c + r.n + r.f;
+  return html`<div className="staff-report">
+    <div className="seg seg-3" role="tablist">
+      ${STAFF_PERIODS.map(x => html`<button key=${x.key} role="tab" aria-selected=${period === x.key}
+        className=${period === x.key ? 'on' : ''} onClick=${() => setPeriod(x.key)}>${t('staffPeriod' + x.key)}</button>`)}
+    </div>
+
+    <div className="rep-grid">
+      <div><b>${r.listeners}</b><small>${t('staffRepListeners', { n: r.accounts })}</small></div>
+      <div><b>${r.total > 0 ? fmtListen(r.total) : '—'}</b><small>${t('staffRepTotal')}</small></div>
+      <div><b>${r.listeners ? fmtListen(r.total / r.listeners) : '—'}</b><small>${t('staffRepAverage')}</small></div>
+      <div><b>${siteSec != null ? fmtHours(siteSec) : '—'}</b><small>${t('staffRepSite')}</small></div>
+    </div>
+
+    ${srcTotal > 0 && html`<${React.Fragment}>
+      <h3>${t('staffRepSources')}</h3>
+      <div className="src-bar">
+        ${SOURCES.map(s => r[s.key] > 0 && html`<span key=${s.key} className=${s.cls} style=${{ width: (r[s.key] / srcTotal * 100) + '%' }}></span>`)}
+      </div>
+      <ul className="src-legend">
+        ${[...SOURCES].sort((a, b) => r[b.key] - r[a.key]).map(s => html`<li key=${s.key}>
+          <span className=${'dot ' + s.cls}></span>${t(s.label)}
+          <b>${r[s.key] > 0 ? fmtListen(r[s.key]) : '—'} <${Pct} value=${Math.round(r[s.key] / srcTotal * 100) + '%'} /></b>
+        </li>`)}
+        ${r.legacy > 0 && html`<li><span className="dot"></span>${t('staffRepLegacy')}<b>${fmtListen(r.legacy)}</b></li>`}
+      </ul>
+    <//>`}
+
+    ${r.lectures.length > 0 && html`<${React.Fragment}>
+      <h3>${t('staffRepLectures')}</h3>
+      <ul className="staff-list">
+        ${r.lectures.slice(0, 10).map(e => html`<li key=${e.id}>
+          <span><b>${shortTitle(e.id)}</b> · ${e.sec > 0 ? fmtListen(e.sec) : '—'}</span>
+          <span className="hint">${t('staffRepLecMeta', { people: e.people, done: e.done })}</span>
+        </li>`)}
+      </ul>
+    <//>`}
+
+    ${r.top.length > 0 && html`<${React.Fragment}>
+      <h3>${t('staffRepTop')}</h3>
+      <ul className="staff-list">
+        ${r.top.slice(0, 10).map((u, i) => html`<li key=${i}>
+          <span>${t('staffRepNumber')} <bdi dir="ltr">${u.k || '—'}</bdi></span>
+          <span className="hint">${fmtListen(u.sec)}</span>
+        </li>`)}
+      </ul>
+    <//>`}
+
+    ${r.listeners === 0 && html`<p className="hint center-text">${t('staffRepEmpty')}</p>`}
+    <button className="link-btn muted" disabled=${busy} onClick=${load}>${busy ? t('pleaseWait') : t('staffReportReload')}</button>
+  </div>`;
+}
+
+function StaffPage({ users }) {
   useStaffVersion();
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState(null);
@@ -2271,6 +2378,10 @@ function StaffPage() {
             ${!s.owner && html`<button className="link-btn muted" onClick=${() => window.confirm(t('staffRemoveConfirm', { name: s.name })) && staff.remove(id)}>${t('delete')}</button>`}
           </li>`)}
         </ul>
+        <h2>${t('staffReportTitle')}</h2>
+        <${StaffReport} />
+        <h2>${t('staffOnlineTitle')}</h2>
+        <${StaffOnline} users=${users} />
         <h2>${t('reportedPostsTitle')}</h2>
         <${ReportedPosts} />
         <h2>${t('feedbackListTitle')}</h2>
@@ -2785,7 +2896,7 @@ function App() {
   } else if (route.page === 'general') {
     page = html`<${CommunityPage} focus=${route.focus} />`;
   } else if (route.page === 'staff') {
-    page = html`<${StaffPage} />`;
+    page = html`<${StaffPage} users=${users} />`;
   } else if (route.page === 'feedback') {
     page = html`<${FeedbackPage} />`;
   } else if (route.page === 'lecture') {
