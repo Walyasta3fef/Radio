@@ -760,3 +760,38 @@ span.note-time { color: var(--note); font-weight: 700; }
 .staff-report > .link-btn { display: block; margin: 14px auto 0; }
 .staff-admin h2 { margin-top: 22px; }
 .staff-admin h2:first-child { margin-top: 0; }
+
+/* إضافة لقاء من صفحة المميزين */
+.lec-admin form { gap: 12px; }
+.lec-admin small { font-size: 11px; color: var(--muted); }
+.lec-admin input {
+  width: 100%; min-width: 0; padding: 8px 10px; border-radius: 10px; font: inherit; font-size: 14px;
+  background: var(--sunken); color: var(--text); border: 1px solid var(--line-2); outline: none;
+  user-select: text; -webkit-user-select: text;
+}
+.lec-admin input:focus { border-color: var(--course); }
+.lec-admin input:disabled { opacity: .5; }
+.lec-head { display: flex; gap: 8px; }
+.lec-head label { display: flex; flex-direction: column; gap: 4px; }
+.lec-num { width: 64px; flex-shrink: 0; }
+.lec-num input { text-align: center; }
+.lec-name { flex: 1; min-width: 0; }
+.lec-src { border: 1px solid var(--line); border-radius: 14px; padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.lec-src legend { padding: 0 6px; font-size: 13px; font-weight: 800; }
+.lec-seg { border-radius: 10px; padding: 3px; }
+.lec-seg button { padding: 6px 4px; font-size: 12px; border-radius: 8px; }
+.lec-file { display: flex; align-items: center; gap: 4px; min-width: 0; }
+.lec-fix { font-size: 11px; color: var(--faint); white-space: nowrap; flex-shrink: 1; overflow: hidden; text-overflow: ellipsis; max-width: 40%; }
+.lec-file input { flex: 1; text-align: left; }
+.lec-url { text-align: left !important; font-size: 13px !important; }
+.lec-files { display: flex; flex-wrap: wrap; gap: 6px; max-height: 120px; overflow-y: auto; }
+.lec-chip { padding: 4px 10px; border-radius: 999px; font-size: 11px; background: var(--surface-2); border: 1px solid var(--line-2); color: var(--muted); }
+.lec-chip.on { background: var(--course); color: var(--course-ink); border-color: transparent; font-weight: 700; }
+.lec-dur { display: flex; align-items: flex-end; gap: 8px; }
+.lec-dur > .hint { padding-bottom: 22px; }
+.lec-dur label { display: flex; flex-direction: column; align-items: center; gap: 2px; width: 56px; }
+.lec-dur input { text-align: center; }
+.lec-ok { color: var(--course); display: inline-flex; align-items: center; gap: 4px; }
+.lec-admin .form-error { margin: 0; line-height: 1.7; }
+.lec-admin .form-error .link-btn { margin-inline-start: 6px; }
+.lec-actions { display: inline-flex; gap: 10px; flex-shrink: 0; }

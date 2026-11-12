@@ -10,7 +10,7 @@ const BEHIND_SECONDS = 20;
 const RADIO_MODE_KEY = 'radio_mode';
 
 const STATIONS = Object.fromEntries(MODES.map(mode => [mode, createStation(mode,
-  LECTURES.map(l => ({ id: l.id, title: l.title, duration: l[mode], from: l.radioFrom ? Date.parse(l.radioFrom + 'T00:00:00Z') : 0 })))]));
+  LECTURES.map(l => ({ id: l.id, title: l.title, duration: l[mode], from: l.from || (l.radioFrom ? Date.parse(l.radioFrom + 'T00:00:00Z') : 0) })))]));
 
 const fmtTime = (s) => {
   if (isNaN(s)) return '0:00';
@@ -2205,6 +2205,219 @@ function FeedbackList() {
 // =====================
 // صفحة المميزين (سرية، تُفتح من الرابط فقط)
 // =====================
+// =====================
+// إضافة اللقاءات من صفحة المميزين (للمالك)
+// =====================
+// قياس مدة ملف صوتي من رابطه. يعيد الثواني، أو null إذا تعذّر فتح الرابط
+function measureAudio(url) {
+  return new Promise(resolve => {
+    let done = false;
+    const a = new Audio();
+    const finish = (v) => { if (done) return; done = true; clearTimeout(timer); try { a.removeAttribute('src'); a.load(); } catch (e) {} resolve(v); };
+    const timer = setTimeout(() => finish(null), 25000);
+    a.preload = 'metadata';
+    a.onloadedmetadata = () => finish(isFinite(a.duration) && a.duration > 0 ? Math.round(a.duration) : null);
+    a.onerror = () => finish(null);
+    a.src = url;
+  });
+}
+
+// ملفات mp3 الموجودة في صفحتي الأرشيف المعتادتين، مع مددها إن ذكرها الأرشيف
+async function loadArchiveFiles() {
+  const out = { normal: [], fast: [] };
+  const parseLen = (x) => {
+    if (x == null) return null;
+    const s = String(x);
+    const v = s.includes(':') ? parseLooseTime(s) : parseFloat(s);
+    return v > 0 && isFinite(v) ? Math.round(v) : null;
+  };
+  await Promise.all(['normal', 'fast'].map(async mode => {
+    try {
+      const item = /\/download\/([^/]+)\//.exec(ARCHIVE_DIR[mode])[1];
+      const res = await fetch('https://archive.org/metadata/' + item + '/files', { credentials: 'omit' });
+      if (!res.ok) return;
+      const j = await res.json();
+      ((j && (j.result || j.files)) || []).forEach(f => {
+        if (f && typeof f.name === 'string' && /\.mp3$/i.test(f.name)) out[mode].push({ name: f.name.replace(/\.mp3$/i, ''), sec: parseLen(f.length) });
+      });
+    } catch (e) {}
+  }));
+  return out;
+}
+
+const splitHMS = (sec) => (sec > 0 ? { h: String(Math.floor(sec / 3600)), m: String(Math.floor(sec % 3600 / 60)), s: String(sec % 60) } : { h: '', m: '', s: '' });
+const joinHMS = (d) => (parseInt(d.h, 10) || 0) * 3600 + (parseInt(d.m, 10) || 0) * 60 + (parseInt(d.s, 10) || 0);
+const fileOfUrl = (url) => { try { return decodeURIComponent(url.split('/').pop()).replace(/\.mp3$/i, ''); } catch (e) { return ''; } };
+const lectureNameOnly = (title) => String(title || '').replace(/^\s*لقاء\s*[0-9٠-٩]+\s*[-–—:،,]*\s*/, '').trim();
+
+// رابط نسخة واحدة ومدتها: من صفحة الأرشيف المعتادة (يُكتب اسم الملف فقط) أو رابط كامل آخر
+function LectureSource({ mode, value, onChange, files }) {
+  const set = (patch) => onChange(Object.assign({}, value, patch));
+  const url = lectureSourceUrl(mode, value);
+  const entered = joinHMS(value);
+  const measure = async (v = value) => {
+    const u = lectureSourceUrl(mode, v);
+    if (!validMp3Url(u) || v.checking) return;
+    if (v.measuredFor === u && v.measured != null) return;          // قيس هذا الرابط من قبل
+    onChange(Object.assign({}, v, { checking: true }));
+    const sec = await measureAudio(u);
+    // الحالة قد تكون تغيّرت أثناء القياس: تُحدَّث من آخر قيمة، ولا تُمس مدة كتبها المالك
+    onChange(prev => {
+      const next = Object.assign({}, prev, { checking: false });
+      if (lectureSourceUrl(mode, prev) !== u) return next;
+      Object.assign(next, { measured: sec == null ? 'fail' : sec, measuredFor: u });
+      if (sec != null && !joinHMS(prev)) Object.assign(next, splitHMS(sec));
+      return next;
+    });
+  };
+  const pickFile = (f) => {
+    const next = Object.assign({}, value, { src: 'archive', file: f.name, measured: null });
+    if (f.sec) { Object.assign(next, splitHMS(f.sec), { measured: f.sec, measuredFor: lectureSourceUrl(mode, next) }); onChange(next); }
+    else measure(next);
+  };
+  const fresh = value.measuredFor === url;
+  const differs = fresh && typeof value.measured === 'number' && entered > 0 && Math.abs(entered - value.measured) > 3;
+
+  return html`<fieldset className="lec-src">
+    <legend>${t(mode === 'normal' ? 'lecSrcNormal' : 'lecSrcFast')}</legend>
+    <div className="seg lec-seg" role="tablist">
+      <button type="button" role="tab" aria-selected=${value.src === 'archive'} className=${value.src === 'archive' ? 'on' : ''} onClick=${() => set({ src: 'archive' })}>${t('lecFromArchive')}</button>
+      <button type="button" role="tab" aria-selected=${value.src === 'url'} className=${value.src === 'url' ? 'on' : ''} onClick=${() => set({ src: 'url' })}>${t('lecFromUrl')}</button>
+    </div>
+    ${value.src === 'archive'
+      ? html`<${React.Fragment}>
+          <div className="lec-file" dir="ltr">
+            <span className="lec-fix" title=${ARCHIVE_DIR[mode]}>…/${ARCHIVE_DIR[mode].split('/').slice(-2, -1)[0]}/</span>
+            <input value=${value.file} placeholder=${t('lecFilePh')} aria-label=${t('lecFilePh')} autoComplete="off" autoCapitalize="off" spellCheck="false"
+              onInput=${e => set({ file: e.target.value.replace(/\.mp3$/i, '') })} onBlur=${() => measure()} />
+            <span className="lec-fix">.mp3</span>
+          </div>
+          ${files.length > 0 && html`<div className="lec-files">
+            ${files.map(f => html`<button type="button" key=${f.name} dir="ltr" className=${'lec-chip' + (value.file === f.name ? ' on' : '')} onClick=${() => pickFile(f)}>${f.name}</button>`)}
+          </div>`}
+        <//>`
+      : html`<input className="name-input lec-url" dir="ltr" value=${value.url} placeholder="https://…/file.mp3" aria-label=${t('lecFromUrl')}
+          autoComplete="off" autoCapitalize="off" spellCheck="false" onInput=${e => set({ url: e.target.value.trim().replace(/ /g, '%20') })} onBlur=${() => measure()} />`}
+    <div className="lec-dur">
+      <span className="hint">${t('lecDuration')}</span>
+      ${[['h', 'lecHours'], ['m', 'lecMinutes'], ['s', 'lecSeconds']].map(([k, label]) => html`<label key=${k}>
+        <input inputMode="numeric" maxLength="2" dir="ltr" value=${value[k]} aria-label=${t(label)}
+          onInput=${e => set({ [k]: e.target.value.replace(/[^0-9]/g, '') })} />
+        <small>${t(label)}</small>
+      </label>`)}
+    </div>
+    ${value.checking && html`<p className="hint">${t('lecChecking')}</p>`}
+    ${!value.checking && fresh && value.measured === 'fail' && html`<p className="form-error">${t('lecLinkFailed')}</p>`}
+    ${!value.checking && fresh && typeof value.measured === 'number' && !differs && html`<p className="hint lec-ok"><${Icon} name="check" size=${12} /> ${t('lecLinkOk')}</p>`}
+    ${!value.checking && differs && html`<p className="form-error">${t('lecDurDiffers', { t: fmtTime(value.measured) })}
+      <button type="button" className="link-btn" onClick=${() => set(splitHMS(value.measured))}>${t('lecUseMeasured')}</button></p>`}
+  </fieldset>`;
+}
+const emptySource = () => ({ src: 'archive', file: '', url: '', h: '', m: '', s: '', measured: null, measuredFor: null, checking: false });
+function lectureSourceUrl(mode, v) {
+  if (v.src === 'url') return v.url;
+  const f = String(v.file || '').trim();
+  return f ? ARCHIVE_DIR[mode] + encodeURIComponent(f) + '.mp3' : '';
+}
+const sourceFromUrl = (mode, url, sec) => Object.assign(emptySource(), splitHMS(sec),
+  url.startsWith(ARCHIVE_DIR[mode]) ? { src: 'archive', file: fileOfUrl(url) } : { src: 'url', url });
+
+function LectureAdmin() {
+  const [, force] = useState(0);
+  useEffect(() => extraLectures.subscribe(() => force(x => x + 1)), []);
+  const added = extraLectures.raw ? cleanExtraLectures(extraLectures.raw) : EXTRA_LECTURES;
+  const nextNum = () => {
+    const nums = LECTURES.concat(added).filter(l => l.id[0] === 'L').map(l => parseInt(l.id.slice(1), 10));
+    return String(Math.min(99, Math.max(0, ...nums) + 1));
+  };
+  const [editing, setEditing] = useState(null);       // معرّف اللقاء الجاري تعديله
+  const [num, setNum] = useState(nextNum);
+  const [name, setName] = useState('');
+  const [normal, setNormal] = useState(emptySource);
+  const [fast, setFast] = useState(emptySource);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState(null);
+  const [files, setFiles] = useState({ normal: [], fast: [] });
+  useEffect(() => { let on = true; loadArchiveFiles().then(f => { if (on) setFiles(f); }); return () => { on = false; }; }, []);
+
+  // ملفات الأرشيف التي لم تُستعمل في أي لقاء بعد
+  const usedFiles = (mode) => new Set(LECTURES.concat(added).filter(l => l.id !== editing).map(l => fileOfUrl(l.extra ? l.url[mode] : mediaUrl(mode, l.id))));
+  const freeFiles = (mode) => { const used = usedFiles(mode); return files[mode].filter(f => !used.has(f.name)); };
+
+  const n = parseInt(num, 10);
+  const id = n >= 1 && n <= 99 ? 'L' + String(n).padStart(2, '0') : null;
+  const cleanName = lectureNameOnly(name);
+  const title = id && cleanName ? t('lecTitleFmt', { n, name: cleanName }) : '';
+  const taken = id && id !== editing && (STATIC_LECTURE_IDS.has(id) || added.some(l => l.id === id));
+  const reset = () => { setEditing(null); setNum(nextNum()); setName(''); setNormal(emptySource()); setFast(emptySource()); };
+
+  const startEdit = (l) => {
+    setMsg(null); setEditing(l.id); setNum(String(parseInt(l.id.slice(1), 10))); setName(lectureNameOnly(l.title));
+    setNormal(sourceFromUrl('normal', l.url.normal, l.normal)); setFast(sourceFromUrl('fast', l.url.fast, l.fast));
+  };
+  const save = async (e) => {
+    e.preventDefault();
+    setMsg(null);
+    const un = lectureSourceUrl('normal', normal), uf = lectureSourceUrl('fast', fast);
+    const sn = joinHMS(normal), sf = joinHMS(fast);
+    if (!id) return setMsg('lecBadNumber');
+    if (taken) return setMsg('lecNumberTaken');
+    if (!cleanName) return setMsg('lecNoName');
+    if (!validMp3Url(un) || !validMp3Url(uf)) return setMsg('lecBadUrl');
+    if (!validSeconds(sn) || !validSeconds(sf)) return setMsg('lecBadDuration');
+    const unchecked = [[normal, un], [fast, uf]].some(([v, u]) => v.measuredFor !== u || typeof v.measured !== 'number');
+    const summary = t('lecConfirm', { title, normal: fmtTime(sn), fast: fmtTime(sf) }) + (unchecked ? '\n\n' + t('lecConfirmUnchecked') : '');
+    if (!window.confirm(summary)) return;
+    setBusy(true);
+    const old = editing && added.find(l => l.id === editing);
+    const r = await staff.saveLecture(id, { title: title.slice(0, 120), normal: sn, fast: sf, urlNormal: un, urlFast: uf }, old && old.from);
+    setBusy(false);
+    if (r.error) return setMsg(r.error);
+    reset();
+    setMsg('lecSaved');
+    setTimeout(() => location.reload(), 1500);     // تُعاد الصفحة لتُبنى القوائم وجدول الراديو باللقاء الجديد
+  };
+  const remove = async (l) => {
+    if (!window.confirm(t('lecDeleteConfirm', { title: l.title }))) return;
+    setBusy(true); setMsg(null);
+    const r = await staff.removeLecture(l.id);
+    setBusy(false);
+    if (r.error) return setMsg(r.error);
+    if (editing === l.id) reset();
+    setMsg('lecDeleted');
+    setTimeout(() => location.reload(), 1500);
+  };
+
+  return html`<div className="lec-admin">
+    <form onSubmit=${save}>
+      <div className="lec-head">
+        <label className="lec-num"><small>${t('lecNumber')}</small>
+          <input inputMode="numeric" maxLength="2" dir="ltr" value=${num} disabled=${!!editing} onInput=${e => setNum(e.target.value.replace(/[^0-9]/g, ''))} />
+        </label>
+        <label className="lec-name"><small>${t('lecName')}</small>
+          <input value=${name} maxLength="100" placeholder=${t('lecNamePh')} onInput=${e => setName(e.target.value)} />
+        </label>
+      </div>
+      ${title && html`<p className="hint">${t('lecPreview')} <b>${title}</b></p>`}
+      ${taken && html`<p className="form-error">${t('lecNumberTaken')}</p>`}
+      <${LectureSource} mode="normal" value=${normal} onChange=${setNormal} files=${freeFiles('normal')} />
+      <${LectureSource} mode="fast" value=${fast} onChange=${setFast} files=${freeFiles('fast')} />
+      <button className="cta" type="submit" disabled=${busy}>${busy ? t('pleaseWait') : editing ? t('lecSaveEdit') : t('lecAdd')}</button>
+      ${editing && html`<button type="button" className="link-btn muted center-text" onClick=${() => { reset(); setMsg(null); }}>${t('cancel')}</button>`}
+      ${msg && html`<p className=${msg === 'lecSaved' || msg === 'lecDeleted' ? 'hint lec-ok' : 'form-error'}>${t(msg)}</p>`}
+    </form>
+    ${added.length > 0 && html`<ul className="staff-list">
+      ${added.map(l => html`<li key=${l.id}>
+        <span><b>${l.title}</b><br /><span className="hint">${t('lecDurations', { normal: fmtTime(l.normal), fast: fmtTime(l.fast) })}</span></span>
+        <span className="lec-actions">
+          <button className="link-btn" disabled=${busy} onClick=${() => startEdit(l)}>${t('edit')}</button>
+          <button className="link-btn muted" disabled=${busy} onClick=${() => remove(l)}>${t('delete')}</button>
+        </span>
+      </li>`)}
+    </ul>`}
+  </div>`;
+}
+
 // من هم متصلون الآن وأين (للمالك): يوضّح الفرق بين من يستمع ومن فتح الموقع فقط
 const PLACE_LABEL = { home: 'placeHome', course: 'sourceCourse', normal: 'sourceNormal', fast: 'sourceFast' };
 function StaffOnline({ users }) {
@@ -2378,6 +2591,8 @@ function StaffPage({ users }) {
             ${!s.owner && html`<button className="link-btn muted" onClick=${() => window.confirm(t('staffRemoveConfirm', { name: s.name })) && staff.remove(id)}>${t('delete')}</button>`}
           </li>`)}
         </ul>
+        <h2>${t('lecAdminTitle')}</h2>
+        <${LectureAdmin} />
         <h2>${t('staffReportTitle')}</h2>
         <${StaffReport} />
         <h2>${t('staffOnlineTitle')}</h2>

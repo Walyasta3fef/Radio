@@ -149,13 +149,83 @@ const MEDIA_BASES = {
     L: atob('aHR0cHM6Ly9hcmNoaXZlLm9yZy9kb3dubG9hZC93YWx5YXN0YWFmZWZNUDMvV2FseWFzdGFhZmVmXw==') + 'LIVE',
   },
 };
-const mediaUrl = (mode, id) => MEDIA_BASES[mode][id[0]] + id.slice(1) + '.mp3';
+// اللقاءات المضافة من صفحة المميزين تحمل روابطها الخاصة
+const mediaUrl = (mode, id) => {
+  const x = EXTRA_BY_ID[id];
+  return x ? x.url[mode] : MEDIA_BASES[mode][id[0]] + id.slice(1) + '.mp3';
+};
+// مجلد الأرشيف المعتاد لكل نسخة (ما قبل اسم الملف)، لتسهيل كتابة الروابط عند إضافة لقاء
+const ARCHIVE_DIR = {
+  normal: MEDIA_BASES.normal.L.replace(/[^/]*$/, ''),
+  fast: MEDIA_BASES.fast.L.replace(/[^/]*$/, ''),
+};
 
 // =====================
 // ترتيب الكورس
 // الترتيب المخصّص أولًا، ثم بقية اللقاءات بترتيبها الطبيعي
 // أي لقاء جديد يُضاف إلى LECTURES يظهر تلقائيًا في آخر الكورس
 // =====================
+// =====================
+// اللقاءات المضافة من صفحة المميزين (قاعدة البيانات: lectures/{id})
+// تُقرأ عند فتح الصفحة من نسخة محفوظة على الجهاز، فتبقى القائمة ثابتة طوال الجلسة كما يتوقع باقي الكود،
+// وتُحدَّث النسخة المحفوظة في الخلفية لتُطبَّق في الفتح التالي
+// =====================
+const EXTRA_LECTURES_KEY = 'afaf_lectures_v1';
+const STATIC_LECTURE_IDS = new Set(LECTURES.map(l => l.id));
+const validMp3Url = (u) => typeof u === 'string' && u.length <= 300 && /^https:\/\/[^\s]+\.mp3$/i.test(u);
+const validSeconds = (n) => typeof n === 'number' && isFinite(n) && n >= 60 && n < 30000;
+
+// تنظيف ما يأتي من قاعدة البيانات: يُقبل فقط ما اكتملت بياناته ولا يصطدم بلقاء أصلي
+function cleanExtraLectures(raw) {
+  const out = [];
+  if (!raw || typeof raw !== 'object') return out;
+  Object.keys(raw).sort().forEach(id => {
+    const v = raw[id];
+    if (!/^L[0-9]{2}$/.test(id) || STATIC_LECTURE_IDS.has(id) || !v || typeof v !== 'object') return;
+    if (typeof v.n !== 'string' || !v.n.trim() || !validSeconds(v.a) || !validSeconds(v.b)) return;
+    if (!validMp3Url(v.ua) || !validMp3Url(v.ub)) return;
+    out.push({
+      id, title: v.n.trim().slice(0, 120), normal: Math.round(v.a), fast: Math.round(v.b),
+      from: typeof v.from === 'number' ? v.from : 0, url: { normal: v.ua, fast: v.ub }, extra: true,
+    });
+  });
+  return out;
+}
+const EXTRA_LECTURES_RAW = storage.get(EXTRA_LECTURES_KEY) || '';
+const EXTRA_LECTURES = (() => { try { return cleanExtraLectures(JSON.parse(EXTRA_LECTURES_RAW || 'null')); } catch (e) { return []; } })();
+const EXTRA_BY_ID = Object.fromEntries(EXTRA_LECTURES.map(l => [l.id, l]));
+EXTRA_LECTURES.forEach(l => LECTURES.push(l));
+
+// متابعة القائمة في قاعدة البيانات. عند تغيّرها تُحفظ، ثم تُعاد الصفحة مرة واحدة إن كانت في لحظاتها الأولى
+// (قبل أن يبدأ الزائر استماعًا أو كتابة)، وإلا تُطبَّق في الفتح التالي
+const extraLectures = (() => {
+  const startedAt = Date.now();
+  let latest = null;               // آخر ما وصل من القاعدة (خام)، أو null إذا لم يصل شيء بعد
+  const listeners = new Set();
+  const RELOAD_FLAG = 'afaf_lectures_reload';
+  const listen = () => database.ref('/lectures').on('value', snap => {
+    latest = snap.val() || {};
+    const json = JSON.stringify(cleanExtraLectures(latest).map(l => [l.id, l.title, l.normal, l.fast, l.from, l.url.normal, l.url.fast]));
+    const mine = JSON.stringify(EXTRA_LECTURES.map(l => [l.id, l.title, l.normal, l.fast, l.from, l.url.normal, l.url.fast]));
+    storage.set(EXTRA_LECTURES_KEY, JSON.stringify(latest));
+    listeners.forEach(fn => fn());
+    if (json === mine) { try { sessionStorage.removeItem(RELOAD_FLAG); } catch (e) {} return; }
+    let tried = '1';
+    try { tried = sessionStorage.getItem(RELOAD_FLAG); } catch (e) {}
+    const audio = document.querySelector('audio');
+    const idle = Date.now() - startedAt < 8000 && (!audio || audio.paused) && !location.hash.startsWith('#/staff');
+    if (idle && !tried) {
+      try { sessionStorage.setItem(RELOAD_FLAG, '1'); } catch (e) { return; }
+      location.reload();
+    }
+  }, () => {});                    // رفض القراءة (قواعد لم تُنشر بعد) لا يؤثر في شيء
+  try { listen(); } catch (e) {}
+  return {
+    get raw() { return latest; },
+    subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn); },
+  };
+})();
+
 const COURSE_HEAD = ['c01', 'c02', 'c03', 'c04', 'L01', 'L02', 'L08'];
 const COURSE_ORDER = [
   ...COURSE_HEAD,

@@ -83,6 +83,21 @@ const staff = (() => {
     } catch (e) { return { error: 'staffReportFailed' }; }
   }
 
+  // للمالك فقط: إضافة لقاء أو تعديله. from: وقت دخوله جدول الراديو، يُحفظ كما هو عند التعديل
+  async function saveLecture(id, v, from) {
+    try {
+      await withTimeout(database.ref('/lectures/' + id).set({
+        n: v.title, a: v.normal, b: v.fast, ua: v.urlNormal, ub: v.urlFast,
+        from: from || firebase.database.ServerValue.TIMESTAMP,
+      }));
+      return { ok: true };
+    } catch (e) { return { error: 'staffLectureSaveFailed' }; }
+  }
+  async function removeLecture(id) {
+    try { await withTimeout(database.ref('/lectures/' + id).remove()); return { ok: true }; }
+    catch (e) { return { error: 'staffLectureSaveFailed' }; }
+  }
+
   async function remove(uid) {
     try { await database.ref('/staff/' + uid).remove(); return { ok: true }; }
     catch (e) { return { error: 'staffSaveFailed' }; }
@@ -98,7 +113,7 @@ const staff = (() => {
     get list() { return list; },
     nameOf: (uid) => (list[uid] && list[uid].name) || null,
     names: () => Object.values(list).map(s => s && s.name).filter(Boolean),
-    signIn, signOut, add, remove, countSubscribers, loadUsers,
+    signIn, signOut, add, remove, countSubscribers, loadUsers, saveLecture, removeLecture,
     subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn); },
   };
 })();

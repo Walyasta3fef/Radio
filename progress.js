@@ -27,11 +27,12 @@ const progress = (() => {
   // sec: وقت الاستماع القديم قبل التقرير اليومي (لكل جهاز)، days: أيام الاستماع، last: آخر لقاء
   // daily: وقت الاستماع الفعلي لكل جهاز ولكل يوم، مع التكرار:
   //   { جهاز: { يوم: { c: الكورس، n: الراديو العادي، f: الراديو السريع، l: { لقاء: ثوانٍ } } } }
-  const empty = () => ({ v: 2, lectures: {}, sec: {}, days: [], legacyDays: 0, last: null, lastAt: 0, daily: {}, seen: {} });
+  // other: تقدّم لقاءات لا يعرفها هذا الجهاز بعد (لقاء جديد لم تصله قائمته)، يُحفظ كما هو حتى لا يضيع عند الرفع
+  const empty = () => ({ v: 2, lectures: {}, sec: {}, days: [], legacyDays: 0, last: null, lastAt: 0, daily: {}, seen: {}, other: {} });
 
   function migrate(s) {
     if (!s) return empty();
-    if (s.v === 2) { if (!s.daily) s.daily = {}; if (!s.seen) s.seen = {}; return s; }
+    if (s.v === 2) { if (!s.daily) s.daily = {}; if (!s.seen) s.seen = {}; if (!s.other) s.other = {}; return s; }
     if (s.v === 1) {
       const n = empty();
       n.lectures = s.lectures || {};
@@ -44,6 +45,7 @@ const progress = (() => {
   }
 
   let state = migrate(storage.getJSON(PROGRESS_KEY));
+  if (!state.other) state.other = {};
   let bitsCache = {};
   const listeners = new Set();
   let dirty = false;
@@ -287,8 +289,14 @@ const progress = (() => {
   function merge(remote) {
     remote = remote && migrateRemote(remote);
     if (!remote) return;
-    Object.entries(remote.lectures || {}).forEach(([id, r]) => {
-      if (!LECTURE_BY_ID[id] || !r) return;
+    const incoming = Object.assign({}, remote.other || {}, remote.lectures || {});
+    Object.entries(incoming).forEach(([id, r]) => {
+      if (!r || typeof r !== 'object') return;
+      if (!LECTURE_BY_ID[id]) {
+        // لقاء غير معروف هنا: يُحتفظ بالنسخة الأكثر استماعًا كما هي
+        if (/^[cL][0-9]{2}$/.test(id) && (!state.other[id] || (r.c || 0) >= (state.other[id].c || 0))) state.other[id] = r;
+        return;
+      }
       const e = entry(id);
       const mine = bits(id);
       const theirs = decode(id, r.h);
@@ -342,6 +350,22 @@ const progress = (() => {
   }
 
   function subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn); }
+
+  // لقاءات كانت مجهولة ثم وصلت قائمتها: يُضم تقدّمها المحفوظ، وما حُذف من القائمة يُنقل إلى other
+  (function adoptKnown() {
+    const known = Object.keys(state.other).filter(id => LECTURE_BY_ID[id]);
+    if (known.length) {
+      const lectures = {};
+      known.forEach(id => { lectures[id] = state.other[id]; delete state.other[id]; });
+      merge({ v: 2, lectures });
+    }
+    Object.keys(state.lectures).filter(id => !LECTURE_BY_ID[id]).forEach(id => {
+      if (/^[cL][0-9]{2}$/.test(id)) state.other[id] = state.lectures[id];
+      delete state.lectures[id];
+      delete bitsCache[id];
+      touch();
+    });
+  })();
 
   setInterval(save, 5000);
   window.addEventListener('pagehide', save);
