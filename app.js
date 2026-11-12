@@ -273,7 +273,7 @@ function usePlayer(volume) {
     const id = lectureRef.current;
     const v = variantRef.current;
     if (!audio || !id) return;
-    setMediaMeta(id);
+    setMediaMeta(id, true);
     lastAttemptRef.current = Date.now();
     lastProgressRef.current = Date.now();
 
@@ -442,7 +442,7 @@ function usePlayer(volume) {
       if (!wantPlayRef.current) return;
       updateStatus('playing');
       const id = loadedKeyRef.current && loadedKeyRef.current.split(':')[1];
-      if (id) setMediaMeta(id);
+      if (id) setMediaMeta(id, modeRef.current === 'lecture');
     };
     const onWaiting = () => {
       if (wantPlayRef.current && statusRef.current !== 'next' && statusRef.current !== 'offline') updateStatus('loading');
@@ -604,11 +604,12 @@ function usePlayer(volume) {
 }
 
 // بيانات شاشة القفل: اسم مختصر محايد مراعاةً للخصوصية
-function setMediaMeta(id) {
+function setMediaMeta(id, course) {
   if (!('mediaSession' in navigator)) return;
   try {
+    const label = t(course ? 'mediaCourse' : 'mediaArtist');
     navigator.mediaSession.metadata = new MediaMetadata({
-      title: id ? shortTitle(id) : t('mediaArtist'), artist: t('mediaArtist'), album: '',
+      title: id ? shortTitle(id) : label, artist: label, album: '',
     });
   } catch (e) {}
 }
@@ -632,6 +633,9 @@ function radioView(player, mode, now) {
 // كل زائر يسجّل نفسه فقط، ويُحذف تلقائيًا من الخادم عند انقطاع اتصاله
 // at: المكان الذي يوجد فيه الزائر (home أو normal أو fast أو course)
 // =====================
+// أماكن الاستماع: من يقف في غيرها (الرئيسية، الحساب، المجتمع) لا يُعدّ مستمعًا
+const LISTEN_PLACES = ['normal', 'fast', 'course'];
+
 function usePresence(at) {
   const [users, setUsers] = useState([]);
   const atRef = useRef(at);
@@ -859,7 +863,7 @@ function FacebookLink() {
 // نافذة صغيرة تظهر عند الضغط على زر، بدل أن يشغل محتواها مساحة في الصفحة
 // يُحسب مكانها لتبقى دائمًا داخل الشاشة، وتُغلق بالضغط خارجها أو بالتمرير
 // keepOpen: الضغط داخلها لا يغلقها (لمحتوى فيه أزرار تتغير حالتها)
-function Popover({ label, btnClass, button, children, keepOpen }) {
+function Popover({ label, btnClass, wrapClass, button, children, keepOpen, btnProps }) {
   const [pos, setPos] = useState(null);
   const btnRef = useRef(null);
   const popRef = useRef(null);
@@ -884,8 +888,8 @@ function Popover({ label, btnClass, button, children, keepOpen }) {
     const left = Math.max(16, Math.min(vw - 16 - w, r.left + r.width / 2 - w / 2));
     setPos({ top: r.bottom + 8, left, width: w });
   };
-  return html`<span className="info">
-    <button ref=${btnRef} className=${btnClass} aria-label=${label} aria-expanded=${!!pos} onClick=${openTip}>${button}</button>
+  return html`<span className=${'info' + (wrapClass ? ' ' + wrapClass : '')}>
+    <button ref=${btnRef} className=${btnClass} aria-label=${label} aria-expanded=${!!pos} onClick=${openTip} ...${btnProps || {}}>${button}</button>
     ${pos && html`<span ref=${popRef} className="info-pop" role=${keepOpen ? 'dialog' : 'tooltip'} aria-label=${label} style=${pos}>${children}</span>`}
   </span>`;
 }
@@ -1388,7 +1392,7 @@ function HomePage({ player, users }) {
       <${TotalStats} />
       <div className="top-left">
         <${NameChip} />
-        <${OnlineBadge} count=${users.length} />
+        <${OnlineBadge} count=${users.filter(u => LISTEN_PLACES.includes(u.at)).length} />
       </div>
     </div>
 
@@ -1682,7 +1686,7 @@ function CoursePage({ player, users }) {
 const NOTE_JUMP_BACK = 5;   // الضغط على وقت الملاحظة يرجع قبله قليلًا، لتُسمع الجملة من أولها
 
 // محرّر ملاحظة جديدة أو موجودة. إذا أُغلقت الصفحة قبل الحفظ يُحفظ المكتوب تلقائيًا
-function NoteEditor({ lid, note, sec, maxSec, getTime, onClose }) {
+function NoteEditor({ lid, note, sec, maxSec, getTime, onClose, saveRef }) {
   const [text, setText] = useState(note ? note.x : '');
   const [time, setTime] = useState(sec != null ? fmtTime(sec) : '');
   const [error, setError] = useState(null);
@@ -1699,8 +1703,10 @@ function NoteEditor({ lid, note, sec, maxSec, getTime, onClose }) {
   };
   const store = (x, s) => (note ? notes.update(lid, note.id, s, x) : notes.add(lid, s, x) != null);
 
-  const save = (e) => {
+  // closeIfEmpty: الحفظ من زر رأس القسم يغلق المحرّر إذا لم يُكتب شيء
+  const save = (e, closeIfEmpty) => {
     if (e) e.preventDefault();
+    if (closeIfEmpty && !note && !text.trim()) return cancel();
     const s = readTime(time);
     if (s === undefined) return setError('mentionBadTime');
     if (!text.trim()) { if (!note) return setError('noteEmpty'); }
@@ -1709,6 +1715,7 @@ function NoteEditor({ lid, note, sec, maxSec, getTime, onClose }) {
     onClose();
   };
   const cancel = () => { closed.current = true; onClose(); };
+  if (saveRef) saveRef.current = () => save(null, true);
   const del = () => {
     if (!window.confirm(t('noteDeleteConfirm'))) return;
     closed.current = true;
@@ -1755,7 +1762,13 @@ function NotesBox({ id, getTime, onTime, readOnly }) {
   const maxSec = LECTURE_BY_ID[id].normal;
   const full = notes.room(id, null) < 1;
 
-  const addNew = () => { setOpen(true); setEdit({ sec: Math.floor(getTime()), k: Date.now() }); };
+  const adding = !!(open && edit && !edit.id);
+  const saveRef = useRef(null);
+  // الزر نفسه: يفتح ملاحظة جديدة بوقت الاستماع الحالي، وإذا كانت مفتوحة يحفظها ويغلقها
+  const addNew = () => {
+    if (adding && saveRef.current) return saveRef.current();
+    setOpen(true); setEdit({ sec: Math.floor(getTime()), k: Date.now() });
+  };
   const copyAll = async () => {
     const body = list.map(n => (n.s != null ? fmtTime(n.s) + '  ' : '') + n.x).join('\n');
     try {
@@ -1772,13 +1785,13 @@ function NotesBox({ id, getTime, onTime, readOnly }) {
         ${list.length > 0 && html`<span className="c-count">${list.length}</span>`}
         <span className=${'chev' + (open ? ' chev-open' : '')} aria-hidden="true">⌄</span>
       </button>
-      ${!readOnly && !full && html`<button className="note-add" onClick=${addNew}>
-        <${Icon} name="plus" size=${14} />${t('noteAdd')}
+      ${!readOnly && (!full || adding) && html`<button className="note-add" onClick=${addNew}>
+        <${Icon} name=${adding ? 'check' : 'plus'} size=${14} />${adding ? t('save') : t('noteAdd')}
       </button>`}
     </div>
     ${open && html`<div className="c-body">
       ${edit && !edit.id && html`<${NoteEditor} key=${'new' + edit.k} lid=${id} sec=${edit.sec} maxSec=${maxSec}
-        getTime=${getTime} onClose=${() => setEdit(null)} />`}
+        getTime=${getTime} onClose=${() => setEdit(null)} saveRef=${saveRef} />`}
 
       ${list.length === 0 && !edit && html`<p className="hint center-text">${readOnly ? t('notesNone') : t('notesEmpty')}</p>`}
 
@@ -1848,17 +1861,13 @@ function LecturePage({ id, variant, player }) {
   const commit = () => { if (dragging != null) { player.seekLecture(id, dragging, variant); setDragging(null); } };
   const skipBy = (d) => (current ? player.skip(d) : player.seekLecture(id, time + d, variant));
 
+  // «أكمل من»: إذا كان المستمع يعيد جزءًا سمعه، زر يقفز إلى أول جزء لم يسمعه بعد
+  const resumeAt = fast || dragging != null ? null : progress.nextUnheard(id, time);
+
   // مفتاح السرعة: «عالسريع» مقفل حتى يكتمل اللقاء على السرعة العادية،
-  // والضغط عليه وهو مقفل يعرض رسالة قصيرة تختفي وحدها
-  const [lockMsg, setLockMsg] = useState(false);
-  useEffect(() => {
-    if (!lockMsg) return;
-    const id2 = setTimeout(() => setLockMsg(false), 6000);
-    return () => clearTimeout(id2);
-  }, [lockMsg]);
+  // والضغط عليه وهو مقفل يفتح نافذة صغيرة فيها السبب
   const pick = (v) => {
     if (v === variant) return;
-    if (v === 'fast' && !done) return setLockMsg(true);
     if (active) player.stop();          // لا يبقى صوت نسخة يعمل والصفحة تعرض الأخرى
     go(lectureHash(id, v));
   };
@@ -1876,20 +1885,21 @@ function LecturePage({ id, variant, player }) {
         <div className="speed-row">
           <div className="seg speed-seg" role="tablist" aria-label=${t('courseSpeed')}>
             <button role="tab" aria-selected=${!fast} className=${!fast ? 'on' : ''} onClick=${() => pick('normal')}>${t('lectureNormal')}</button>
-            <button role="tab" aria-selected=${fast} aria-disabled=${!done} className=${(fast ? 'on' : '') + (!done ? ' seg-locked' : '')}
-                onClick=${() => pick('fast')}>
-              ${!done && html`<${Icon} name="lock" size=${13} />`}${t('lectureFast')}
-            </button>
+            ${done
+              ? html`<button role="tab" aria-selected=${fast} className=${fast ? 'on' : ''} onClick=${() => pick('fast')}>${t('lectureFast')}</button>`
+              : html`<${Popover} label=${t('lectureFast')} wrapClass="seg-pop" btnClass="seg-locked"
+                  button=${html`<${React.Fragment}><${Icon} name="lock" size=${13} />${t('lectureFast')}<//>`}>${t('fastLocked')}<//>`}
           </div>
           <${OfflineControl} id=${id} variant=${variant} />
         </div>
-        ${lockMsg && html`<p className="lock-msg" role="status">${t('fastLocked')}</p>`}
 
         <${SeekBar} id=${id} value=${shown} duration=${duration} marks=${fast ? [] : marks} noteMarks=${noteMarks} plain=${fast}
           onInput=${setDragging} onCommit=${commit} />
         <div className="times">
           <span>${fmtTime(shown)}</span>
-          ${!fast && (done || heard > 0) && html`<span className=${'times-heard' + (done ? ' heard-done' : '')}>
+          ${resumeAt != null ? html`<button className="resume-chip" onClick=${() => { player.seekLecture(id, resumeAt, variant); if (!active) player.playLecture(id, variant); }}>
+            ${t('resumeFrom')} <bdi dir="ltr">${fmtTime(resumeAt)}</bdi>
+          </button>` : !fast && (done || heard > 0) && html`<span className=${'times-heard' + (done ? ' heard-done' : '')}>
             ${done ? html`<${React.Fragment}><${Icon} name="check" size=${12} /> ${t('lectureDone')}<//>`
               : html`<${React.Fragment}>${t('heardLabel')} <${Pct} value=${heard + '%'} /><//>`}
           </span>`}

@@ -228,6 +228,30 @@ const progress = (() => {
     return out;
   }
 
+  // أول موضع لم يُسمع بعد الموضع sec، إذا كان sec نفسه داخل جزء مسموع
+  // الفجوات القصيرة (أقل من نصف دقيقة) تُعدّ مسموعة، والقفزة القصيرة لا تستحق زرًا
+  const GAP_SLOTS = Math.ceil(30 / SLOT_SECONDS);
+  function nextUnheard(id, sec) {
+    const e = state.lectures[id];
+    if (!e || !e.c || !LECTURE_BY_ID[id]) return null;
+    const arr = bits(id);
+    const total = slotsOf(id);
+    const on = (i) => !!(arr[i >> 3] & (1 << (i & 7)));
+    const start = Math.floor(sec / SLOT_SECONDS);
+    if (start >= total || !on(start)) return null;
+    let i = start;
+    while (i < total) {
+      if (on(i)) { i++; continue; }
+      let j = i;
+      while (j < total && !on(j)) j++;
+      if (j - i >= GAP_SLOTS || j >= total) break;
+      i = j;
+    }
+    if (i >= total - GAP_SLOTS) return null;                 // مسموع حتى النهاية تقريبًا
+    const target = i * SLOT_SECONDS;
+    return target - sec >= 60 ? target : null;
+  }
+
   const isDone = (id) => !!(state.lectures[id] && state.lectures[id].d);
 
   function summary() {
@@ -324,7 +348,7 @@ const progress = (() => {
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') save(); });
 
   return {
-    record, addTime, stats, seenAt, markSeen, legacySeconds, setPosition, position, setFastPosition, fastPosition, percent, segments, isDone, summary, continueId, hasAny,
+    record, addTime, stats, nextUnheard, seenAt, markSeen, legacySeconds, setPosition, position, setFastPosition, fastPosition, percent, segments, isDone, summary, continueId, hasAny,
     merge, exportState, reset, subscribe, save,
     get rev() { return rev; },
   };

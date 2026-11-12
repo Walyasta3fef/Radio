@@ -333,6 +333,8 @@ const STRINGS = {
   courseShort: 'الكورس الأساسي {n}',
   lectureShort: 'لقاء {n}',
   mediaArtist: 'راديو',
+  mediaCourse: 'كورس',
+  resumeFrom: 'أكمل من',
   thousand: 'ألف',
   million: 'مليون',
 };

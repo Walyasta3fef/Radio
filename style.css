@@ -668,12 +668,14 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid 
 .speed-seg { flex: 1; min-width: 0; border-radius: 12px; padding: 3px; }
 .speed-seg button { padding: 7px 8px; border-radius: 9px; font-size: 13px; display: inline-flex; align-items: center; justify-content: center; gap: 5px; }
 .speed-seg .seg-locked { color: var(--faint); }
-.lock-msg {
-  margin: -6px 0 14px; padding: 8px 12px; border-radius: 10px; background: var(--sunken);
-  border: 1px solid var(--line-2); font-size: 12px; line-height: 1.8; color: var(--text);
-  animation: lock-msg-in .2s ease-out;
+.seg-pop { display: flex; }
+.seg-pop > button { width: 100%; }
+.speed-row .info-pop { font-size: 13px; line-height: 1.8; }
+.resume-chip {
+  display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; border-radius: 999px;
+  background: var(--course-soft); border: 1px solid var(--course-line); color: var(--course);
+  font-size: 12px; font-weight: 700;
 }
-@keyframes lock-msg-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
 .times { align-items: center; }
 .times-heard { display: inline-flex; align-items: center; gap: 3px; color: var(--muted); }
 .times-heard.heard-done { color: var(--course); }
