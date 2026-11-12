@@ -41,7 +41,8 @@ function parseRoute() {
   const h = location.hash;
   let m = /^#\/radio\/(normal|fast)$/.exec(h);
   if (m) return { page: 'radio', mode: m[1] };
-  if (h === '#/course') return { page: 'course' };
+  if (h === '#/course') return { page: 'course', tab: 'normal' };
+  if (h === '#/course/fast') return { page: 'course', tab: 'fast' };
   if (h === '#/account') return { page: 'account' };
   if (h === '#/report') return { page: 'report' };
   if (h === '#/general' || h === '#/community') return { page: 'general' };
@@ -49,7 +50,9 @@ function parseRoute() {
   if (h === '#/staff') return { page: 'staff' };
   if (h === '#/feedback') return { page: 'feedback' };
   m = /^#\/lecture\/(\w+)$/.exec(h);
-  if (m && LECTURE_BY_ID[m[1]]) return { page: 'lecture', id: m[1] };
+  if (m && LECTURE_BY_ID[m[1]]) return { page: 'lecture', id: m[1], variant: 'normal' };
+  m = /^#\/fast\/(\w+)$/.exec(h);
+  if (m && LECTURE_BY_ID[m[1]]) return { page: 'lecture', id: m[1], variant: 'fast' };
   return { page: 'home' };
 }
 function useRoute() {
@@ -84,9 +87,36 @@ function useAccountVersion() {
   return v;
 }
 
+function useOfflineVersion() {
+  const [v, setV] = useState(0);
+  useEffect(() => offline.subscribe(() => setV(x => x + 1)), []);
+  return v;
+}
+
+function useOnline() {
+  const [on, setOn] = useState(navigator.onLine);
+  useEffect(() => {
+    const up = () => setOn(navigator.onLine);
+    window.addEventListener('online', up);
+    window.addEventListener('offline', up);
+    return () => { window.removeEventListener('online', up); window.removeEventListener('offline', up); };
+  }, []);
+  return on;
+}
+
+// =====================
+// الكورس عالسريع: النسخة السريعة من كل لقاء، وتُفتح بعد إكمال اللقاء على السرعة العادية
+// =====================
+const lectureHash = (id, variant) => (variant === 'fast' ? '#/fast/' : '#/lecture/') + id;
+const fastNext = (id) => COURSE_ORDER.slice(courseIndex(id) + 1).find(x => progress.isDone(x)) || null;
+const fastPrev = (id) => COURSE_ORDER.slice(0, Math.max(0, courseIndex(id))).reverse().find(x => progress.isDone(x)) || null;
+const lectureNext = (id, variant) => (variant === 'fast' ? fastNext(id) : courseNext(id));
+const lecturePrev = (id, variant) => (variant === 'fast' ? fastPrev(id) : coursePrev(id));
+
 // =====================
 // المشغّل: مشغّل واحد للموقع كله يبقى يعمل أثناء التنقل
 // mode: normal أو fast (بث مباشر) أو lecture (لقاء من الكورس)
+// variant: نسخة لقاء الكورس المشغّلة: normal (تُحتسب في التقدّم) أو fast (للمراجعة)
 // shifted: أوقف المستمع البث فصار متأخرًا عنه، فيكمل من حيث توقف
 // حتى ينتهي اللقاء ثم يعود إلى البث المباشر
 // =====================
@@ -94,8 +124,9 @@ function usePlayer(volume) {
   const audioRef = useRef(null);
   const modeRef = useRef(null);
   const lectureRef = useRef(null);
+  const variantRef = useRef('normal');
   const wantPlayRef = useRef(false);     // هل يريد المستخدم الاستماع الآن
-  const loadedKeyRef = useRef(null);     // المحمّل حاليًا، مثل normal:L05 أو lecture:c01
+  const loadedKeyRef = useRef(null);     // المحمّل حاليًا، مثل normal:L05 أو lecture:c01 أو flecture:c01 (النسخة السريعة)
   const statusRef = useRef('idle');
   const endedRef = useRef(false);
   const pendingSeekRef = useRef(false);
@@ -109,6 +140,7 @@ function usePlayer(volume) {
 
   const [mode, setMode] = useState(null);
   const [lectureId, setLectureId] = useState(null);
+  const [variant, setVariant] = useState('normal');
   const [isPlaying, setIsPlaying] = useState(false);
   const [status, setStatus] = useState('idle');
   const [live, setLive] = useState(null);
@@ -120,11 +152,21 @@ function usePlayer(volume) {
   const isRadio = () => modeRef.current === 'normal' || modeRef.current === 'fast';
   const radioState = () => isRadio() ? STATIONS[modeRef.current].getState() : null;
   const radioKey = (s) => modeRef.current + ':' + s.track.id;
+  const lecKey = (id, v) => (v === 'fast' ? 'flecture:' : 'lecture:') + id;
+  const posOf = (id, v) => (v === 'fast' ? progress.fastPosition(id) : progress.position(id));
+  const savePos = (id, v, sec) => (v === 'fast' ? progress.setFastPosition(id, sec) : progress.setPosition(id, sec));
+  // هل يعمل اللقاء الحالي من ملف محمّل على الجهاز (فلا يتأثر بانقطاع الإنترنت)
+  const isLocal = () => {
+    const a = audioRef.current;
+    return !!a && modeRef.current === 'lecture' && !!lectureRef.current
+      && loadedKeyRef.current === lecKey(lectureRef.current, variantRef.current)
+      && (a.getAttribute('src') || '').startsWith('blob:');
+  };
 
   // اللقاء الذي يُحتسب الاستماع إليه الآن (النسخة العادية فقط)
   const trackedId = () => {
     const k = loadedKeyRef.current;
-    if (!k || k.startsWith('fast:')) return null;
+    if (!k || k.startsWith('fast:') || k.startsWith('flecture:')) return null;
     return k.split(':')[1];
   };
 
@@ -146,18 +188,20 @@ function usePlayer(volume) {
     }
   }, [updateStatus]);
 
-  const switchTo = (m, id = null) => {
-    if (modeRef.current === m && lectureRef.current === id) return;
+  const switchTo = (m, id = null, v = 'normal') => {
+    if (modeRef.current === m && lectureRef.current === id && variantRef.current === v) return;
     lastAttemptRef.current = Date.now();
     if (audioRef.current) audioRef.current.pause();
     loadedKeyRef.current = null;
     lastSampleRef.current = null;
     modeRef.current = m;
     lectureRef.current = id;
+    variantRef.current = v;
     setShifted(false);
     setMode(m);
     setLectureId(id);
-    setCurrentTime(id ? progress.position(id) : 0);
+    setVariant(v);
+    setCurrentTime(id ? posOf(id, v) : 0);
   };
 
   // آخر موضع موثوق للملف المحمّل حاليًا
@@ -228,31 +272,49 @@ function usePlayer(volume) {
   const loadLecture = useCallback((forceReload = false) => {
     const audio = audioRef.current;
     const id = lectureRef.current;
+    const v = variantRef.current;
     if (!audio || !id) return;
     setMediaMeta(id);
     lastAttemptRef.current = Date.now();
     lastProgressRef.current = Date.now();
-    if (!navigator.onLine) { updateStatus('offline'); return; }
+
+    // اللقاء المحمّل على الجهاز يُشغَّل منه مباشرة، مع الإنترنت أو دونه
+    const local = offline.url(v, id);
+    if (!local && offline.has(v, id)) {
+      // محمّل لكن رابط تشغيله لم يُجهَّز بعد: يُجهَّز ثم تُعاد المحاولة
+      // (بعدها إما يصير الرابط جاهزًا أو يُشطب الملف من القائمة، فلا تتكرر المحاولة بلا نهاية)
+      updateStatus('loading');
+      offline.prepare(v, id).then(() => {
+        if (wantPlayRef.current && modeRef.current === 'lecture' && lectureRef.current === id && variantRef.current === v) {
+          loadLecture(forceReload);
+        }
+      });
+      return;
+    }
+    if (!local && !navigator.onLine) { updateStatus('offline'); return; }
     updateStatus('loading');
 
-    const key = 'lecture:' + id;
+    const key = lecKey(id, v);
     if (forceReload || loadedKeyRef.current !== key) {
       // عند إعادة المحاولة: موضع لم يُطبّق بعد، أو آخر موضع كان يعمل فيه، أو الموضع المحفوظ
       resumeRef.current = forceReload && loadedKeyRef.current === key
-        ? (resumeRef.current != null ? resumeRef.current : goodPosition(progress.position(id)))
-        : progress.position(id);
+        ? (resumeRef.current != null ? resumeRef.current : goodPosition(posOf(id, v)))
+        : posOf(id, v);
       loadedKeyRef.current = key;
       lastSampleRef.current = null;
-      audio.src = mediaUrl('normal', id);
+      audio.src = local || mediaUrl(v, id);
       audio.load();
+      // تجهيز اللقاء التالي إن كان محمّلًا، حتى يبدأ فورًا عند الانتقال إليه
+      const nx = lectureNext(id, v);
+      if (nx) offline.prepare(v, nx);
     }
     playAudio();
   }, [updateStatus, playAudio]);
 
   const startPlaying = () => { wantPlayRef.current = true; setIsPlaying(true); };
 
-  const playLecture = useCallback((id) => {
-    switchTo('lecture', id);
+  const playLecture = useCallback((id, v = 'normal') => {
+    switchTo('lecture', id, v);
     startPlaying();
     loadLecture();
     logEvent('lecture_started');
@@ -297,36 +359,37 @@ function usePlayer(volume) {
     syncAndPlay();
   }, [syncAndPlay]);
 
-  const toggleLecture = useCallback((id) => {
-    if (wantPlayRef.current && modeRef.current === 'lecture' && lectureRef.current === id) {
+  const toggleLecture = useCallback((id, v = 'normal') => {
+    if (wantPlayRef.current && modeRef.current === 'lecture' && lectureRef.current === id && variantRef.current === v) {
       if (statusRef.current === 'blocked') return loadLecture();
       return stop();
     }
-    playLecture(id);
+    playLecture(id, v);
   }, [playLecture, stop, loadLecture]);
 
   // التقديم والتأخير داخل لقاء من الكورس فقط
-  const seekLecture = useCallback((id, sec) => {
-    const dur = LECTURE_BY_ID[id].normal;
+  const seekLecture = useCallback((id, sec, v = 'normal') => {
+    const dur = LECTURE_BY_ID[id][v];
     sec = Math.max(0, Math.min(dur - 1, sec));
     const audio = audioRef.current;
-    if (modeRef.current === 'lecture' && lectureRef.current === id && loadedKeyRef.current === 'lecture:' + id
-        && audio && audio.readyState >= 1) {
+    const mine = modeRef.current === 'lecture' && lectureRef.current === id && variantRef.current === v;
+    if (mine && loadedKeyRef.current === lecKey(id, v) && audio && audio.readyState >= 1) {
       lastSampleRef.current = null;
       audio.currentTime = sec;
-    } else if (modeRef.current === 'lecture' && lectureRef.current === id) {
+    } else if (mine) {
       resumeRef.current = sec;
     }
-    progress.setPosition(id, sec);
+    savePos(id, v, sec);
     setCurrentTime(sec);
   }, []);
 
   const skip = useCallback((delta) => {
     const id = lectureRef.current;
     if (modeRef.current !== 'lecture' || !id) return;
+    const v = variantRef.current;
     const audio = audioRef.current;
-    const base = audio && audio.readyState >= 1 ? audio.currentTime : progress.position(id);
-    seekLecture(id, base + delta);
+    const base = audio && audio.readyState >= 1 ? audio.currentTime : posOf(id, v);
+    seekLecture(id, base + delta, v);
   }, [seekLecture]);
 
   const retry = useCallback(() => {
@@ -368,7 +431,11 @@ function usePlayer(volume) {
         }
       }
       // لا يُحفظ موضع اللقاء قبل الرجوع إلى مكانه بعد التحميل، حتى لا يُحفظ الصفر
-      if (modeRef.current === 'lecture' && id && resumeRef.current == null) progress.setPosition(id, ct);
+      if (modeRef.current === 'lecture' && resumeRef.current == null) {
+        const lid = lectureRef.current;
+        if (id) progress.setPosition(id, ct);
+        else if (lid && variantRef.current === 'fast' && loadedKeyRef.current === lecKey(lid, 'fast')) progress.setFastPosition(lid, ct);
+      }
     };
     const onSeeking = () => { lastSampleRef.current = null; };
     const onPlaying = () => {
@@ -396,13 +463,15 @@ function usePlayer(volume) {
       if (!wantPlayRef.current) return;
       if (modeRef.current === 'lecture') {
         // انتهى اللقاء: ننتقل تلقائيًا إلى اللقاء التالي في الكورس
+        // (في الكورس عالسريع: التالي من اللقاءات المفتوحة فقط)
         const id = lectureRef.current;
-        progress.setPosition(id, 0);
+        const v = variantRef.current;
+        savePos(id, v, 0);
         progress.save();
-        const next = courseNext(id);
+        const next = lectureNext(id, v);
         if (next) {
-          playLecture(next);
-          if (location.hash === '#/lecture/' + id) go('#/lecture/' + next);
+          playLecture(next, v);
+          if (location.hash === lectureHash(id, v)) go(lectureHash(next, v));
         } else {
           stop();
         }
@@ -431,12 +500,16 @@ function usePlayer(volume) {
       progress.save();
     };
     const onError = () => {
-      if (audio.error) errLog.add('audio ' + (audio.error.code || '') + ' ' + modeRef.current + (navigator.onLine ? '' : ' offline'));
-      if (wantPlayRef.current && audio.getAttribute('src')) updateStatus(navigator.onLine ? 'error' : 'offline');
+      const local = isLocal();
+      if (audio.error) errLog.add('audio ' + (audio.error.code || '') + ' ' + modeRef.current + (local ? ' local' : '') + (navigator.onLine ? '' : ' offline'));
+      // تعذّر تشغيل الملف المحمّل: يُجهَّز رابطه من جديد في المحاولة التالية
+      if (local) offline.invalidate(variantRef.current, lectureRef.current);
+      if (wantPlayRef.current && audio.getAttribute('src')) updateStatus(navigator.onLine || local ? 'error' : 'offline');
     };
-    const onOffline = () => { if (wantPlayRef.current) updateStatus('offline'); };
+    const onOffline = () => { if (wantPlayRef.current && !isLocal()) updateStatus('offline'); };
     const onOnline = () => {
       if (!wantPlayRef.current) return;
+      if (isLocal()) return;
       if (!isRadio()) return loadLecture(true);
       if (shiftedRef.current) return reloadInPlace();
       syncAndPlay(true);
@@ -512,9 +585,9 @@ function usePlayer(volume) {
     if (mode === 'lecture') {
       set('seekbackward', () => skip(-SKIP_SECONDS));
       set('seekforward', () => skip(SKIP_SECONDS));
-      set('seekto', (d) => { if (d && lectureRef.current) seekLecture(lectureRef.current, d.seekTime); });
-      set('previoustrack', () => { const p = coursePrev(lectureRef.current); if (p) playLecture(p); });
-      set('nexttrack', () => { const n = courseNext(lectureRef.current); if (n) playLecture(n); });
+      set('seekto', (d) => { if (d && lectureRef.current) seekLecture(lectureRef.current, d.seekTime, variantRef.current); });
+      set('previoustrack', () => { const p = lecturePrev(lectureRef.current, variantRef.current); if (p) playLecture(p, variantRef.current); });
+      set('nexttrack', () => { const n = lectureNext(lectureRef.current, variantRef.current); if (n) playLecture(n, variantRef.current); });
     } else {
       ['seekbackward', 'seekforward', 'seekto', 'previoustrack', 'nexttrack'].forEach(a => set(a, null));
     }
@@ -526,7 +599,7 @@ function usePlayer(volume) {
   }, [isPlaying]);
 
   return {
-    audioRef, mode, lectureId, isPlaying, status, live, shifted, currentTime,
+    audioRef, mode, lectureId, variant, isPlaying, status, live, shifted, currentTime,
     toggleRadio, goLive, toggleLecture, playLecture, seekLecture, skip, stop, retry,
   };
 }
@@ -632,6 +705,10 @@ const ICON_PATHS = {
   heart: html`<path d="M12 20s-7-4.3-9-8.6C1.8 8.4 3.8 5 7 5c1.9 0 3.2 1 4 2.2h2C13.8 6 15.1 5 17 5c3.2 0 5.2 3.4 4 6.4C19 15.7 12 20 12 20z"></path>`,
   heartFill: html`<path d="M12 20s-7-4.3-9-8.6C1.8 8.4 3.8 5 7 5c1.9 0 3.2 1 4 2.2h2C13.8 6 15.1 5 17 5c3.2 0 5.2 3.4 4 6.4C19 15.7 12 20 12 20z" fill="currentColor"></path>`,
   dots: html`<g fill="currentColor" stroke="none"><circle cx="5" cy="12" r="1.8"></circle><circle cx="12" cy="12" r="1.8"></circle><circle cx="19" cy="12" r="1.8"></circle></g>`,
+  lock: html`<g><rect x="5" y="11" width="14" height="9" rx="2"></rect><path d="M8 11V8a4 4 0 0 1 8 0v3"></path></g>`,
+  plus: html`<g><path d="M12 5v14"></path><path d="M5 12h14"></path></g>`,
+  trash: html`<g><path d="M4 7h16"></path><path d="M9 7V4h6v3"></path><path d="M6 7l1 13h10l1-13"></path></g>`,
+  saved: html`<g><path d="M12 3v9"></path><path d="M8 9l4 4 4-4"></path><path d="M5 17l3 3 4-4"></path><path d="M14 20h5"></path></g>`,
   note: html`<g><path d="M12 20h9"></path><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"></path></g>`,
 };
 function Icon({ name, size = 18 }) {
@@ -822,12 +899,15 @@ function HeardBar({ id }) {
 
 // شريط التشغيل في صفحة اللقاء: شريط واحد يجمع
 // موضع الاستماع، والأجزاء المسموعة سابقًا، وأماكن التعليقات
-function SeekBar({ id, value, duration, marks, onInput, onCommit }) {
-  const segs = progress.segments(id);
+// plain: للنسخة السريعة، بلا أجزاء مسموعة ولا علامات. noteMarks: أماكن ملاحظات المستخدم
+function SeekBar({ id, value, duration, marks, noteMarks, plain, onInput, onCommit }) {
+  const segs = plain ? [] : progress.segments(id);
   const pos = Math.min(100, (value / duration) * 100 || 0);
   return html`<div className="seekbar">
     <div className="sb-marks" aria-hidden="true">
       ${(marks || []).map((s, i) => html`<span key=${i} className="sb-mark"
+        style=${{ insetInlineStart: Math.min(100, s / duration * 100) + '%' }}></span>`)}
+      ${(noteMarks || []).map((s, i) => html`<span key=${'n' + i} className="sb-mark sb-mark-note"
         style=${{ insetInlineStart: Math.min(100, s / duration * 100) + '%' }}></span>`)}
     </div>
     <div className="sb-track" aria-hidden="true">
@@ -1462,8 +1542,52 @@ function RadioPage({ mode, player, users }) {
 // =====================
 // صفحة الكورس
 // =====================
-function CoursePage({ player, users }) {
+// حجم الملف بالميغابايت
+const fmtSize = (bytes) => t('sizeMB', { n: bytes >= 10485760 ? Math.round(bytes / 1048576) : Math.max(0.1, Math.round(bytes / 104857.6) / 10) });
+
+// تحميل لقاء للاستماع دون اتصال: زر، ثم شريط تقدّم، ثم علامة «متاح دون اتصال» مع الحذف
+function OfflineControl({ id, variant }) {
+  useOfflineVersion();
+  useEffect(() => { offline.loadSizes(); }, []);
+  if (!offline.supported) return null;
+  const s = offline.state(variant, id);
+
+  if (s.st === 'loading') {
+    const pct = s.total ? Math.min(100, s.loaded / s.total * 100) : 0;
+    return html`<div className="dl">
+      <div className="dl-row">
+        <span className="dl-label">${t('dlLoading')}</span>
+        <bdi dir="ltr" className="dl-num">${s.total ? Math.floor(pct) + '%' : fmtSize(s.loaded)}</bdi>
+        <button className="link-btn muted" onClick=${() => offline.cancel(variant, id)}>${t('cancel')}</button>
+      </div>
+      <${MiniBar} value=${pct} />
+      <p className="hint">${t('dlKeepOpen')}</p>
+    </div>`;
+  }
+  if (s.st === 'done') {
+    return html`<div className="dl">
+      <div className="dl-row">
+        <span className="dl-label dl-done"><${Icon} name="check" size=${14} />${t('dlDone')}</span>
+        <span className="hint">${fmtSize(s.size)}</span>
+        <button className="link-btn muted" onClick=${() => { if (window.confirm(t('dlRemoveConfirm'))) offline.remove(variant, id); }}>${t('delete')}</button>
+      </div>
+    </div>`;
+  }
+  return html`<div className="dl">
+    <button className="dl-btn" onClick=${() => offline.download(variant, id)}>
+      <${Icon} name="download" size=${15} />
+      <span>${s.st === 'error' ? t('dlRetry') : t('dlButton')}</span>
+      ${s.size > 0 && html`<small>${fmtSize(s.size)}</small>`}
+    </button>
+    ${s.st === 'error' && html`<p className="form-error">${t(s.error)}</p>`}
+  </div>`;
+}
+
+function CoursePage({ tab, player, users }) {
   useProgressVersion();
+  useOfflineVersion();
+  const online = useOnline();
+  const fast = tab === 'fast';
   const sum = progress.summary();
   const contId = progress.continueId();
   const courseUsers = users.filter(u => u.at === 'course');
@@ -1471,8 +1595,12 @@ function CoursePage({ player, users }) {
   const feed = useRecentFeed(100);
   const newBy = {};
   feed.forEach(c => { if (isNewComment(c, c.l)) newBy[c.l] = true; });
+  const [lockedTip, setLockedTip] = useState(null);
+  useEffect(() => { setLockedTip(null); }, [tab]);
+  const saved = offline.usage();
 
   const continueNow = () => { player.playLecture(contId); go('#/lecture/' + contId); };
+  const removeAll = () => { if (window.confirm(t('dlRemoveAllConfirm'))) offline.removeAll(); };
 
   return html`<div className="page course">
     <div className="topbar">
@@ -1498,14 +1626,52 @@ function CoursePage({ player, users }) {
       </button>`}
     </div>
 
-    <${RecentComments} player=${player} />
+    <div className=${'seg course-tabs' + (fast ? ' variant-fast' : '')} role="tablist" aria-label=${t('courseSpeed')}>
+      <button role="tab" aria-selected=${!fast} className=${!fast ? 'on' : ''} onClick=${() => go('#/course')}>${t('course')}</button>
+      <button role="tab" aria-selected=${fast} className=${fast ? 'on' : ''} onClick=${() => go('#/course/fast')}>${t('courseFast')}</button>
+    </div>
+    ${fast && html`<p className="tab-hint">${t('courseFastHint')}</p>`}
+    ${!online && html`<p className="tab-hint warn">${t('offlineOnlySaved')}</p>`}
+    ${saved.count > 0 && html`<div className="saved-row">
+      <span className="hint"><${Icon} name="saved" size=${13} /> ${t('dlUsage', { n: saved.count, size: fmtSize(saved.bytes) })}</span>
+      <button className="link-btn muted" onClick=${removeAll}>${t('dlRemoveAll')}</button>
+    </div>`}
 
-    <ol className="lessons">
+    ${!fast && html`<${RecentComments} player=${player} />`}
+
+    <ol className=${'lessons' + (fast ? ' variant-fast' : '')}>
       ${COURSE_ORDER.map((id) => {
         const pct = progress.percent(id);
         const done = progress.isDone(id);
         const n = counts[id] || 0;
-        const playing = player.isPlaying && player.mode === 'lecture' && player.lectureId === id;
+        const playing = player.isPlaying && player.mode === 'lecture' && player.lectureId === id && player.variant === tab;
+        const isSaved = offline.has(tab, id);
+
+        if (fast) {
+          const locked = !done;
+          return html`<li key=${id}>
+            <button className=${'lesson' + (playing ? ' lesson-playing' : '') + (locked ? ' lesson-locked' : '')}
+                aria-disabled=${locked}
+                onClick=${() => (locked ? setLockedTip(lockedTip === id ? null : id) : go('#/fast/' + id))}>
+              <span className="lesson-body">
+                <span className="lesson-title">${LECTURE_BY_ID[id].title}</span>
+                <span className="lesson-meta">
+                  ${fmtTime(LECTURE_BY_ID[id].fast)}
+                  ${playing ? html`<span> · ${t('playingHere')}</span>` : ''}
+                </span>
+              </span>
+              <span className="lesson-side">
+                ${locked && html`<span className="lock-badge" aria-label=${t('fastLockedShort')}><${Icon} name="lock" size=${14} /></span>`}
+                ${isSaved && html`<span className="note-badge" aria-label=${t('dlDone')}><${Icon} name="saved" size=${14} /></span>`}
+              </span>
+            </button>
+            ${locked && lockedTip === id && html`<div className="locked-tip" role="status">
+              <p>${t('fastLocked')}</p>
+              <button className="link-btn" onClick=${() => go('#/lecture/' + id)}>${t('openNormal')}</button>
+            </div>`}
+          </li>`;
+        }
+
         return html`<li key=${id}>
           <button className=${'lesson' + (playing ? ' lesson-playing' : '') + (done ? ' lesson-done' : '')}
               onClick=${() => go('#/lecture/' + id)}>
@@ -1518,8 +1684,9 @@ function CoursePage({ player, users }) {
               </span>
               ${pct > 0 && !done && html`<${HeardBar} id=${id} />`}
             </span>
-            ${(done || n > 0 || newBy[id] || notes.has(id)) && html`<span className="lesson-side">
+            ${(done || n > 0 || newBy[id] || notes.has(id) || isSaved) && html`<span className="lesson-side">
               ${done && html`<span className="done-badge" aria-label=${t('lectureDone')}><${Icon} name="check" size=${14} /></span>`}
+              ${isSaved && html`<span className="note-badge" aria-label=${t('dlDone')}><${Icon} name="saved" size=${14} /></span>`}
               ${notes.has(id) && html`<span className="note-badge" aria-label=${t('lectureHasNotes')}><${Icon} name="note" size=${13} /></span>`}
               ${n > 0 && html`<span className=${'c-badge' + (newBy[id] ? ' new' : '')} aria-label=${t('commentsCount', { n })}><${Icon} name="chat" size=${13} />${n}</span>`}
             </span>`}
@@ -1530,43 +1697,139 @@ function CoursePage({ player, users }) {
   </div>`;
 }
 
-// ملاحظات المستخدم الخاصة على اللقاء: تُكتب وتُحفظ تلقائيًا، وتُعرض بأوقات قابلة للضغط
-function NotesBox({ id, getTime, onTime }) {
+// =====================
+// ملاحظات المستخدم الخاصة على اللقاء
+// كل ملاحظة صف مستقل: وقتها على اليمين ونصها على اليسار
+// «أضف ملاحظة» يلتقط وقت الاستماع لحظة الضغط، ويبقى الصوت يعمل أثناء الكتابة
+// =====================
+const NOTE_JUMP_BACK = 5;   // الضغط على وقت الملاحظة يرجع قبله قليلًا، لتُسمع الجملة من أولها
+
+// محرّر ملاحظة جديدة أو موجودة. إذا أُغلقت الصفحة قبل الحفظ يُحفظ المكتوب تلقائيًا
+function NoteEditor({ lid, note, sec, maxSec, getTime, onClose }) {
+  const [text, setText] = useState(note ? note.x : '');
+  const [time, setTime] = useState(sec != null ? fmtTime(sec) : '');
+  const [error, setError] = useState(null);
+  const max = notes.room(lid, note ? note.id : null);
+  const draft = useRef({ text, time });
+  draft.current = { text, time };
+  const closed = useRef(false);
+
+  // يعيد الثواني، أو null بلا وقت، أو undefined إذا كان الوقت المكتوب غير صحيح
+  const readTime = (v) => {
+    if (!String(v).trim()) return null;
+    const s = parseLooseTime(v);
+    return s == null || s > maxSec ? undefined : s;
+  };
+  const store = (x, s) => (note ? notes.update(lid, note.id, s, x) : notes.add(lid, s, x) != null);
+
+  const save = (e) => {
+    if (e) e.preventDefault();
+    const s = readTime(time);
+    if (s === undefined) return setError('mentionBadTime');
+    if (!text.trim()) { if (!note) return setError('noteEmpty'); }
+    if (!store(text, s)) return setError('notesFull');
+    closed.current = true;
+    onClose();
+  };
+  const cancel = () => { closed.current = true; onClose(); };
+  const del = () => {
+    if (!window.confirm(t('noteDeleteConfirm'))) return;
+    closed.current = true;
+    notes.remove(lid, note.id);
+    onClose();
+  };
+
+  useEffect(() => () => {
+    if (closed.current) return;
+    const d = draft.current;
+    if (!d.text.trim() || (note && d.text === note.x)) return;
+    const s = readTime(d.time);
+    store(d.text, s === undefined ? (note ? note.s : null) : s);
+  }, []);
+
+  return html`<form className="note-edit" onSubmit=${save}>
+    <div className="note-edit-time">
+      <input value=${time} dir="ltr" inputMode="text" autoComplete="off" placeholder=${t('noteNoTime')}
+        aria-label=${t('noteTimeLabel')} onInput=${e => { setTime(e.target.value); setError(null); }} />
+      <button type="button" className="link-btn" onClick=${() => { setTime(fmtTime(getTime())); setError(null); }}>${t('noteNow')}</button>
+      ${time && html`<button type="button" className="link-btn muted" onClick=${() => { setTime(''); setError(null); }}>${t('noteClearTime')}</button>`}
+    </div>
+    <textarea value=${text} maxLength=${max} rows="3" autoFocus placeholder=${t('notePlaceholder')}
+      aria-label=${t('myNotes')} onInput=${e => { setText(e.target.value); setError(null); }}></textarea>
+    ${error && html`<p className="form-error">${t(error)}</p>`}
+    <div className="c-actions">
+      <button className="small-btn c-send" type="submit" disabled=${!note && !text.trim()}>${t('save')}</button>
+      <button type="button" className="link-btn muted" onClick=${cancel}>${t('cancel')}</button>
+      <span className="hint note-len">${text.length}/${max}</span>
+      ${note && html`<button type="button" className="note-del" onClick=${del} aria-label=${t('delete')}><${Icon} name="trash" size=${16} /></button>`}
+    </div>
+  </form>`;
+}
+
+// readOnly: في الكورس عالسريع تُعرض الملاحظات للقراءة فقط، لأن أوقاتها على السرعة العادية
+function NotesBox({ id, getTime, onTime, readOnly }) {
   const [, force] = useState(0);
   useEffect(() => notes.subscribe(() => force(x => x + 1)), []);
+  useAccountVersion();
   const [open, setOpen] = useState(false);
-  const [editing, setEditing] = useState(false);
-  const text = notes.get(id);
-  const has = !!text.trim();
-  const write = (v) => { setEditing(true); notes.set(id, v); };
-  const addTime = () => write((text && !/\s$/.test(text) ? text + ' ' : text) + fmtTime(getTime()) + ' ');
+  const [edit, setEdit] = useState(null);       // { id } لملاحظة موجودة، أو { sec } لملاحظة جديدة
+  const [copied, setCopied] = useState(false);
+  const list = notes.list(id);
+  const maxSec = LECTURE_BY_ID[id].normal;
+  const full = notes.room(id, null) < 1;
+
+  const addNew = () => { setOpen(true); setEdit({ sec: Math.floor(getTime()), k: Date.now() }); };
+  const copyAll = async () => {
+    const body = list.map(n => (n.s != null ? fmtTime(n.s) + '  ' : '') + n.x).join('\n');
+    try {
+      await navigator.clipboard.writeText(shortTitle(id) + '\n' + body);
+      setCopied(true); setTimeout(() => setCopied(false), 2000);
+    } catch (e) {}
+  };
 
   return html`<section className="comments notes">
-    <button className="c-toggle" onClick=${() => setOpen(o => !o)} aria-expanded=${open}>
-      <${Icon} name="note" size=${16} />
-      <span>${t('myNotes')}</span>
-      ${has && !open && html`<span className="c-count">${t('notesHas')}</span>`}
-      <span className=${'chev' + (open ? ' chev-open' : '')} aria-hidden="true">⌄</span>
-    </button>
+    <div className="notes-head">
+      <button className="c-toggle" onClick=${() => setOpen(o => !o)} aria-expanded=${open}>
+        <${Icon} name="note" size=${16} />
+        <span>${t('myNotes')}</span>
+        ${list.length > 0 && html`<span className="c-count">${list.length}</span>`}
+        <span className=${'chev' + (open ? ' chev-open' : '')} aria-hidden="true">⌄</span>
+      </button>
+      ${!readOnly && !full && html`<button className="note-add" onClick=${addNew}>
+        <${Icon} name="plus" size=${14} />${t('noteAdd')}
+      </button>`}
+    </div>
     ${open && html`<div className="c-body">
-      ${editing || !has ? html`<div className="c-form">
-          <textarea value=${text} maxLength=${NOTE_MAX} rows="5" placeholder=${t('notesPlaceholder')}
-            aria-label=${t('myNotes')} onInput=${e => write(e.target.value)}></textarea>
-          <div className="c-tools">
-            <span className="hint">${text.length}/${NOTE_MAX}</span>
-            <span className="c-tool-links">
-              <button type="button" className="link-btn" onClick=${addTime}>${t('addCurrentTime')}</button>
-              ${has && html`<button type="button" className="link-btn" onClick=${() => setEditing(false)}>${t('notesDone')}</button>`}
-            </span>
-          </div>
-        </div>`
-      : html`<div className="note-view">
-          <${CommentText} text=${text} maxSec=${LECTURE_BY_ID[id].normal} onTime=${onTime} />
-          <div className="c-tools"><span></span>
-            <button type="button" className="link-btn" onClick=${() => setEditing(true)}>${t('notesEdit')}</button>
-          </div>
-        </div>`}
-      <p className="hint">${account.loggedIn ? t('notesPrivateAcc') : t('notesPrivateLocal')}</p>
+      ${edit && !edit.id && html`<${NoteEditor} key=${'new' + edit.k} lid=${id} sec=${edit.sec} maxSec=${maxSec}
+        getTime=${getTime} onClose=${() => setEdit(null)} />`}
+
+      ${list.length === 0 && !edit && html`<p className="hint center-text">${readOnly ? t('notesNone') : t('notesEmpty')}</p>`}
+
+      ${list.length > 0 && html`<ul className="note-list">
+        ${list.map(n => (edit && edit.id === n.id
+          ? html`<li key=${n.id} className="note-row editing">
+              <${NoteEditor} lid=${id} note=${n} sec=${n.s} maxSec=${maxSec} getTime=${getTime} onClose=${() => setEdit(null)} />
+            </li>`
+          : html`<li key=${n.id} className="note-row">
+              ${n.s == null ? html`<span className="note-time none" aria-hidden="true">—</span>`
+                : readOnly ? html`<span className="note-time" dir="ltr">${fmtTime(n.s)}</span>`
+                : html`<button className="note-time time-chip" dir="ltr" onClick=${() => onTime(Math.max(0, n.s - NOTE_JUMP_BACK))}
+                    aria-label=${t('jumpTo', { t: fmtTime(n.s) })}>${fmtTime(n.s)}</button>`}
+              <div className="note-text"><${CommentText} text=${n.x} maxSec=${readOnly ? 0 : maxSec} onTime=${onTime} /></div>
+              ${!readOnly && html`<button className="note-edit-btn" onClick=${() => setEdit({ id: n.id })} aria-label=${t('notesEdit')}>
+                <${Icon} name="note" size=${15} />
+              </button>`}
+            </li>`))}
+      </ul>`}
+
+      ${!readOnly && full && html`<p className="hint">${t('notesFull')}</p>`}
+      <div className="c-tools">
+        <span className="hint notes-foot">
+          ${readOnly ? t('notesFastHint') : html`<${React.Fragment}>${t('notesPrivate')}
+            <${InfoTip} label=${t('infoLabel')} text=${account.loggedIn ? t('notesPrivateAcc') : t('notesPrivateLocal')} /><//>`}
+        </span>
+        ${list.length > 0 && html`<button type="button" className="link-btn" onClick=${copyAll}>${copied ? t('copied') : t('notesCopyAll')}</button>`}
+      </div>
     </div>`}
   </section>`;
 }
@@ -1574,67 +1837,100 @@ function NotesBox({ id, getTime, onTime }) {
 // =====================
 // صفحة اللقاء
 // =====================
-function LecturePage({ id, player }) {
+function LecturePage({ id, variant, player }) {
   useProgressVersion();
+  const online = useOnline();
+  const fast = variant === 'fast';
   const lec = LECTURE_BY_ID[id];
-  const current = player.mode === 'lecture' && player.lectureId === id;
+  const duration = lec[variant];
+  const savedPos = () => (fast ? progress.fastPosition(id) : progress.position(id));
+  const current = player.mode === 'lecture' && player.lectureId === id && player.variant === variant;
   const active = current && player.isPlaying;
-  const time = current ? player.currentTime : progress.position(id);
+  const time = current ? player.currentTime : savedPos();
   const status = active ? player.status : 'idle';
   const heard = progress.percent(id);
   const done = progress.isDone(id);
-  const prev = coursePrev(id), next = courseNext(id);
-  const comments = useComments(id);
+  const prev = lecturePrev(id, variant), next = lectureNext(id, variant);
+  const comments = useComments(fast ? null : id);
   const marks = useMemo(() => comments.filter(c => typeof c.s === 'number').map(c => c.s), [comments]);
+  const [, bump] = useState(0);
+  useEffect(() => notes.subscribe(() => bump(x => x + 1)), []);
+  const noteMarks = fast ? [] : notes.list(id).filter(n => n.s != null).map(n => n.s);
+  const getTime = () => (current ? player.currentTime : savedPos());
 
-  // الضغط على وقت في تعليق: الانتقال إلى تلك اللحظة وتشغيلها
+  // الضغط على وقت في تعليق أو ملاحظة: الانتقال إلى تلك اللحظة وتشغيلها
   const jumpTo = (sec) => {
-    player.seekLecture(id, sec);
-    if (!active) player.playLecture(id);
+    player.seekLecture(id, sec, variant);
+    if (!active) player.playLecture(id, variant);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   // سحب الشريط: يُعرض الموضع أثناء السحب ثم يُطبّق عند الإفلات
   const [dragging, setDragging] = useState(null);
   const shown = dragging != null ? dragging : time;
-  const commit = () => { if (dragging != null) { player.seekLecture(id, dragging); setDragging(null); } };
+  const commit = () => { if (dragging != null) { player.seekLecture(id, dragging, variant); setDragging(null); } };
+  const skipBy = (d) => (current ? player.skip(d) : player.seekLecture(id, time + d, variant));
 
-  return html`<div className="page lecture">
+  // النسخة السريعة لا تُفتح قبل إكمال اللقاء على السرعة العادية
+  if (fast && !done) {
+    return html`<div className="page lecture">
+      <div className="topbar">
+        <${BackButton} to="#/course/fast" />
+        <div className="top-left"><${NameChip} /></div>
+      </div>
+      <div className="panel-wrap">
+        <div className="panel center">
+          <span className="title-icon big"><${Icon} name="lock" size=${24} /></span>
+          <p className="lecture-title">${lec.title}</p>
+          <p className="acc-line">${t('fastLocked')}</p>
+          <button className="cta" onClick=${() => go('#/lecture/' + id)}>${t('openNormal')}</button>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  return html`<div className=${'page lecture' + (fast ? ' variant-fast' : '')}>
     <div className="topbar">
-      <${BackButton} to="#/course" />
+      <${BackButton} to=${fast ? '#/course/fast' : '#/course'} />
       <div className="top-left"><${NameChip} /></div>
     </div>
 
     <div className="panel-wrap">
       <div className="panel tint-course">
         <p className="lecture-title">${lec.title}</p>
-        <p className=${'heard' + (done ? ' heard-done' : '')}>
-          ${done ? '✓ ' + t('lectureDone') + ' · ' : ''}${t('heardLabel')} <${Pct} value=${heard + '%'} />
-        </p>
+        ${fast
+          ? html`<p className="heard"><b className="variant-tag">${t('courseFast')}</b> ${t('fastNoCount')}</p>`
+          : html`<p className=${'heard' + (done ? ' heard-done' : '')}>
+              ${done ? '✓ ' + t('lectureDone') + ' · ' : ''}${t('heardLabel')} <${Pct} value=${heard + '%'} />
+            </p>`}
 
-        <${SeekBar} id=${id} value=${shown} duration=${lec.normal} marks=${marks}
+        <${SeekBar} id=${id} value=${shown} duration=${duration} marks=${fast ? [] : marks} noteMarks=${noteMarks} plain=${fast}
           onInput=${setDragging} onCommit=${commit} />
-        <div className="times"><span>${fmtTime(shown)}</span><span>${fmtTime(lec.normal)}</span></div>
+        <div className="times"><span>${fmtTime(shown)}</span><span>${fmtTime(duration)}</span></div>
 
         <div className="controls">
-          <button className="skip" onClick=${() => current ? player.skip(-SKIP_SECONDS) : player.seekLecture(id, time - SKIP_SECONDS)}
-            aria-label=${t('back15')}>−15</button>
-          <${PlayButton} active=${active} status=${status} onClick=${() => player.toggleLecture(id)} />
-          <button className="skip" onClick=${() => current ? player.skip(SKIP_SECONDS) : player.seekLecture(id, time + SKIP_SECONDS)}
-            aria-label=${t('forward15')}>+15</button>
+          <button className="skip" onClick=${() => skipBy(-SKIP_SECONDS)} aria-label=${t('back15')}>−15</button>
+          <${PlayButton} active=${active} status=${status} onClick=${() => player.toggleLecture(id, variant)} />
+          <button className="skip" onClick=${() => skipBy(SKIP_SECONDS)} aria-label=${t('forward15')}>+15</button>
         </div>
 
         <${StatusLine} active=${active} status=${status} onRetry=${player.retry} />
 
+        <${OfflineControl} id=${id} variant=${variant} />
+
         <div className="nav">
-          <button className="small-btn" disabled=${!prev} onClick=${() => prev && go('#/lecture/' + prev)}>${t('prevLecture')}</button>
-          <button className="small-btn" disabled=${!next} onClick=${() => next && go('#/lecture/' + next)}>${t('nextLecture')}</button>
+          <button className="small-btn" disabled=${!prev} onClick=${() => prev && go(lectureHash(prev, variant))}>${t('prevLecture')}</button>
+          <button className="small-btn" disabled=${!next} onClick=${() => next && go(lectureHash(next, variant))}>${t('nextLecture')}</button>
         </div>
+        ${(fast || done) && html`<p className="variant-switch">
+          <button className="link-btn" onClick=${() => go(lectureHash(id, fast ? 'normal' : 'fast'))}>${t(fast ? 'openNormalShort' : 'openFast')}</button>
+        </p>`}
       </div>
     </div>
-    <${NotesBox} id=${id} getTime=${() => (current ? player.currentTime : progress.position(id))} onTime=${jumpTo} />
-    <${CommentsBox} lid=${id} list=${comments}
-      getTime=${() => (current ? player.currentTime : progress.position(id))} onTime=${jumpTo} />
+    <${NotesBox} id=${id} getTime=${getTime} onTime=${jumpTo} readOnly=${fast} />
+    ${!fast && (online
+      ? html`<${CommentsBox} lid=${id} list=${comments} getTime=${getTime} onTime=${jumpTo} />`
+      : html`<p className="tab-hint">${t('commentsNeedNet')}</p>`)}
   </div>`;
 }
 
@@ -2398,15 +2694,16 @@ const SYNC_KEY = { syncing: 'syncSyncing', synced: 'syncSynced', error: 'syncErr
 function MiniPlayer({ player, route }) {
   if (!player.isPlaying) return null;
   const isLecture = player.mode === 'lecture';
-  if (isLecture && route.page === 'lecture' && route.id === player.lectureId) return null;
+  const fastCourse = isLecture && player.variant === 'fast';
+  if (isLecture && route.page === 'lecture' && route.id === player.lectureId && route.variant === player.variant) return null;
   if (!isLecture && route.page === 'radio' && route.mode === player.mode) return null;
   const id = isLecture ? player.lectureId : (player.live && player.live.track.id);
   if (!id) return null;
-  const target = isLecture ? '#/lecture/' + id : '#/radio/' + player.mode;
+  const target = isLecture ? lectureHash(id, player.variant) : '#/radio/' + player.mode;
   const busy = player.status === 'loading' || player.status === 'next';
-  return html`<div className=${'mini' + (isLecture ? '' : ' mini-radio') + (player.mode === 'fast' ? ' mode-fast' : '')}>
+  return html`<div className=${'mini' + (isLecture ? '' : ' mini-radio') + (player.mode === 'fast' ? ' mode-fast' : '') + (fastCourse ? ' variant-fast' : '')}>
     <button className="mini-info" onClick=${() => go(target)}>
-      <b>${t(MODE_LABEL[player.mode])}</b>
+      <b>${fastCourse ? t('courseFast') : t(MODE_LABEL[player.mode])}</b>
       <span>${LECTURE_BY_ID[id].title}</span>
     </button>
     <button className="mini-btn" onClick=${player.stop} aria-label=${t('pause')}>
@@ -2486,7 +2783,7 @@ function App() {
   if (route.page === 'radio') {
     page = html`<${RadioPage} mode=${route.mode} player=${player} users=${users} />`;
   } else if (route.page === 'course') {
-    page = html`<${CoursePage} player=${player} users=${users} />`;
+    page = html`<${CoursePage} tab=${route.tab} player=${player} users=${users} />`;
   } else if (route.page === 'account') {
     page = html`<${AccountPage} returnTo=${returnRef.current} />`;
   } else if (route.page === 'report') {
@@ -2498,7 +2795,7 @@ function App() {
   } else if (route.page === 'feedback') {
     page = html`<${FeedbackPage} />`;
   } else if (route.page === 'lecture') {
-    page = html`<${LecturePage} key=${route.id} id=${route.id} player=${player} />`;
+    page = html`<${LecturePage} key=${route.variant + ':' + route.id} id=${route.id} variant=${route.variant} player=${player} />`;
   } else {
     page = html`<${HomePage} player=${player} users=${users} />`;
   }

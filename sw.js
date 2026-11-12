@@ -1,12 +1,12 @@
 // =====================
 // ملف التطبيق: يحفظ واجهة الموقع ليفتح أسرع
 // يُجلب الأحدث من الإنترنت أولًا، والنسخة المحفوظة تُستخدم فقط عند انقطاع الاتصال
-// الملفات الصوتية وFirebase لا تُحفظ هنا
+// الملفات الصوتية وFirebase لا تُحفظ هنا، واللقاءات التي يحمّلها المستخدم في مخزن audio-* منفصل لا يُحذف عند التحديث
 // =====================
-const CACHE = 'shell-v39';
+const CACHE = 'shell-v40';
 const SHELL = [
   './', 'index.html', 'style.css', 'i18n.js', 'data.js', 'radio.js', 'progress.js',
-  'notes.js', 'account.js', 'staff.js', 'comments.js', 'feedback.js', 'app.js', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png',
+  'notes.js', 'offline.js', 'account.js', 'staff.js', 'comments.js', 'feedback.js', 'app.js', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png',
   'lib/react.production.min.js', 'lib/react-dom.production.min.js', 'lib/htm.umd.js',
   'lib/firebase-app-compat.js', 'lib/firebase-database-compat.js', 'lib/firebase-auth-compat.js',
   'fonts/tajawal-arabic-400-normal.woff2', 'fonts/tajawal-latin-400-normal.woff2', 'fonts/tajawal-arabic-500-normal.woff2', 'fonts/tajawal-latin-500-normal.woff2', 'fonts/tajawal-arabic-700-normal.woff2', 'fonts/tajawal-latin-700-normal.woff2', 'fonts/tajawal-arabic-800-normal.woff2', 'fonts/tajawal-latin-800-normal.woff2',
@@ -19,7 +19,7 @@ self.addEventListener('install', (e) => {
 
 self.addEventListener('activate', (e) => {
   e.waitUntil(
-    caches.keys().then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
+    caches.keys().then(keys => Promise.all(keys.filter(k => k !== CACHE && !k.startsWith('audio-')).map(k => caches.delete(k))))
       .then(() => self.clients.claim())
   );
 });

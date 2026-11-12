@@ -22,7 +22,8 @@ const dayKey = (d = new Date()) =>
 
 const progress = (() => {
   // الحالة:
-  // lectures: لكل لقاء { h: الشرائح المسموعة مشفّرة، c: عددها، p: موضع التوقف، t: وقت آخر تحديث للموضع، d: اكتمل }
+  // lectures: لكل لقاء { h: الشرائح المسموعة مشفّرة، c: عددها، p: موضع التوقف، t: وقت آخر تحديث للموضع، d: اكتمل،
+  //   fp: موضع التوقف في النسخة السريعة من الكورس، ft: وقت آخر تحديث له }
   // sec: وقت الاستماع القديم قبل التقرير اليومي (لكل جهاز)، days: أيام الاستماع، last: آخر لقاء
   // daily: وقت الاستماع الفعلي لكل جهاز ولكل يوم، مع التكرار:
   //   { جهاز: { يوم: { c: الكورس، n: الراديو العادي، f: الراديو السريع، l: { لقاء: ثوانٍ } } } }
@@ -191,6 +192,20 @@ const progress = (() => {
     return e.p > LECTURE_BY_ID[id].normal - 15 ? 0 : e.p;
   }
 
+  // موضع النسخة السريعة من الكورس: مستقل عن العادية، ولا يغيّر التقدّم ولا «أكمل من حيث توقفت»
+  function setFastPosition(id, sec) {
+    if (!LECTURE_BY_ID[id]) return;
+    const e = entry(id);
+    e.fp = Math.max(0, Math.floor(sec));
+    e.ft = Date.now();
+    touch();
+  }
+  function fastPosition(id) {
+    const e = state.lectures[id];
+    if (!e || !e.fp || !LECTURE_BY_ID[id]) return 0;
+    return e.fp > LECTURE_BY_ID[id].fast - 15 ? 0 : e.fp;
+  }
+
   function percent(id) {
     const e = state.lectures[id];
     if (!e || !LECTURE_BY_ID[id]) return 0;
@@ -260,6 +275,7 @@ const progress = (() => {
       if (r.da && (!e.da || r.da < e.da)) e.da = r.da;
       if (e.d && !e.da) e.da = dayKey();
       if ((r.t || 0) > (e.t || 0)) { e.p = r.p || 0; e.t = r.t; }
+      if ((r.ft || 0) > (e.ft || 0)) { e.fp = r.fp || 0; e.ft = r.ft; }
     });
     Object.entries(remote.sec || {}).forEach(([dev, s]) => {
       if (typeof s === 'number') state.sec[dev] = Math.max(state.sec[dev] || 0, s);
@@ -308,7 +324,7 @@ const progress = (() => {
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') save(); });
 
   return {
-    record, addTime, stats, seenAt, markSeen, legacySeconds, setPosition, position, percent, segments, isDone, summary, continueId, hasAny,
+    record, addTime, stats, seenAt, markSeen, legacySeconds, setPosition, position, setFastPosition, fastPosition, percent, segments, isDone, summary, continueId, hasAny,
     merge, exportState, reset, subscribe, save,
     get rev() { return rev; },
   };

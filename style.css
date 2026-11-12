@@ -649,3 +649,84 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid 
 .strength-medium .strength-bar i:nth-child(-n+2) { background: var(--radio); }
 .strength-strong { color: var(--course); }
 .strength-strong .strength-bar i { background: var(--course); }
+
+/* =====================
+   الكورس عالسريع: اللون نفسه المستخدم للراديو السريع «لحاء البتولا»
+   ===================== */
+.variant-fast {
+  --course: #E3D2AE;
+  --course-ink: #3A2E14;
+  --course-soft: rgba(227, 210, 174, .16);
+  --course-line: rgba(227, 210, 174, .38);
+}
+.course-tabs { margin-top: 14px; }
+.tab-hint { font-size: 12px; line-height: 1.7; color: var(--muted); text-align: center; margin-top: 10px; }
+.tab-hint.warn { color: var(--warn); }
+.saved-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 10px; }
+.saved-row .hint { display: inline-flex; align-items: center; gap: 4px; }
+.lesson-locked { opacity: .6; }
+.lock-badge { color: var(--muted); display: inline-flex; }
+.locked-tip {
+  margin: 4px 0 0; padding: 10px 12px; border-radius: 12px; background: var(--sunken);
+  border: 1px solid var(--line); font-size: 13px; line-height: 1.8; color: var(--muted);
+  display: flex; flex-direction: column; align-items: flex-start; gap: 4px;
+}
+.variant-tag { color: var(--course); font-weight: 800; }
+.variant-switch { text-align: center; margin-top: 12px; }
+
+/* التحميل للاستماع دون إنترنت */
+.dl { margin: 4px 0 14px; display: flex; flex-direction: column; gap: 6px; }
+.dl-btn {
+  width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 10px 12px; border-radius: 12px; background: var(--surface-2);
+  border: 1px solid var(--line-2); font-size: 13px; font-weight: 700;
+}
+.dl-btn:hover { background: #26392F; }
+.dl-btn small { color: var(--faint); font-weight: 500; font-size: 12px; }
+.dl-row { display: flex; align-items: center; gap: 10px; }
+.dl-row .link-btn { margin-inline-start: auto; }
+.dl-label { font-size: 13px; font-weight: 700; color: var(--muted); }
+.dl-done { color: var(--course); display: inline-flex; align-items: center; gap: 5px; }
+.dl-num { font-size: 12px; color: var(--faint); }
+.dl .form-error { margin-top: 0; }
+
+/* ملاحظاتي: صفوف مستقلة، الوقت على اليمين والنص بجانبه */
+.notes-head { display: flex; align-items: center; }
+.notes-head .c-toggle { flex: 1; min-width: 0; }
+.note-add {
+  display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0;
+  margin-inline-end: 12px; padding: 6px 12px; border-radius: 999px;
+  background: var(--course); color: var(--course-ink); font-size: 12px; font-weight: 800;
+}
+.note-list { list-style: none; display: flex; flex-direction: column; gap: 8px; }
+.note-row {
+  display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px;
+  background: var(--sunken); border: 1px solid var(--line); border-radius: 14px;
+}
+.note-row.editing { display: block; }
+.note-time { flex-shrink: 0; min-width: 52px; text-align: center; margin: 2px 0 0; font-size: 13px; }
+.note-time.none { color: var(--faint); border: 0; background: none; }
+span.note-time { color: var(--note); font-weight: 700; }
+.note-text { flex: 1; min-width: 0; }
+.note-text .c-text { font-size: 14px; }
+.note-edit-btn, .note-del { flex-shrink: 0; color: var(--muted); padding: 4px; border-radius: 8px; display: inline-flex; }
+.note-edit-btn:hover, .note-del:hover { color: var(--text); background: var(--surface-2); }
+.note-del { margin-inline-start: auto; color: var(--live); }
+.note-edit { display: flex; flex-direction: column; gap: 8px; }
+.note-edit-time { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.note-edit-time input {
+  width: 96px; padding: 6px 10px; border-radius: 10px; text-align: center; font: inherit; font-size: 14px;
+  background: var(--sunken); color: var(--text); border: 1px solid var(--line-2); outline: none;
+  user-select: text; -webkit-user-select: text;
+}
+.note-edit-time input:focus { border-color: var(--course); }
+.note-edit textarea {
+  width: 100%; resize: vertical; min-height: 72px; padding: 10px 12px; border-radius: 12px;
+  background: var(--sunken); color: var(--text); border: 1px solid var(--line-2); outline: none;
+  font: inherit; font-size: 14px; line-height: 1.7; user-select: text; -webkit-user-select: text;
+}
+.note-edit textarea:focus { border-color: var(--course); }
+.note-len { margin-inline-start: auto; }
+.note-edit .note-del { margin-inline-start: 0; }
+.notes-foot { display: inline-flex; align-items: center; gap: 4px; }
+.sb-mark-note { background: var(--course); opacity: 1; border-radius: 2px; width: 4px; height: 8px; margin-inline-start: -2px; top: 0; }
