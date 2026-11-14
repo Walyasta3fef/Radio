@@ -500,7 +500,8 @@ function usePlayer(volume) {
     };
     const onError = () => {
       const local = isLocal();
-      if (audio.error) errLog.add('audio ' + (audio.error.code || '') + ' ' + modeRef.current + (local ? ' local' : '') + (navigator.onLine ? '' : ' offline'));
+      // يُسجَّل اللقاء والنسخة مع الخطأ، مثل lecture:L05 (flecture = النسخة السريعة من الكورس)
+      if (audio.error) errLog.add('audio ' + (audio.error.code || '') + ' ' + (loadedKeyRef.current || modeRef.current) + (local ? ' local' : '') + (navigator.onLine ? '' : ' offline'));
       // تعذّر تشغيل الملف المحمّل: يُجهَّز رابطه من جديد في المحاولة التالية
       if (local) offline.invalidate(variantRef.current, lectureRef.current);
       if (wantPlayRef.current && audio.getAttribute('src')) updateStatus(navigator.onLine || local ? 'error' : 'offline');
@@ -2186,7 +2187,14 @@ function ReportedPosts() {
 function FeedbackList() {
   const [list, setList] = useState(null);
   const [openId, setOpenId] = useState(null);
+  const [copiedId, setCopiedId] = useState(null);
   useEffect(() => feedbackApi.watch(setList), []);
+  // نسخ البلاغ كاملًا: النوع والنص ورقم النسخة وتفاصيل الخطأ
+  const copyOne = async (f, info) => {
+    const text = [t('fbType_' + f.ty) + ' · v' + f.v + ' · ' + new Date(f.ts).toISOString(), f.t || '', info ? JSON.stringify(info, null, 1) : (f.i || '')]
+      .filter(Boolean).join('\n');
+    try { await navigator.clipboard.writeText(text); setCopiedId(f.id); setTimeout(() => setCopiedId(null), 2000); } catch (e) {}
+  };
   if (!list) return html`<p className="hint">${t('pleaseWait')}</p>`;
   if (!list.length) return html`<p className="hint">${t('feedbackNone')}</p>`;
   return html`<ul className="fb-list">${list.map(f => {
@@ -2197,7 +2205,10 @@ function FeedbackList() {
       ${f.t && html`<p className="c-text">${f.t}</p>`}
       ${info && html`<button className="link-btn muted" onClick=${() => setOpenId(openId === f.id ? null : f.id)}>${t('feedbackDetails')}</button>`}
       ${info && openId === f.id && html`<pre className="fb-info" dir="ltr">${JSON.stringify(info, null, 1)}</pre>`}
-      <div className="c-actions"><button className="small-btn" onClick=${() => feedbackApi.resolve(f.id)}>${t('feedbackResolved')}</button></div>
+      <div className="c-actions">
+        <button className="small-btn" onClick=${() => feedbackApi.resolve(f.id)}>${t('feedbackResolved')}</button>
+        <button className="small-btn" onClick=${() => copyOne(f, info)}>${copiedId === f.id ? t('copied') : t('copy')}</button>
+      </div>
     </li>`;
   })}</ul>`;
 }
@@ -2525,7 +2536,28 @@ function StaffReport() {
   </div>`;
 }
 
+// قسم مطوي في صفحة المميزين: يُفتح بالضغط على عنوانه، ولا يُحمَّل محتواه قبل فتحه
+function StaffSection({ title, badge, children }) {
+  const [open, setOpen] = useState(false);
+  return html`<section className=${'staff-sec' + (open ? ' open' : '')}>
+    <button className="staff-sec-head" onClick=${() => setOpen(o => !o)} aria-expanded=${open}>
+      <span>${title}</span>
+      ${badge > 0 && html`<span className="c-count">${badge}</span>`}
+      <span className=${'chev' + (open ? ' chev-open' : '')} aria-hidden="true">⌄</span>
+    </button>
+    ${open && html`<div className="staff-sec-body">${children}</div>`}
+  </section>`;
+}
+
+// عدد البلاغات المفتوحة، ليظهر بجانب عنوان القسم دون فتحه (للمالك فقط)
+function useFeedbackCount(enabled) {
+  const [n, setN] = useState(0);
+  useEffect(() => (enabled ? feedbackApi.watch(list => setN(list.length)) : undefined), [enabled]);
+  return enabled ? n : 0;
+}
+
 function StaffPage({ users }) {
+  const feedbackCount = useFeedbackCount(!!staff.isOwner);
   useStaffVersion();
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState(null);
@@ -2578,32 +2610,29 @@ function StaffPage({ users }) {
           </div>`}
 
       ${staff.isOwner && html`<div className="staff-admin">
-        <h2>${t('staffAddTitle')}</h2>
-        <form onSubmit=${addOne}>
-          <input className="name-input" dir="ltr" placeholder=${t('staffUidPh')} value=${uid} onInput=${e => setUid(e.target.value)} aria-label=${t('staffUidPh')} />
-          <input className="name-input" placeholder=${t('staffNamePh')} value=${name} onInput=${e => setName(e.target.value)} aria-label=${t('staffNamePh')} />
-          <label className="check-row"><input type="checkbox" checked=${mod} onChange=${e => setMod(e.target.checked)} />${t('staffCanDelete')}</label>
-          <button className="cta" type="submit" disabled=${busy || !uid.trim() || !name.trim()}>${t('staffAdd')}</button>
-        </form>
-        <ul className="staff-list">
-          ${Object.entries(staff.list).map(([id, s]) => html`<li key=${id}>
-            <span><b>${s.name}</b> · ${s.owner ? t('staffOwner') : s.mod ? t('staffMod') : t('staffMember')}</span>
-            ${!s.owner && html`<button className="link-btn muted" onClick=${() => window.confirm(t('staffRemoveConfirm', { name: s.name })) && staff.remove(id)}>${t('delete')}</button>`}
-          </li>`)}
-        </ul>
-        <h2>${t('lecAdminTitle')}</h2>
-        <${LectureAdmin} />
-        <h2>${t('staffReportTitle')}</h2>
-        <${StaffReport} />
-        <h2>${t('staffOnlineTitle')}</h2>
-        <${StaffOnline} users=${users} />
-        <h2>${t('reportedPostsTitle')}</h2>
-        <${ReportedPosts} />
-        <h2>${t('feedbackListTitle')}</h2>
-        <${FeedbackList} />
-        <h2>${t('staffCountTitle')}</h2>
-        <p className="acc-line">${t('staffCountHint')}</p>
-        <button className="small-btn" disabled=${busy} onClick=${countSubs}>${busy ? t('pleaseWait') : t('staffCountBtn')}</button>
+        <${StaffSection} title=${t('feedbackListTitle')} badge=${feedbackCount}><${FeedbackList} /><//>
+        <${StaffSection} title=${t('reportedPostsTitle')}><${ReportedPosts} /><//>
+        <${StaffSection} title=${t('staffOnlineTitle')} badge=${users.length}><${StaffOnline} users=${users} /><//>
+        <${StaffSection} title=${t('staffReportTitle')}><${StaffReport} /><//>
+        <${StaffSection} title=${t('lecAdminTitle')}><${LectureAdmin} /><//>
+        <${StaffSection} title=${t('staffMembersTitle')} badge=${Object.keys(staff.list).length}>
+          <form onSubmit=${addOne}>
+            <input className="name-input" dir="ltr" placeholder=${t('staffUidPh')} value=${uid} onInput=${e => setUid(e.target.value)} aria-label=${t('staffUidPh')} />
+            <input className="name-input" placeholder=${t('staffNamePh')} value=${name} onInput=${e => setName(e.target.value)} aria-label=${t('staffNamePh')} />
+            <label className="check-row"><input type="checkbox" checked=${mod} onChange=${e => setMod(e.target.checked)} />${t('staffCanDelete')}</label>
+            <button className="cta" type="submit" disabled=${busy || !uid.trim() || !name.trim()}>${t('staffAdd')}</button>
+          </form>
+          <ul className="staff-list">
+            ${Object.entries(staff.list).map(([id, s]) => html`<li key=${id}>
+              <span><b>${s.name}</b> · ${s.owner ? t('staffOwner') : s.mod ? t('staffMod') : t('staffMember')}</span>
+              ${!s.owner && html`<button className="link-btn muted" onClick=${() => window.confirm(t('staffRemoveConfirm', { name: s.name })) && staff.remove(id)}>${t('delete')}</button>`}
+            </li>`)}
+          </ul>
+        <//>
+        <${StaffSection} title=${t('staffCountTitle')}>
+          <p className="acc-line">${t('staffCountHint')}</p>
+          <button className="small-btn" disabled=${busy} onClick=${countSubs}>${busy ? t('pleaseWait') : t('staffCountBtn')}</button>
+        <//>
       </div>`}
 
       ${msg && html`<p className="form-error">${msg}</p>`}
@@ -3011,6 +3040,31 @@ const SYNC_KEY = { syncing: 'syncSyncing', synced: 'syncSynced', error: 'syncErr
 // =====================
 // المشغّل المصغّر: يظهر أسفل الشاشة أثناء الاستماع في صفحة أخرى
 // =====================
+// تنبيه خفيف لمن يفتح الموقع من المتصفح الداخلي لتطبيق (فيسبوك، إنستغرام...)، حيث يتعطل الصوت أحيانًا
+// سطر واحد أعلى الصفحة لا يغطي شيئًا، ويختفي نهائيًا على هذا الجهاز عند إغلاقه
+const IN_APP_KEY = 'inapp_hint_off';
+const isInAppBrowser = () => /FBAN|FBAV|FB_IAB|Instagram|Line\/|TikTok|musical_ly|Snapchat|Twitter/i.test(navigator.userAgent || '');
+function InAppHint() {
+  const [show, setShow] = useState(() => isInAppBrowser() && !storage.get(IN_APP_KEY));
+  const [copied, setCopied] = useState(false);
+  if (!show) return null;
+  const close = () => { storage.set(IN_APP_KEY, '1'); setShow(false); };
+  const page = location.href.split('#')[0];
+  const android = /Android/i.test(navigator.userAgent || '');
+  // على أندرويد: رابط يفتح الصفحة في كروم مباشرة. على غيره: نسخ الرابط للصقه في المتصفح
+  const chrome = 'intent://' + page.replace(/^https?:\/\//, '') + '#Intent;scheme=https;package=com.android.chrome;end';
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(page); setCopied(true); setTimeout(() => setCopied(false), 2000); } catch (e) {}
+  };
+  return html`<div className="inapp" role="note">
+    <span>${t('inAppHint')}</span>
+    ${android
+      ? html`<a className="inapp-go" href=${chrome}>${t('inAppOpen')}</a>`
+      : html`<button className="inapp-go" onClick=${copy}>${copied ? t('copied') : t('inAppCopy')}</button>`}
+    <button className="inapp-x" onClick=${close} aria-label=${t('inAppClose')}>×</button>
+  </div>`;
+}
+
 function MiniPlayer({ player, route }) {
   if (!player.isPlaying) return null;
   const isLecture = player.mode === 'lecture';
@@ -3074,7 +3128,12 @@ function App() {
   // مستوى الصوت يُضبط من أزرار الجهاز
   const player = usePlayer(1);
   mentionPlayer = player;
-  feedbackContext = { page: route.page, mode: player.mode || null, st: player.status || null, playing: !!player.isPlaying };
+  feedbackContext = {
+    page: route.page, mode: player.mode || null, st: player.status || null, playing: !!player.isPlaying,
+    // اللقاء المشغّل أو المفتوح، ونسخته (normal أو fast)
+    lec: player.mode === 'lecture' ? player.lectureId : (player.live && player.live.track ? player.live.track.id : (route.id || null)),
+    ver: player.mode === 'lecture' ? player.variant : (player.mode || route.variant || null),
+  };
 
   // آخر صفحة قبل صفحة الاسم، للعودة إليها بعد الحفظ
   const returnRef = useRef('#/');
@@ -3125,6 +3184,7 @@ function App() {
   return html`<div className="app" onContextMenu=${e => e.preventDefault()}>
     <${Stars} />
     <audio ref=${player.audioRef} preload="none" controlsList="nodownload" />
+    <${InAppHint} />
     <${PageBoundary} key=${location.hash}>${page}<//>
     <${MiniPlayer} player=${player} route=${route} />
   </div>`;
