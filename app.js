@@ -634,6 +634,30 @@ function radioView(player, mode, now) {
 // كل زائر يسجّل نفسه فقط، ويُحذف تلقائيًا من الخادم عند انقطاع اتصاله
 // at: المكان الذي يوجد فيه الزائر (home أو normal أو fast أو course)
 // =====================
+// =====================
+// توفير الاتصالات: للخطة المجانية حد أقصى من الاتصالات المتزامنة بقاعدة البيانات، وكل تبويب مفتوح يشغل اتصالًا
+// التبويب الذي يبقى في الخلفية دون صوت خمس دقائق يُفصل، ويعود فور الرجوع إليه أو بدء الصوت فيه
+// من يستمع والشاشة مقفلة يبقى متصلًا، فهو مستمع فعلي ويُسجَّل وقته
+// =====================
+const IDLE_DISCONNECT_MS = 5 * 60 * 1000;
+(() => {
+  let timer = null;
+  let off = false;
+  const playing = () => { const a = document.querySelector('audio'); return !!a && !a.paused; };
+  const wake = () => { clearTimeout(timer); timer = null; if (off) { off = false; database.goOnline(); } };
+  const arm = () => { clearTimeout(timer); timer = setTimeout(sleep, IDLE_DISCONNECT_MS); };
+  const sleep = () => {
+    timer = null;
+    if (document.visibilityState !== 'hidden' || off) return;
+    if (playing()) return arm();          // ما زال يستمع: يُعاد الفحص لاحقًا
+    off = true;
+    database.goOffline();
+  };
+  document.addEventListener('visibilitychange', () => (document.visibilityState === 'hidden' ? arm() : wake()));
+  // بدء الصوت من أزرار شاشة القفل والتبويب مفصول
+  document.addEventListener('play', () => { if (off) { off = false; database.goOnline(); } if (document.visibilityState === 'hidden') arm(); }, true);
+})();
+
 // أماكن الاستماع: من يقف في غيرها (الرئيسية، الحساب، المجتمع) لا يُعدّ مستمعًا
 const LISTEN_PLACES = ['normal', 'fast', 'course'];
 
@@ -1828,6 +1852,7 @@ function NotesBox({ id, getTime, onTime, readOnly }) {
 // =====================
 // صفحة اللقاء
 // =====================
+const FAST_TOLD_KEY = 'fast_unlock_told';
 function LecturePage({ id, variant, player }) {
   useProgressVersion();
   const online = useOnline();
@@ -1861,6 +1886,20 @@ function LecturePage({ id, variant, player }) {
   const shown = dragging != null ? dragging : time;
   const commit = () => { if (dragging != null) { player.seekLecture(id, dragging, variant); setDragging(null); } };
   const skipBy = (d) => (current ? player.skip(d) : player.seekLecture(id, time + d, variant));
+
+  // عند أول لقاء يكتمل أثناء الاستماع: تنبيه لمرة واحدة بأن نسخته «عالسريع» صارت متاحة
+  const [unlocked, setUnlocked] = useState(false);
+  const wasDone = useRef(done);
+  useEffect(() => {
+    if (done && !wasDone.current && !fast && !storage.get(FAST_TOLD_KEY)) {
+      storage.set(FAST_TOLD_KEY, '1');
+      setUnlocked(true);
+      const id2 = setTimeout(() => setUnlocked(false), 9000);
+      wasDone.current = done;
+      return () => clearTimeout(id2);
+    }
+    wasDone.current = done;
+  }, [done]);
 
   // «أكمل من»: إذا كان المستمع يعيد جزءًا سمعه، زر يقفز إلى أول جزء لم يسمعه بعد
   const resumeAt = fast || dragging != null ? null : progress.nextUnheard(id, time);
@@ -1926,6 +1965,8 @@ function LecturePage({ id, variant, player }) {
     ${!fast && (online
       ? html`<${CommentsBox} lid=${id} list=${comments} getTime=${getTime} onTime=${jumpTo} />`
       : html`<p className="tab-hint">${t('commentsNeedNet')}</p>`)}
+    <p className="foot-link"><button className="link-btn muted" onClick=${() => go('#/feedback')}>${t('reportProblem')}</button></p>
+    ${unlocked && html`<p className="toast toast-float" role="status" onClick=${() => setUnlocked(false)}>${t('fastUnlocked')}</p>`}
   </div>`;
 }
 
