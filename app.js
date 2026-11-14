@@ -1152,15 +1152,34 @@ function CommentForm({ lid, parent, getTime, onDone, onCancel, compact, placehol
 // صاحب التعليق خلال المهلة: تعديل وحذف. غيره: إبلاغ. المشرف: تجاهل البلاغات وحذف
 // replies: الردود على التعليق (تُحذف معه). reports: شجرة البلاغات
 function CommentMenu({ c, lid, replies, reports, onEdit, onNotice }) {
-  const [open, setOpen] = useState(false);
+  // pos: مكان القائمة على الشاشة نفسها (لا داخل صندوق التعليقات الذي يقصّ ما يخرج عن حوافه)، أو null وهي مغلقة
+  const [pos, setPos] = useState(null);
+  const open = !!pos;
+  const setOpen = (v) => { if (!v) setPos(null); };
   const [busy, setBusy] = useState(false);
   const boxRef = useRef(null);
+  const btnRef = useRef(null);
   useEffect(() => {
     if (!open) return;
-    const close = (e) => { if (boxRef.current && !boxRef.current.contains(e.target)) setOpen(false); };
-    document.addEventListener('click', close);
-    return () => document.removeEventListener('click', close);
+    const outside = (e) => { if (boxRef.current && !boxRef.current.contains(e.target)) setPos(null); };
+    const away = () => setPos(null);
+    document.addEventListener('click', outside);
+    window.addEventListener('scroll', away, { passive: true });
+    window.addEventListener('resize', away);
+    return () => { document.removeEventListener('click', outside); window.removeEventListener('scroll', away); window.removeEventListener('resize', away); };
   }, [open]);
+  // تُفتح تحت الزر، وإن لم تتسع المساحة أسفله (آخر تعليق في الصفحة) تُفتح فوقه
+  const toggle = (count) => {
+    if (open) return setPos(null);
+    const r = btnRef.current.getBoundingClientRect();
+    const vw = window.innerWidth, vh = window.innerHeight;
+    const width = 150, height = count * 40 + 14;
+    const left = Math.max(8, Math.min(r.left, vw - width - 8));
+    const below = vh - r.bottom - 96;          // يُترك مكان المشغّل الصغير أسفل الشاشة
+    setPos(below >= height || r.top < height + 8
+      ? { left, top: r.bottom + 4, width }
+      : { left, bottom: vh - r.top + 4, width });
+  };
 
   const own = canModifyOwn(c);
   const me = reactions.mine();
@@ -1195,10 +1214,10 @@ function CommentMenu({ c, lid, replies, reports, onEdit, onNotice }) {
   if (own || staff.isMod) items.push(html`<button key="d" className="menu-item danger" onClick=${del}>${t('delete')}</button>`);
   if (!items.length) return null;
   return html`<span className="post-menu" ref=${boxRef}>
-    <button className="dots-btn" disabled=${busy} onClick=${() => setOpen(o => !o)} aria-label=${t('moreOptions')} aria-expanded=${open}>
+    <button ref=${btnRef} className="dots-btn" disabled=${busy} onClick=${() => toggle(items.length)} aria-label=${t('moreOptions')} aria-expanded=${open}>
       <${Icon} name="dots" size=${18} />
     </button>
-    ${open && html`<span className="menu-pop" role="menu">${items}</span>`}
+    ${open && html`<span className="menu-pop menu-fixed" role="menu" style=${pos}>${items}</span>`}
   </span>`;
 }
 

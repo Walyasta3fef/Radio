@@ -823,3 +823,5 @@ span.note-time { color: var(--note); font-weight: 700; }
 .c-foot .menu-item.danger { color: var(--live); }
 .c-edit { margin: 4px 0 8px; }
 .danger-link { color: var(--live); }
+/* القائمة تُثبَّت على الشاشة نفسها حتى لا يقصّها صندوق التعليقات */
+.menu-pop.menu-fixed { position: fixed; inset: auto; z-index: 45; min-width: 0; }
