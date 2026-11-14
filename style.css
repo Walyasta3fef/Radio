@@ -814,3 +814,12 @@ span.note-time { color: var(--note); font-weight: 700; }
 .inapp > span { flex: 1; min-width: 0; }
 .inapp-go { flex-shrink: 0; color: var(--course); font-weight: 800; font-size: 12px; text-decoration: none; }
 .inapp-x { flex-shrink: 0; width: 24px; height: 24px; border-radius: 50%; color: var(--muted); font-size: 18px; line-height: 1; }
+
+/* قائمة ⋯ وتعديل التعليق في تعليقات اللقاءات */
+.c-foot { align-items: center; }
+.c-foot .post-menu .dots-btn { padding: 2px 4px; }
+.c-foot .menu-item { font-size: 14px; font-weight: 500; color: var(--text); }
+.c-foot .menu-item.muted { color: var(--muted); }
+.c-foot .menu-item.danger { color: var(--live); }
+.c-edit { margin: 4px 0 8px; }
+.danger-link { color: var(--live); }

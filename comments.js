@@ -199,6 +199,71 @@ const commentsApi = {
     } catch (e) { return { error: 'commentFailed' }; }
   },
 
+  // نسخ التعليق في «أحدث التعليقات» (مفاتيحها)، للقاءات فقط
+  async recentKeys(lid, ids) {
+    if (!LECTURE_BY_ID[lid]) return [];
+    const keys = [];
+    await Promise.all(ids.map(async id => {
+      const snap = await withTimeout(database.ref('/recent').orderByChild('i').equalTo(id).once('value'));
+      snap.forEach(ch => { keys.push(ch.key); });
+    }));
+    return keys;
+  },
+
+  // اتصال الكتابة لتعليق يملكه المستخدم: المميز باتصال Google، والمشترك باتصال حسابه (لتتحقق القواعد من ملكية رقمه)
+  async ownDb(c) {
+    if (c.a) return database;
+    return (await account.ready()) ? account.db : null;
+  },
+
+  // حذف المستخدم تعليقه خلال مهلة التعديل: يُحذف هو وكل الردود عليه ونسخها في «أحدث التعليقات» في عملية واحدة
+  // (إما أن يُحذف الكل أو لا يُحذف شيء)، ثم يُصحَّح عدّاد اللقاء
+  async removeOwn(lid, comment, replies) {
+    if (!navigator.onLine) return { error: 'needOnline' };
+    const ids = [comment.id, ...(replies || []).map(r => r.id)];
+    try {
+      const db = await this.ownDb(comment);
+      if (!db) return { error: 'saveFailed' };
+      const patch = {};
+      ids.forEach(id => { patch['comments/' + lid + '/' + id] = null; });
+      (await this.recentKeys(lid, ids)).forEach(k => { patch['recent/' + k] = null; });
+      await withTimeout(db.ref().update(patch));
+      if (LECTURE_BY_ID[lid]) database.ref('/counts/' + lid).transaction(v => Math.max(0, (v || 0) - ids.length)).catch(() => {});
+      logEvent('comment_deleted_own');
+      return { ok: true };
+    } catch (e) {
+      errLog.add('own delete: ' + (e && (e.code || e.message)));
+      return { error: 'deleteFailed' };
+    }
+  },
+
+  // تعديل المستخدم نص تعليقه خلال المهلة: يتغير النص (وعلامة الوقت المستخرجة منه) وتُضاف علامة «معدّل»
+  async edit(lid, c, text) {
+    text = String(text || '').trim();
+    if (!text) return { error: 'commentEmpty' };
+    if (text.length > COMMENT_MAX) return { error: 'commentTooLong' };
+    if (!c.a && hasContact(text)) return { error: 'noContacts' };
+    if (!navigator.onLine) return { error: 'needOnline' };
+    if (text === c.t) return { ok: true };
+    try {
+      const db = await this.ownDb(c);
+      if (!db) return { error: 'saveFailed' };
+      const s = firstTime(text, maxSecOf(lid));
+      const base = 'comments/' + lid + '/' + c.id + '/';
+      const patch = { [base + 't']: text, [base + 'ed']: true, [base + 's']: s != null ? s : null };
+      (await this.recentKeys(lid, [c.id])).forEach(k => {
+        patch['recent/' + k + '/t'] = text.slice(0, 200);
+        patch['recent/' + k + '/s'] = s != null ? s : null;
+      });
+      await withTimeout(db.ref().update(patch));
+      logEvent('comment_edited');
+      return { ok: true };
+    } catch (e) {
+      errLog.add('edit: ' + (e && (e.code || e.message)));
+      return { error: 'editFailed' };
+    }
+  },
+
   // حذف تعليق وردوده (للمشرف فقط)، مع نسخه في «أحدث التعليقات» وتصحيح العدّاد
   async remove(lid, comment, replies) {
     const ids = [comment.id, ...(replies || []).map(r => r.id)];
@@ -222,6 +287,9 @@ const commentsApi = {
 
 // صاحب التعليق: هل هو المستخدم الحالي
 const isMine = (c) => (c.n && c.n === account.nick) || (c.a && c.a === staff.uid);
+// مهلة تعديل التعليق وحذفه لصاحبه (القواعد تفرضها بوقت الخادم). يُخفى الخيار قبل نهايتها بدقيقة تفاديًا لطلب مرفوض
+const OWN_EDIT_MS = 3 * 3600 * 1000;
+const canModifyOwn = (c) => !!isMine(c) && typeof c.ts === 'number' && serverNow() - c.ts < OWN_EDIT_MS - 60000;
 // هل التعليق جديد على المستخدم: بعد آخر قراءة ومن شخص آخر
 const isNewComment = (c, lid) => (c.ts || 0) > progress.seenAt(lid) && !isMine(c);
 const isReplyToMe = (c, lid) => ((!!account.nick && c.r === account.nick) || (!!staff.uid && c.ra === staff.uid)) && isNewComment(c, lid);
@@ -264,9 +332,12 @@ const reactions = (() => {
       try { await withTimeout(on ? ref.set(true) : ref.remove()); return true; }
       catch (e) { errLog.add('heart: ' + (e && (e.code || e.message))); return false; }
     },
-    async report(cid) {
+    // البلاغ لا يحذف ولا يخفي شيئًا: يظهر للمشرفين فقط والقرار لهم
+    // قيمته true لمنشور المجتمع، ومعرّف اللقاء لتعليق داخل لقاء (ليُعرف مكانه في قائمة البلاغات)
+    async report(cid, lid) {
       if (!(await account.ready())) return false;
-      try { await withTimeout(account.db.ref('/reports/' + cid + '/' + mine()).set(true)); return true; }
+      const value = !lid || lid === GENERAL_ID ? true : lid;
+      try { await withTimeout(account.db.ref('/reports/' + cid + '/' + mine()).set(value)); return true; }
       catch (e) { errLog.add('report: ' + (e && (e.code || e.message))); return false; }
     },
     // للمشرف: إلغاء البلاغات وإظهار المنشور

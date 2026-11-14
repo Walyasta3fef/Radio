@@ -1148,6 +1148,88 @@ function CommentForm({ lid, parent, getTime, onDone, onCancel, compact, placehol
 
 // صندوق التعليقات بمستويين: تعليق ثم ردود عليه
 // مطويّ افتراضيًا حتى تبقى الصفحة نظيفة
+// قائمة ⋯ على التعليق، موحّدة في تعليقات اللقاءات والمجتمع:
+// صاحب التعليق خلال المهلة: تعديل وحذف. غيره: إبلاغ. المشرف: تجاهل البلاغات وحذف
+// replies: الردود على التعليق (تُحذف معه). reports: شجرة البلاغات
+function CommentMenu({ c, lid, replies, reports, onEdit, onNotice }) {
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const boxRef = useRef(null);
+  useEffect(() => {
+    if (!open) return;
+    const close = (e) => { if (boxRef.current && !boxRef.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('click', close);
+    return () => document.removeEventListener('click', close);
+  }, [open]);
+
+  const own = canModifyOwn(c);
+  const me = reactions.mine();
+  const node = reports[c.id];
+  const reportCount = reactions.count(node);
+  const reported = !!(me && node && node[me]);
+  const rs = replies || [];
+
+  const report = async () => {
+    setOpen(false);
+    if (!navigator.onLine) return onNotice(t('needOnline'));
+    const ok = await reactions.report(c.id, lid);
+    onNotice(ok ? t('reportSent') : t('saveFailed'));
+  };
+  const del = async () => {
+    setOpen(false);
+    if (busy) return;
+    if (!window.confirm(rs.length ? t('deleteOwnWithReplies', { n: rs.length }) : t('deleteOwnConfirm'))) return;
+    setBusy(true);
+    // المشرف يحذف بصلاحيته في أي وقت، وصاحب التعليق بصلاحية المهلة
+    const r = staff.isMod ? await commentsApi.remove(lid, c, rs) : await commentsApi.removeOwn(lid, c, rs);
+    setBusy(false);
+    if (r.error) onNotice(t(r.error === 'commentFailed' ? 'deleteFailed' : r.error));
+  };
+
+  const items = [];
+  if (own) items.push(html`<button key="e" className="menu-item" onClick=${() => { setOpen(false); onEdit(c); }}>${t('edit')}</button>`);
+  if (account.loggedIn && !isMine(c) && !c.a) items.push(reported
+    ? html`<span key="r" className="menu-item muted">${t('reported')}</span>`
+    : html`<button key="r" className="menu-item" onClick=${report}>${t('reportPost')}</button>`);
+  if (staff.isMod && reportCount > 0) items.push(html`<button key="s" className="menu-item" onClick=${() => { setOpen(false); reactions.clearReports(c.id); }}>${t('ignoreReports')}</button>`);
+  if (own || staff.isMod) items.push(html`<button key="d" className="menu-item danger" onClick=${del}>${t('delete')}</button>`);
+  if (!items.length) return null;
+  return html`<span className="post-menu" ref=${boxRef}>
+    <button className="dots-btn" disabled=${busy} onClick=${() => setOpen(o => !o)} aria-label=${t('moreOptions')} aria-expanded=${open}>
+      <${Icon} name="dots" size=${18} />
+    </button>
+    ${open && html`<span className="menu-pop" role="menu">${items}</span>`}
+  </span>`;
+}
+
+// تعديل نص تعليق في مكانه
+function CommentEdit({ lid, c, onDone }) {
+  const [text, setText] = useState(c.t);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+  const save = async (e) => {
+    e.preventDefault();
+    if (busy) return;
+    setBusy(true); setError(null);
+    const r = await commentsApi.edit(lid, c, text);
+    setBusy(false);
+    if (r.error) return setError(r.error);
+    onDone();
+  };
+  return html`<form className="c-form c-edit" onSubmit=${save}>
+    <textarea value=${text} maxLength=${COMMENT_MAX} rows="3" autoFocus aria-label=${t('edit')}
+      onInput=${e => { setText(e.target.value); setError(null); }}></textarea>
+    ${error && html`<p className="form-error">${t(error)}</p>`}
+    <div className="c-actions">
+      <button className="small-btn c-send" type="submit" disabled=${busy || !text.trim()}>${busy ? t('pleaseWait') : t('save')}</button>
+      <button type="button" className="link-btn muted" onClick=${onDone}>${t('cancel')}</button>
+    </div>
+  </form>`;
+}
+
+// وقت التعليق، ومعه «معدّل» إن عدّله صاحبه
+const commentWhen = (c) => relTime(c.ts) + (c.ed ? ' · ' + t('edited') : '');
+
 function CommentsBox({ lid, list, getTime, onTime, startOpen, title }) {
   useAccountVersion();
   const focus = pendingFocus && pendingFocus.lid === lid ? pendingFocus.cid : null;
@@ -1178,11 +1260,11 @@ function CommentsBox({ lid, list, getTime, onTime, startOpen, title }) {
   const wasNew = (c) => seenBase != null && (c.ts || 0) > seenBase && !isMine(c);
   const toMe = (c) => wasNew(c) && ((account.nick && c.r === account.nick) || (staff.uid && c.ra === staff.uid));
 
-  // حذف تعليق (للمشرف فقط)
-  const del = async (c, isReply) => {
-    if (!window.confirm(t('deleteConfirm'))) return;
-    await commentsApi.remove(lid, c, isReply ? [] : (replies[c.id] || []));
-  };
+  // قائمة ⋯ : تعديل وحذف لصاحب التعليق خلال المهلة، وإبلاغ لغيره، وحذف للمشرف
+  const reports = useReactionTree(reactions.watchReports);
+  const [editing, setEditing] = useState(null);
+  const [notice, setNotice] = useState(null);
+  const flash = (msg) => { setNotice(msg); setTimeout(() => setNotice(null), 3500); };
 
   // فتح اللقاء من «أحدث التعليقات»: التمرير إلى التعليق وإبرازه
   useEffect(() => {
@@ -1211,14 +1293,17 @@ function CommentsBox({ lid, list, getTime, onTime, startOpen, title }) {
   const replyButton = (top, target) => canWrite && html`<button onClick=${() => setReplyFor({ top: top.id, n: target.n, a: target.a, pf: target.pf })}>${t('reply')}</button>`;
 
   const item = (c, top, isReply) => html`<li key=${c.id} id=${'c-' + c.id} className=${'c-item' + (highlight === c.id ? ' focus' : '') + (wasNew(c) ? ' is-new' : '')}>
-    <div className="c-meta"><${CommentAuthor} c=${c} toMe=${toMe(c)} /><span>${relTime(c.ts)}</span></div>
-    <${CommentText} text=${c.t} maxSec=${maxSec} onTime=${onTime} replyTo=${isReply && (c.r || c.ra) ? authorName(c.r, c.ra, c.rp) : null} />
+    <div className="c-meta"><${CommentAuthor} c=${c} toMe=${toMe(c)} /><span>${commentWhen(c)}</span></div>
+    ${editing === c.id
+      ? html`<${CommentEdit} lid=${lid} c=${c} onDone=${() => setEditing(null)} />`
+      : html`<${CommentText} text=${c.t} maxSec=${maxSec} onTime=${onTime} replyTo=${isReply && (c.r || c.ra) ? authorName(c.r, c.ra, c.rp) : null} />`}
     <div className="c-foot">
       ${replyButton(top, c)}
-      ${staff.isMod && html`<button className="c-del" onClick=${() => del(c, isReply)}>${t('delete')}</button>`}
       ${!isReply && (replies[c.id] || []).length > 0 && html`<button onClick=${() => setExpanded(x => ({ ...x, [c.id]: !x[c.id] }))}>
         ${expanded[c.id] ? t('hideReplies') : t('showReplies', { n: replies[c.id].length })}
       </button>`}
+      <${CommentMenu} c=${c} lid=${lid} replies=${isReply ? [] : (replies[c.id] || [])} reports=${reports}
+        onEdit=${(x) => setEditing(x.id)} onNotice=${flash} />
     </div>
     ${!isReply && (expanded[c.id] || replyFor && replyFor.top === c.id) && html`<ul className="replies">
       ${expanded[c.id] && (replies[c.id] || []).map(r => item(r, c, true))}
@@ -1239,6 +1324,7 @@ function CommentsBox({ lid, list, getTime, onTime, startOpen, title }) {
     </button>
 
     ${open && html`<div className="c-body">
+      ${notice && html`<p className="toast toast-float" role="status">${notice}</p>`}
       ${canWrite
         ? html`<${CommentForm} lid=${lid} getTime=${getTime} onDone=${() => setSort('new')} />`
         : html`<div className="c-login">
@@ -2003,7 +2089,6 @@ function CommunityPage({ focus }) {
   const [composing, setComposing] = useState(false);
   const [expanded, setExpanded] = useState({});
   const [replyTo, setReplyTo] = useState({});     // لكل منشور: من يُرد عليه { n, a, pf }
-  const [menuFor, setMenuFor] = useState(null);
   const [notice, setNotice] = useState(null);
   const canWrite = commentsApi.canWrite();
 
@@ -2043,42 +2128,21 @@ function CommunityPage({ focus }) {
     const ok = await reactions.setHeart(id, !myHeart(id));
     if (ok === false) flash(t('saveFailed'));
   };
-  const report = async (id) => {
-    setMenuFor(null);
-    const ok = await reactions.report(id);
-    flash(ok ? t('reportSent') : t('saveFailed'));
-  };
-  const del = async (c, isReply) => {
-    setMenuFor(null);
-    if (!window.confirm(t('deletePostConfirm'))) return;
-    await commentsApi.remove(GENERAL_ID, c, isReply ? [] : (replies[c.id] || []));
-  };
-
-  // قائمة ⋯ : إبلاغ، وللمشرف حذف وإظهار
-  const menu = (c, isReply) => {
-    const mine = isMine(c);
-    const items = [];
-    if (account.loggedIn && !mine && !c.a) items.push(myReport(c.id)
-      ? html`<span key="r" className="menu-item muted">${t('reported')}</span>`
-      : html`<button key="r" className="menu-item" onClick=${() => report(c.id)}>${t('reportPost')}</button>`);
-    if (staff.isMod && reportCount(c.id) > 0) items.push(html`<button key="s" className="menu-item" onClick=${() => { setMenuFor(null); reactions.clearReports(c.id); }}>${t('ignoreReports')}</button>`);
-    if (staff.isMod) items.push(html`<button key="d" className="menu-item danger" onClick=${() => del(c, isReply)}>${t('delete')}</button>`);
-    if (!items.length) return null;
-    return html`<span className="post-menu">
-      <button className="dots-btn" onClick=${() => setMenuFor(menuFor === c.id ? null : c.id)} aria-label=${t('moreOptions')} aria-expanded=${menuFor === c.id}>
-        <${Icon} name="dots" size=${18} />
-      </button>
-      ${menuFor === c.id && html`<span className="menu-pop" role="menu">${items}</span>`}
-    </span>`;
-  };
+  // قائمة ⋯ : تعديل وحذف لصاحب المنشور خلال المهلة، وإبلاغ لغيره، وللمشرف تجاهل البلاغات والحذف
+  const [editing, setEditing] = useState(null);
+  const menu = (c, isReply) => html`<${CommentMenu} c=${c} lid=${GENERAL_ID} replies=${isReply ? [] : (replies[c.id] || [])} reports=${reports}
+    onEdit=${(x) => setEditing(x.id)} onNotice=${flash} />`;
+  const body = (c, replyName) => (editing === c.id
+    ? html`<${CommentEdit} lid=${GENERAL_ID} c=${c} onDone=${() => setEditing(null)} />`
+    : html`<${CommentText} text=${c.t} maxSec=${0} replyTo=${replyName} />`);
 
   // عدد البلاغات يظهر للمشرفين فقط، والقرار لهم
   const hiddenNote = (c) => staff.isMod && reportCount(c.id) > 0 && html`<p className="hidden-note">${t('reportsCount', { n: reportCount(c.id) })}</p>`;
 
   const replyItem = (c, post) => html`<li key=${c.id} className=${'reply' + (isNew(c) ? ' is-new' : '')}>
-    <div className="c-meta"><${CommentAuthor} c=${c} toMe=${isNew(c) && ((account.nick && c.r === account.nick) || (staff.uid && c.ra === staff.uid))} /><span>${relTime(c.ts)}</span></div>
+    <div className="c-meta"><${CommentAuthor} c=${c} toMe=${isNew(c) && ((account.nick && c.r === account.nick) || (staff.uid && c.ra === staff.uid))} /><span>${commentWhen(c)}</span></div>
     ${hiddenNote(c)}
-    <${CommentText} text=${c.t} maxSec=${0} replyTo=${(c.r || c.ra) ? authorName(c.r, c.ra, c.rp) : null} />
+    ${body(c, (c.r || c.ra) ? authorName(c.r, c.ra, c.rp) : null)}
     <div className="post-acts">
       <${HeartButton} small count=${heartCount(c.id)} mine=${myHeart(c.id)} onToggle=${() => toggleHeart(c.id)} />
       ${canWrite && html`<button className="act-btn" onClick=${() => setReplyTo(x => ({ ...x, [post.id]: { n: c.n, a: c.a, pf: c.pf } }))}>${t('reply')}</button>`}
@@ -2094,10 +2158,10 @@ function CommunityPage({ focus }) {
     return html`<article key=${p.id} id=${'c-' + p.id} className=${'post' + (isNew(p) ? ' is-new' : '')}>
       <div className="c-meta">
         <${CommentAuthor} c=${p} />
-        <span>${relTime(p.ts)}${isNew(p) && html`<i className="new-dot" aria-label=${t('newComments')}></i>`}</span>
+        <span>${commentWhen(p)}${isNew(p) && html`<i className="new-dot" aria-label=${t('newComments')}></i>`}</span>
       </div>
       ${hiddenNote(p)}
-      <${CommentText} text=${p.t} maxSec=${0} />
+      ${body(p, null)}
       <div className="post-acts">
         <${HeartButton} count=${heartCount(p.id)} mine=${myHeart(p.id)} onToggle=${() => toggleHeart(p.id)} />
         <button className=${'act-btn' + (open ? ' on' : '')} onClick=${() => setExpanded(x => ({ ...x, [p.id]: !open }))} aria-expanded=${open}>
@@ -2130,7 +2194,7 @@ function CommunityPage({ focus }) {
     setTimeout(() => { const el = document.getElementById('c-' + top); if (el) el.scrollIntoView({ block: 'center' }); }, 100);
   }, [focus, list.length]);
 
-  return html`<div className="page community" onClick=${(e) => { if (menuFor && !e.target.closest('.post-menu')) setMenuFor(null); }}>
+  return html`<div className="page community">
     <div className="topbar">
       <${BackButton} to="#/" />
       <div className="top-left"><${NameChip} /></div>
@@ -2208,18 +2272,74 @@ function FeedbackPage() {
   </div>`;
 }
 
-// منشورات المجتمع التي عليها بلاغات (للمشرفين)
+// التعليقات التي عليها بلاغات (للمشرفين): منشورات المجتمع وتعليقات اللقاءات
+// البلاغ لا يحذف شيئًا: الحذف من هنا أو من قائمة التعليق فقط
 function ReportedPosts() {
-  const list = useComments(GENERAL_ID);
+  const general = useComments(GENERAL_ID);
   const reports = useReactionTree(reactions.watchReports);
-  const rows = list.map(c => ({ c, n: reactions.count(reports[c.id]) })).filter(r => r.n > 0).sort((a, b) => b.n - a.n);
+  const [lectureRows, setLectureRows] = useState({});   // معرّف التعليق → { lid, c }، أو null إذا لم يعد موجودًا
+  const [busy, setBusy] = useState(null);
+
+  // بلاغات تعليقات اللقاءات تحمل معرّف اللقاء كقيمة
+  const wanted = Object.entries(reports).map(([cid, node]) => {
+    const lid = Object.values(node || {}).find(v => typeof v === 'string' && LECTURE_BY_ID[v]);
+    return lid ? { cid, lid } : null;
+  }).filter(Boolean);
+  const wantedKey = wanted.map(w => w.cid).sort().join(',');
+  useEffect(() => {
+    let on = true;
+    wanted.forEach(w => {
+      if (lectureRows[w.cid] !== undefined) return;
+      database.ref('/comments/' + w.lid + '/' + w.cid).once('value').then(snap => {
+        if (!on) return;
+        const v = snap.val();
+        const row = v && typeof v.t === 'string' ? { lid: w.lid, c: { id: w.cid, ...v } } : null;
+        setLectureRows(x => ({ ...x, [w.cid]: row }));
+        if (!row && staff.isMod) reactions.clearReports(w.cid);      // تعليق حذفه صاحبه: تُزال بلاغاته
+      }).catch(() => {});
+    });
+    return () => { on = false; };
+  }, [wantedKey]);
+
+  const rows = [
+    ...general.map(c => ({ lid: GENERAL_ID, c })),
+    ...wanted.map(w => lectureRows[w.cid]).filter(Boolean),
+  ].map(r => ({ ...r, n: reactions.count(reports[r.c.id]) })).filter(r => r.n > 0).sort((a, b) => b.n - a.n);
+
+  const open = (r) => {
+    if (r.lid === GENERAL_ID) return go('#/community?c=' + r.c.id);
+    pendingFocus = { lid: r.lid, cid: r.c.p || r.c.id };
+    go('#/lecture/' + r.lid);
+  };
+  const del = async (r) => {
+    if (!window.confirm(t('deleteConfirm'))) return;
+    setBusy(r.c.id);
+    let replies = [];
+    try {
+      if (r.c.p) replies = [];
+      else if (r.lid === GENERAL_ID) replies = general.filter(x => x.p === r.c.id);
+      else {
+        const snap = await database.ref('/comments/' + r.lid).orderByChild('p').equalTo(r.c.id).once('value');
+        snap.forEach(ch => { replies.push({ id: ch.key, ...ch.val() }); });
+      }
+    } catch (e) {}
+    const res = await commentsApi.remove(r.lid, r.c, replies);
+    setBusy(null);
+    if (res.ok) {
+      reactions.clearReports(r.c.id);
+      if (r.lid !== GENERAL_ID) setLectureRows(x => ({ ...x, [r.c.id]: null }));
+    }
+  };
+
   if (!rows.length) return html`<p className="hint">${t('reportedNone')}</p>`;
-  return html`<ul className="fb-list">${rows.map(({ c, n }) => html`<li key=${c.id} className="fb-item">
-    <div className="c-meta"><${CommentAuthor} c=${c} /><span>${t('reportsCount', { n })}</span></div>
-    <p className="c-text">${c.t}</p>
+  return html`<ul className="fb-list">${rows.map((r) => html`<li key=${r.c.id} className="fb-item">
+    <div className="c-meta"><${CommentAuthor} c=${r.c} /><span>${t('reportsCount', { n: r.n })}</span></div>
+    <p className="hint">${r.lid === GENERAL_ID ? t('community') : shortTitle(r.lid)}${r.c.p ? ' · ' + t('reply') : ''}</p>
+    <p className="c-text">${r.c.t}</p>
     <div className="c-actions">
-      <button className="small-btn" onClick=${() => go('#/community?c=' + c.id)}>${t('openPost')}</button>
-      <button className="link-btn muted" onClick=${() => reactions.clearReports(c.id)}>${t('ignoreReports')}</button>
+      <button className="small-btn" onClick=${() => open(r)}>${t('openPost')}</button>
+      <button className="link-btn muted" onClick=${() => reactions.clearReports(r.c.id)}>${t('ignoreReports')}</button>
+      ${staff.isMod && html`<button className="link-btn danger-link" disabled=${busy === r.c.id} onClick=${() => del(r)}>${t('delete')}</button>`}
     </div>
   </li>`)}</ul>`;
 }
@@ -2599,6 +2719,7 @@ function useFeedbackCount(enabled) {
 
 function StaffPage({ users }) {
   const feedbackCount = useFeedbackCount(!!staff.isOwner);
+  const reportedCount = Object.keys(useReactionTree(reactions.watchReports)).length;
   useStaffVersion();
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState(null);
@@ -2652,7 +2773,7 @@ function StaffPage({ users }) {
 
       ${staff.isOwner && html`<div className="staff-admin">
         <${StaffSection} title=${t('feedbackListTitle')} badge=${feedbackCount}><${FeedbackList} /><//>
-        <${StaffSection} title=${t('reportedPostsTitle')}><${ReportedPosts} /><//>
+        <${StaffSection} title=${t('reportedPostsTitle')} badge=${reportedCount}><${ReportedPosts} /><//>
         <${StaffSection} title=${t('staffOnlineTitle')} badge=${users.length}><${StaffOnline} users=${users} /><//>
         <${StaffSection} title=${t('staffReportTitle')}><${StaffReport} /><//>
         <${StaffSection} title=${t('lecAdminTitle')}><${LectureAdmin} /><//>

@@ -3,7 +3,7 @@
 // يُجلب الأحدث من الإنترنت أولًا، والنسخة المحفوظة تُستخدم فقط عند انقطاع الاتصال
 // الملفات الصوتية وFirebase لا تُحفظ هنا، واللقاءات التي يحمّلها المستخدم في مخزن audio-* منفصل لا يُحذف عند التحديث
 // =====================
-const CACHE = 'shell-v46';
+const CACHE = 'shell-v47';
 const SHELL = [
   './', 'index.html', 'style.css', 'i18n.js', 'data.js', 'radio.js', 'progress.js',
   'notes.js', 'offline.js', 'account.js', 'staff.js', 'comments.js', 'feedback.js', 'app.js', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png',
