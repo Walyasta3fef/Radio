@@ -1173,7 +1173,8 @@ function CommentMenu({ c, lid, replies, reports, onEdit, onNotice }) {
     if (open) return setPos(null);
     const r = btnRef.current.getBoundingClientRect();
     const vw = window.innerWidth, vh = window.innerHeight;
-    const width = 150, height = count * 40 + 14;
+    // قائمة صاحب التعليق أعرض قليلًا وتحمل ملاحظة المهلة أسفل الخيارين
+    const width = own ? 176 : 150, height = count * 40 + 14 + (own ? 50 : 0);
     const left = Math.max(8, Math.min(r.left, vw - width - 8));
     const below = vh - r.bottom - 96;          // يُترك مكان المشغّل الصغير أسفل الشاشة
     setPos(below >= height || r.top < height + 8
@@ -1217,7 +1218,10 @@ function CommentMenu({ c, lid, replies, reports, onEdit, onNotice }) {
     <button ref=${btnRef} className="dots-btn" disabled=${busy} onClick=${() => toggle(items.length)} aria-label=${t('moreOptions')} aria-expanded=${open}>
       <${Icon} name="dots" size=${18} />
     </button>
-    ${open && html`<span className="menu-pop menu-fixed" role="menu" style=${pos}>${items}</span>`}
+    ${open && html`<span className="menu-pop menu-fixed" role="menu" style=${pos}>
+      ${items}
+      ${own && html`<span className="menu-note">${t('ownWindowNote')}</span>`}
+    </span>`}
   </span>`;
 }
 
@@ -1284,6 +1288,8 @@ function CommentsBox({ lid, list, getTime, onTime, startOpen, title }) {
   const [editing, setEditing] = useState(null);
   const [notice, setNotice] = useState(null);
   const flash = (msg) => { setNotice(msg); setTimeout(() => setNotice(null), 3500); };
+  // خانة الكتابة مطوية خلف زر «اكتب تعليقًا» حتى تظهر التعليقات مباشرة
+  const [composing, setComposing] = useState(false);
 
   // فتح اللقاء من «أحدث التعليقات»: التمرير إلى التعليق وإبرازه
   useEffect(() => {
@@ -1344,12 +1350,15 @@ function CommentsBox({ lid, list, getTime, onTime, startOpen, title }) {
 
     ${open && html`<div className="c-body">
       ${notice && html`<p className="toast toast-float" role="status">${notice}</p>`}
-      ${canWrite
-        ? html`<${CommentForm} lid=${lid} getTime=${getTime} onDone=${() => setSort('new')} />`
-        : html`<div className="c-login">
-            <p>${account.loggedIn ? t('commentPreparing') : t('commentNeedName')}</p>
-            ${!account.loggedIn && html`<button className="small-btn" onClick=${() => go('#/account')}>${t('createNameShort')}</button>`}
-          </div>`}
+      ${!composing
+        ? html`<button className="composer-fake" onClick=${() => setComposing(true)}>${t('writeComment')}</button>`
+        : canWrite
+          ? html`<${CommentForm} lid=${lid} getTime=${getTime} autoFocus
+              onDone=${() => { setComposing(false); setSort('new'); flash(t('commentSent')); }} onCancel=${() => setComposing(false)} />`
+          : html`<div className="c-login">
+              <p>${account.loggedIn ? t('commentPreparing') : t('commentNeedName')}</p>
+              ${!account.loggedIn && html`<button className="small-btn" onClick=${() => go('#/account')}>${t('createNameShort')}</button>`}
+            </div>`}
 
       ${maxSec > 0 && tops.length > 1 && html`<div className="c-sort">
         <button className=${sort === 'new' ? 'on' : ''} onClick=${() => setSort('new')}>${t('sortNewest')}</button>
@@ -1957,6 +1966,88 @@ function NotesBox({ id, getTime, onTime, readOnly }) {
 // =====================
 // صفحة اللقاء
 // =====================
+// تاريخ نشر اللقاء بصيغة مقروءة، مثل «12 مارس 2024»
+function fmtPubDate(d) {
+  try {
+    const [y, m, day] = d.split('-').map(Number);
+    return new Date(y, m - 1, day).toLocaleDateString('ar-EG-u-nu-latn', { day: 'numeric', month: 'long', year: 'numeric' });
+  } catch (e) { return d; }
+}
+function usePublished() {
+  const [, force] = useState(0);
+  useEffect(() => published.subscribe(() => force(x => x + 1)), []);
+}
+// سطر صغير تحت عنوان اللقاء: «نُشر في ...»، والضغط عليه يفتح المنشور الأصلي إن وُضع رابطه
+function PublishedLine({ lid }) {
+  usePublished();
+  const p = published.get(lid);
+  if (!p) return null;
+  const text = t('publishedOn', { d: fmtPubDate(p.d) });
+  return html`<p className="pub-line">${p.u
+    ? html`<a href=${p.u} target="_blank" rel="noopener noreferrer">${text}</a>`
+    : text}</p>`;
+}
+
+// تواريخ نشر اللقاءات في صفحة المميزين (للمالك): اختيار اللقاء ثم التاريخ والرابط
+function PublishedAdmin() {
+  usePublished();
+  const all = published.all();
+  const [lid, setLid] = useState(() => COURSE_ORDER.find(id => !all[id]) || COURSE_ORDER[0]);
+  const cur = all[lid];
+  const [date, setDate] = useState(cur ? cur.d : '');
+  const [url, setUrl] = useState(cur && cur.u ? cur.u : '');
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState(null);
+  const pick = (id) => { const p = published.all()[id]; setLid(id); setDate(p ? p.d : ''); setUrl(p && p.u ? p.u : ''); setMsg(null); };
+
+  const save = async (e) => {
+    e.preventDefault();
+    setMsg(null);
+    if (!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(date)) return setMsg('pubBadDate');
+    const u = url.trim();
+    if (u && !validHttpsUrl(u)) return setMsg('pubBadUrl');
+    setBusy(true);
+    const r = await staff.savePublished(lid, date, u);
+    setBusy(false);
+    setMsg(r.error || 'pubSaved');
+  };
+  const remove = async (id) => {
+    if (!window.confirm(t('pubDeleteConfirm', { title: shortTitle(id) }))) return;
+    setBusy(true); setMsg(null);
+    const r = await staff.removePublished(id);
+    setBusy(false);
+    if (r.error) return setMsg(r.error);
+    if (id === lid) { setDate(''); setUrl(''); }
+  };
+  const saved = COURSE_ORDER.filter(id => all[id]);
+
+  return html`<div className="lec-admin pub-admin">
+    <form onSubmit=${save}>
+      <select className="name-input" value=${lid} onChange=${e => pick(e.target.value)} aria-label=${t('pubLecture')}>
+        ${COURSE_ORDER.map(id => html`<option key=${id} value=${id}>${(all[id] ? '✓ ' : '') + LECTURE_BY_ID[id].title}</option>`)}
+      </select>
+      <label className="pub-field"><small>${t('pubDate')}</small>
+        <input type="date" dir="ltr" value=${date} max="2100-12-31" onInput=${e => { setDate(e.target.value); setMsg(null); }} />
+      </label>
+      <label className="pub-field"><small>${t('pubUrl')}</small>
+        <input dir="ltr" className="lec-url" value=${url} placeholder="https://…" autoComplete="off" autoCapitalize="off" spellCheck="false"
+          onInput=${e => { setUrl(e.target.value.trim()); setMsg(null); }} />
+      </label>
+      <button className="cta" type="submit" disabled=${busy || !date}>${busy ? t('pleaseWait') : cur ? t('lecSaveEdit') : t('save')}</button>
+      ${msg && html`<p className=${msg === 'pubSaved' ? 'hint lec-ok' : 'form-error'}>${t(msg)}</p>`}
+    </form>
+    ${saved.length > 0 && html`<ul className="staff-list">
+      ${saved.map(id => html`<li key=${id}>
+        <span><b>${shortTitle(id)}</b><br /><span className="hint">${fmtPubDate(all[id].d)}${all[id].u ? '' : ' · ' + t('pubNoLink')}</span></span>
+        <span className="lec-actions">
+          <button className="link-btn" disabled=${busy} onClick=${() => pick(id)}>${t('edit')}</button>
+          <button className="link-btn muted" disabled=${busy} onClick=${() => remove(id)}>${t('delete')}</button>
+        </span>
+      </li>`)}
+    </ul>`}
+  </div>`;
+}
+
 const FAST_TOLD_KEY = 'fast_unlock_told';
 function LecturePage({ id, variant, player }) {
   useProgressVersion();
@@ -2026,6 +2117,7 @@ function LecturePage({ id, variant, player }) {
     <div className="panel-wrap">
       <div className="panel tint-course">
         <p className="lecture-title">${lec.title}</p>
+        <${PublishedLine} lid=${id} />
 
         <div className="speed-row">
           <div className="seg speed-seg" role="tablist" aria-label=${t('courseSpeed')}>
@@ -2528,6 +2620,9 @@ function LectureAdmin() {
   const [fast, setFast] = useState(emptySource);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState(null);
+  // تاريخ النشر ورابطه: اختياريان، ويُحفظان مع اللقاء في فرع published
+  const [pubDate, setPubDate] = useState('');
+  const [pubUrl, setPubUrl] = useState('');
   const [files, setFiles] = useState({ normal: [], fast: [] });
   useEffect(() => { let on = true; loadArchiveFiles().then(f => { if (on) setFiles(f); }); return () => { on = false; }; }, []);
 
@@ -2540,11 +2635,13 @@ function LectureAdmin() {
   const cleanName = lectureNameOnly(name);
   const title = id && cleanName ? t('lecTitleFmt', { n, name: cleanName }) : '';
   const taken = id && id !== editing && (STATIC_LECTURE_IDS.has(id) || added.some(l => l.id === id));
-  const reset = () => { setEditing(null); setNum(nextNum()); setName(''); setNormal(emptySource()); setFast(emptySource()); };
+  const reset = () => { setEditing(null); setNum(nextNum()); setName(''); setNormal(emptySource()); setFast(emptySource()); setPubDate(''); setPubUrl(''); };
 
   const startEdit = (l) => {
     setMsg(null); setEditing(l.id); setNum(String(parseInt(l.id.slice(1), 10))); setName(lectureNameOnly(l.title));
     setNormal(sourceFromUrl('normal', l.url.normal, l.normal)); setFast(sourceFromUrl('fast', l.url.fast, l.fast));
+    const p = published.get(l.id);
+    setPubDate(p ? p.d : ''); setPubUrl(p && p.u ? p.u : '');
   };
   const save = async (e) => {
     e.preventDefault();
@@ -2556,12 +2653,15 @@ function LectureAdmin() {
     if (!cleanName) return setMsg('lecNoName');
     if (!validMp3Url(un) || !validMp3Url(uf)) return setMsg('lecBadUrl');
     if (!validSeconds(sn) || !validSeconds(sf)) return setMsg('lecBadDuration');
+    if (pubUrl && !validHttpsUrl(pubUrl)) return setMsg('pubBadUrl');
+    if (pubUrl && !pubDate) return setMsg('pubBadDate');
     const unchecked = [[normal, un], [fast, uf]].some(([v, u]) => v.measuredFor !== u || typeof v.measured !== 'number');
     const summary = t('lecConfirm', { title, normal: fmtTime(sn), fast: fmtTime(sf) }) + (unchecked ? '\n\n' + t('lecConfirmUnchecked') : '');
     if (!window.confirm(summary)) return;
     setBusy(true);
     const old = editing && added.find(l => l.id === editing);
     const r = await staff.saveLecture(id, { title: title.slice(0, 120), normal: sn, fast: sf, urlNormal: un, urlFast: uf }, old && old.from);
+    if (!r.error && pubDate) await staff.savePublished(id, pubDate, pubUrl);
     setBusy(false);
     if (r.error) return setMsg(r.error);
     reset();
@@ -2593,6 +2693,16 @@ function LectureAdmin() {
       ${taken && html`<p className="form-error">${t('lecNumberTaken')}</p>`}
       <${LectureSource} mode="normal" value=${normal} onChange=${setNormal} files=${freeFiles('normal')} />
       <${LectureSource} mode="fast" value=${fast} onChange=${setFast} files=${freeFiles('fast')} />
+      <fieldset className="lec-src">
+        <legend>${t('pubOptional')}</legend>
+        <label className="pub-field"><small>${t('pubDate')}</small>
+          <input type="date" dir="ltr" value=${pubDate} max="2100-12-31" onInput=${e => setPubDate(e.target.value)} />
+        </label>
+        <label className="pub-field"><small>${t('pubUrl')}</small>
+          <input dir="ltr" className="lec-url" value=${pubUrl} placeholder="https://…" autoComplete="off" autoCapitalize="off" spellCheck="false"
+            onInput=${e => setPubUrl(e.target.value.trim())} />
+        </label>
+      </fieldset>
       <button className="cta" type="submit" disabled=${busy}>${busy ? t('pleaseWait') : editing ? t('lecSaveEdit') : t('lecAdd')}</button>
       ${editing && html`<button type="button" className="link-btn muted center-text" onClick=${() => { reset(); setMsg(null); }}>${t('cancel')}</button>`}
       ${msg && html`<p className=${msg === 'lecSaved' || msg === 'lecDeleted' ? 'hint lec-ok' : 'form-error'}>${t(msg)}</p>`}
@@ -2796,6 +2906,7 @@ function StaffPage({ users }) {
         <${StaffSection} title=${t('staffOnlineTitle')} badge=${users.length}><${StaffOnline} users=${users} /><//>
         <${StaffSection} title=${t('staffReportTitle')}><${StaffReport} /><//>
         <${StaffSection} title=${t('lecAdminTitle')}><${LectureAdmin} /><//>
+        <${StaffSection} title=${t('pubAdminTitle')} badge=${Object.keys(published.all()).length}><${PublishedAdmin} /><//>
         <${StaffSection} title=${t('staffMembersTitle')} badge=${Object.keys(staff.list).length}>
           <form onSubmit=${addOne}>
             <input className="name-input" dir="ltr" placeholder=${t('staffUidPh')} value=${uid} onInput=${e => setUid(e.target.value)} aria-label=${t('staffUidPh')} />

@@ -226,6 +226,38 @@ const extraLectures = (() => {
   };
 })();
 
+// =====================
+// تاريخ نشر كل لقاء ورابط منشوره الأصلي (قاعدة البيانات: published/{lid} = { d: 'YYYY-MM-DD', u: رابط اختياري })
+// يُدخله المالك من صفحة المميزين. تُعرض نسخة محفوظة على الجهاز فورًا ثم تُحدَّث
+// =====================
+const PUBLISHED_KEY = 'afaf_published_v1';
+const validHttpsUrl = (u) => typeof u === 'string' && u.length <= 300 && /^https:\/\/[^\s]+$/i.test(u);
+function cleanPublished(raw) {
+  const out = {};
+  if (!raw || typeof raw !== 'object') return out;
+  Object.entries(raw).forEach(([lid, v]) => {
+    if (!/^[cL][0-9]{2}$/.test(lid) || !v || typeof v.d !== 'string' || !/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(v.d)) return;
+    out[lid] = { d: v.d, u: validHttpsUrl(v.u) ? v.u : null };
+  });
+  return out;
+}
+const published = (() => {
+  let map = cleanPublished(storage.getJSON(PUBLISHED_KEY));
+  const listeners = new Set();
+  try {
+    database.ref('/published').on('value', snap => {
+      map = cleanPublished(snap.val());
+      storage.setJSON(PUBLISHED_KEY, map);
+      listeners.forEach(fn => fn());
+    }, () => {});                  // رفض القراءة (قواعد لم تُنشر بعد) لا يؤثر في شيء
+  } catch (e) {}
+  return {
+    get: (lid) => map[lid] || null,
+    all: () => map,
+    subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn); },
+  };
+})();
+
 const COURSE_HEAD = ['c01', 'c02', 'c03', 'c04', 'L01', 'L02', 'L08'];
 const COURSE_ORDER = [
   ...COURSE_HEAD,

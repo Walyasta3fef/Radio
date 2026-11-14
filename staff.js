@@ -98,6 +98,18 @@ const staff = (() => {
     catch (e) { return { error: 'staffLectureSaveFailed' }; }
   }
 
+  // للمالك فقط: تاريخ نشر لقاء ورابط منشوره الأصلي (الرابط اختياري)
+  async function savePublished(lid, date, url) {
+    const v = { d: date };
+    if (url) v.u = url;
+    try { await withTimeout(database.ref('/published/' + lid).set(v)); return { ok: true }; }
+    catch (e) { return { error: 'staffLectureSaveFailed' }; }
+  }
+  async function removePublished(lid) {
+    try { await withTimeout(database.ref('/published/' + lid).remove()); return { ok: true }; }
+    catch (e) { return { error: 'staffLectureSaveFailed' }; }
+  }
+
   async function remove(uid) {
     try { await database.ref('/staff/' + uid).remove(); return { ok: true }; }
     catch (e) { return { error: 'staffSaveFailed' }; }
@@ -113,7 +125,7 @@ const staff = (() => {
     get list() { return list; },
     nameOf: (uid) => (list[uid] && list[uid].name) || null,
     names: () => Object.values(list).map(s => s && s.name).filter(Boolean),
-    signIn, signOut, add, remove, countSubscribers, loadUsers, saveLecture, removeLecture,
+    signIn, signOut, add, remove, countSubscribers, loadUsers, saveLecture, removeLecture, savePublished, removePublished,
     subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn); },
   };
 })();
