@@ -259,6 +259,8 @@ const STRINGS = {
   courseSpeed: 'سرعة اللقاء',
   courseFast: 'الكورس عالسريع',
   fastUnlocked: 'اكتمل اللقاء، وصارت نسخته «عالسريع» متاحة.',
+  skipSilences: 'حذف السكتات',
+  skipSilencesSaves: 'يختصر {m} دقيقة',
   lectureNormal: 'العادية',
   lectureFast: 'عالسريع',
   fastLocked: 'الكورس عالسريع متاح للمراجعة فقط بعد أن تنهي اللقاء على السرعة العادية أولًا.',

@@ -840,3 +840,15 @@ span.note-time { color: var(--note); font-weight: 700; }
 .pub-admin select { width: 100%; }
 .lec-admin input[type="date"] { color-scheme: dark; text-align: left; }
 .comments .composer-fake { width: 100%; }
+
+/* زر «حذف السكتات» (تجربة) */
+.sil-toggle {
+  flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; padding: 8px 12px;
+  border-radius: 12px; background: var(--sunken); border: 1px solid var(--line-2); text-align: right;
+}
+.sil-knob { position: relative; flex-shrink: 0; width: 36px; height: 20px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--line-2); transition: background .2s; }
+.sil-knob::after { content: ''; position: absolute; top: 2px; inset-inline-start: 2px; width: 14px; height: 14px; border-radius: 50%; background: var(--muted); transition: transform .2s, background .2s; }
+.sil-toggle.on .sil-knob { background: var(--course); border-color: transparent; }
+.sil-toggle.on .sil-knob::after { background: var(--course-ink); transform: translateX(-16px); }
+.sil-label { font-size: 13px; font-weight: 800; }
+.sil-toggle small { margin-inline-start: auto; font-size: 11px; color: var(--faint); }

@@ -106,6 +106,10 @@ function useOnline() {
 // =====================
 // الكورس عالسريع: النسخة السريعة من كل لقاء، وتُفتح بعد إكمال اللقاء على السرعة العادية
 // =====================
+// حذف السكتات (تجربة): متاح حاليًا للمالك فقط وفي اللقاءات التي لها قائمة سكتات، إلى أن تُعتمد التجربة
+const SKIP_SIL_KEY = 'skip_sil';
+const canSkipSilence = (id) => silences.has(id) && !!staff.isOwner;
+
 const lectureHash = (id, variant) => (variant === 'fast' ? '#/fast/' : '#/lecture/') + id;
 const fastNext = (id) => COURSE_ORDER.slice(courseIndex(id) + 1).find(x => progress.isDone(x)) || null;
 const fastPrev = (id) => COURSE_ORDER.slice(0, Math.max(0, courseIndex(id))).reverse().find(x => progress.isDone(x)) || null;
@@ -124,6 +128,10 @@ function usePlayer(volume) {
   const modeRef = useRef(null);
   const lectureRef = useRef(null);
   const variantRef = useRef('normal');
+  // «حذف السكتات»: القفز فوق مواضع الصمت في الملف الأصلي للّقاء. اختيار يُحفظ على الجهاز
+  const [skipSil, setSkipSilState] = useState(() => storage.get(SKIP_SIL_KEY) === '1');
+  const skipSilRef = useRef(skipSil);
+  const setSkipSil = useCallback((v) => { skipSilRef.current = !!v; storage.set(SKIP_SIL_KEY, v ? '1' : ''); setSkipSilState(!!v); }, []);
   const wantPlayRef = useRef(false);     // هل يريد المستخدم الاستماع الآن
   const loadedKeyRef = useRef(null);     // المحمّل حاليًا، مثل normal:L05 أو lecture:c01 أو flecture:c01 (النسخة السريعة)
   const statusRef = useRef('idle');
@@ -406,6 +414,19 @@ function usePlayer(volume) {
     const onTime = () => {
       lastProgressRef.current = Date.now();
       const ct = audio.currentTime;
+      // حذف السكتات: إذا دخل التشغيل سكتة معلّمة يُقفز إلى نهايتها (في النسخة العادية من لقاء الكورس فقط)
+      if (skipSilRef.current && !audio.paused && !audio.seeking && resumeRef.current == null
+          && modeRef.current === 'lecture' && variantRef.current === 'normal') {
+        const lid = lectureRef.current;
+        if (lid && loadedKeyRef.current === lecKey(lid, 'normal') && canSkipSilence(lid)) {
+          const end = silences.endAt(lid, ct);
+          if (end != null && end < LECTURE_BY_ID[lid].normal - 1) {
+            lastSampleRef.current = null;
+            audio.currentTime = end;
+            return;
+          }
+        }
+      }
       // حماية إضافية: الوقت يتقدّم فالصوت يعمل، فلا داعي لعلامة التحميل
       if (wantPlayRef.current && statusRef.current === 'loading' && !audio.paused) updateStatus('playing');
       setCurrentTime(prev => (Math.floor(prev) === Math.floor(ct) ? prev : ct));
@@ -599,7 +620,7 @@ function usePlayer(volume) {
   }, [isPlaying]);
 
   return {
-    audioRef, mode, lectureId, variant, isPlaying, status, live, shifted, currentTime,
+    audioRef, mode, lectureId, variant, isPlaying, status, live, shifted, currentTime, skipSil, setSkipSil,
     toggleRadio, goLive, toggleLecture, playLecture, seekLecture, skip, stop, retry,
   };
 }
@@ -2097,6 +2118,10 @@ function LecturePage({ id, variant, player }) {
     wasDone.current = done;
   }, [done]);
 
+  // تجربة «حذف السكتات»: زر واحد بدل مفتاح السرعة، في اللقاءات التي لها قائمة سكتات
+  useStaffVersion();
+  const silTrial = !fast && canSkipSilence(id);
+
   // «أكمل من»: إذا كان المستمع يعيد جزءًا سمعه، زر يقفز إلى أول جزء لم يسمعه بعد
   const resumeAt = fast || dragging != null ? null : progress.nextUnheard(id, time);
 
@@ -2119,7 +2144,15 @@ function LecturePage({ id, variant, player }) {
         <p className="lecture-title">${lec.title}</p>
         <${PublishedLine} lid=${id} />
 
-        <div className="speed-row">
+        ${silTrial ? html`<div className="speed-row">
+          <button className=${'sil-toggle' + (player.skipSil ? ' on' : '')} role="switch" aria-checked=${player.skipSil}
+              onClick=${() => player.setSkipSil(!player.skipSil)}>
+            <span className="sil-knob" aria-hidden="true"></span>
+            <span className="sil-label">${t('skipSilences')}</span>
+            <small>${t('skipSilencesSaves', { m: Math.round(silences.total(id) / 60) })}</small>
+          </button>
+          <${OfflineControl} id=${id} variant=${variant} />
+        </div>` : html`<div className="speed-row">
           <div className="seg speed-seg" role="tablist" aria-label=${t('courseSpeed')}>
             <button role="tab" aria-selected=${!fast} className=${!fast ? 'on' : ''} onClick=${() => pick('normal')}>${t('lectureNormal')}</button>
             ${done
@@ -2128,7 +2161,7 @@ function LecturePage({ id, variant, player }) {
                   button=${html`<${React.Fragment}><${Icon} name="lock" size=${13} />${t('lectureFast')}<//>`}>${t('fastLocked')}<//>`}
           </div>
           <${OfflineControl} id=${id} variant=${variant} />
-        </div>
+        </div>`}
 
         <${SeekBar} id=${id} value=${shown} duration=${duration} marks=${fast ? [] : marks} noteMarks=${noteMarks} plain=${fast}
           onInput=${setDragging} onCommit=${commit} />
