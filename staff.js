@@ -106,9 +106,11 @@ const staff = (() => {
     catch (e) { return { error: 'staffLectureSaveFailed' }; }
   }
   // ملف سكتات لقاء: النص المضغوط ووقت الرفع (يعرف الزوار أن الملف تغيّر فيحمّلونه من جديد)
-  async function saveSilences(lid, str) {
+  // واسم الملف المرفوع يحفظ للمالك فقط، ليعرف أي ملف رفعه لكل لقاء
+  async function saveSilences(lid, str, fileName) {
     try {
       await withTimeout(database.ref('/sil/' + lid).set(str));
+      await withTimeout(database.ref('/silname/' + lid).set(String(fileName || '').slice(0, 120) || '-'));
       await withTimeout(database.ref('/silat/' + lid).set(Date.now()));
       return { ok: true };
     } catch (e) { return { error: 'silSaveFailed' }; }
@@ -117,8 +119,14 @@ const staff = (() => {
     try {
       await withTimeout(database.ref('/silat/' + lid).remove());
       await withTimeout(database.ref('/sil/' + lid).remove());
+      await withTimeout(database.ref('/silname/' + lid).remove());
       return { ok: true };
     } catch (e) { return { error: 'silSaveFailed' }; }
+  }
+
+  async function loadSilenceNames() {
+    try { const snap = await withTimeout(database.ref('/silname').once('value')); return snap.val() || {}; }
+    catch (e) { return {}; }
   }
 
   async function removePublished(lid) {
@@ -141,7 +149,7 @@ const staff = (() => {
     get list() { return list; },
     nameOf: (uid) => (list[uid] && list[uid].name) || null,
     names: () => Object.values(list).map(s => s && s.name).filter(Boolean),
-    signIn, signOut, add, remove, countSubscribers, loadUsers, saveLecture, removeLecture, savePublished, removePublished, saveSilences, removeSilences,
+    signIn, signOut, add, remove, countSubscribers, loadUsers, saveLecture, removeLecture, savePublished, removePublished, saveSilences, removeSilences, loadSilenceNames,
     subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn); },
   };
 })();

@@ -854,6 +854,7 @@ span.note-time { color: var(--note); font-weight: 700; }
 .sil-toggle small { margin-inline-start: auto; font-size: 11px; color: var(--faint); }
 
 .sil-pop { flex: 1; min-width: 0; }
+.speed-row > :only-child { margin-inline-start: auto; }
 .sil-toggle-locked { color: var(--faint); justify-content: center; }
 .pub-arrow { display: inline-block; margin-inline-start: 4px; vertical-align: -1px; color: var(--muted); }
 .sil-admin input[type="file"] { width: 100%; }

@@ -173,5 +173,6 @@ const silences = (() => {
   const list = () => Object.keys(at);
   function subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn); }
 
-  return { available, ready, load, endAt, shift, total, list, subscribe };
+  const stamp = (id) => at[id] || null;
+  return { available, ready, load, endAt, shift, total, list, stamp, subscribe };
 })();

@@ -254,10 +254,12 @@ const offline = (() => {
       Object.keys(index).forEach(k => {
         const [v, id] = k.split(':');
         if (jobs.has(k)) return;
-        if (!LECTURE_BY_ID[id] || !present.has(cacheUrl(v, id))) { delete index[k]; urls.delete(k); changed = true; }
+        // النسخ السريعة أُلغيت من الكورس، فلا داعي لبقائها على الجهاز
+        if (v === 'fast' || !LECTURE_BY_ID[id] || !present.has(cacheUrl(v, id))) { delete index[k]; urls.delete(k); changed = true; }
       });
       for (const r of keys) {
         const m = /offline-audio\/(normal|fast)\/(\w+)\.mp3$/.exec(r.url);
+        if (m && m[1] === 'fast') { try { await cache.delete(r); } catch (e) {} continue; }
         if (!m || !LECTURE_BY_ID[m[2]] || index[keyOf(m[1], m[2])]) continue;
         try {
           const res = await cache.match(r);

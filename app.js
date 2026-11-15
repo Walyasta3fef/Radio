@@ -50,8 +50,9 @@ function parseRoute() {
   if (h === '#/feedback') return { page: 'feedback' };
   m = /^#\/lecture\/(\w+)$/.exec(h);
   if (m && LECTURE_BY_ID[m[1]]) return { page: 'lecture', id: m[1], variant: 'normal' };
+  // النسخة السريعة من لقاءات الكورس أُلغيت: روابطها القديمة تفتح الصفحة العادية
   m = /^#\/fast\/(\w+)$/.exec(h);
-  if (m && LECTURE_BY_ID[m[1]]) return { page: 'lecture', id: m[1], variant: 'fast' };
+  if (m && LECTURE_BY_ID[m[1]]) { history.replaceState(null, '', '#/lecture/' + m[1]); return { page: 'lecture', id: m[1], variant: 'normal' }; }
   return { page: 'home' };
 }
 function useRoute() {
@@ -2093,8 +2094,9 @@ function SilencesAdmin() {
   const [pending, setPending] = useState(null);   // { str, count, removed } بعد قراءة الملف وقبل الحفظ
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState(null);
+  const [names, setNames] = useState({});
   const saved = COURSE_ORDER.filter(id => silences.available(id));
-  useEffect(() => { saved.forEach(id => silences.load(id)); }, [saved.join(',')]);
+  useEffect(() => { let on = true; staff.loadSilenceNames().then(n => { if (on) setNames(n); }); return () => { on = false; }; }, [saved.join(',')]);
 
   const onFile = async (e) => {
     const f = e.target.files && e.target.files[0];
@@ -2107,14 +2109,15 @@ function SilencesAdmin() {
     const str = encodeSilences(rows);
     const removed = skipRangesOf(rows).reduce((s, x) => s + (x[1] - x[0]), 0);
     if (str.length > 20000) return setMsg('silTooBig');
-    setPending({ str, count: rows.length, removed });
+    setPending({ str, count: rows.length, removed, name: f.name });
   };
   const save = async () => {
     if (!pending) return;
     setBusy(true); setMsg(null);
-    const r = await staff.saveSilences(lid, pending.str);
+    const r = await staff.saveSilences(lid, pending.str, pending.name);
     setBusy(false);
     if (r.error) return setMsg(r.error);
+    setNames(n => ({ ...n, [lid]: pending.name }));
     setPending(null); setMsg('silSaved');
   };
   const remove = async (id) => {
@@ -2143,7 +2146,8 @@ function SilencesAdmin() {
     ${msg && html`<p className=${msg === 'silSaved' ? 'hint lec-ok' : 'form-error'}>${t(msg)}</p>`}
     ${saved.length > 0 && html`<ul className="staff-list">
       ${saved.map(id => html`<li key=${id}>
-        <span><b>${shortTitle(id)}</b><br /><span className="hint">${silences.ready(id) ? t('silSummary', { m: mins(silences.total(id)) }) : t('pleaseWait')}</span></span>
+        <span><b>${shortTitle(id)}</b><br /><span className="hint" dir="auto">${names[id] && names[id] !== '-' ? names[id] : t('silNoName')}</span>
+          ${silences.stamp(id) && html`<br /><span className="hint">${t('silUploadedOn', { d: new Date(silences.stamp(id)).toLocaleDateString('ar-EG-u-nu-latn', { day: 'numeric', month: 'long', year: 'numeric' }) })}</span>`}</span>
         <span className="lec-actions">
           <button className="link-btn" disabled=${busy} onClick=${() => { setLid(id); setPending(null); setMsg(null); }}>${t('silReplace')}</button>
           <button className="link-btn muted" disabled=${busy} onClick=${() => remove(id)}>${t('delete')}</button>
@@ -2153,7 +2157,7 @@ function SilencesAdmin() {
   </div>`;
 }
 
-const FAST_TOLD_KEY = 'fast_unlock_told';
+const FAST_TOLD_KEY = 'sil_unlock_told';
 function LecturePage({ id, variant, player }) {
   useProgressVersion();
   const online = useOnline();
@@ -2192,7 +2196,7 @@ function LecturePage({ id, variant, player }) {
   const [unlocked, setUnlocked] = useState(false);
   const wasDone = useRef(done);
   useEffect(() => {
-    if (done && !wasDone.current && !fast && !storage.get(FAST_TOLD_KEY)) {
+    if (done && !wasDone.current && !fast && silences.available(id) && !storage.get(FAST_TOLD_KEY)) {
       storage.set(FAST_TOLD_KEY, '1');
       setUnlocked(true);
       const id2 = setTimeout(() => setUnlocked(false), 9000);
@@ -2208,13 +2212,6 @@ function LecturePage({ id, variant, player }) {
   const silHas = !fast && silences.available(id);
   const silOpen = done && silences.ready(id);
   const silOn = current && player.skipSil;
-  // نسخة «عالسريع» تُلغى للّقاء الذي له ملف سكتات: الرابط القديم يتحوّل إلى الصفحة العادية
-  useEffect(() => {
-    if (fast && silences.available(id)) {
-      if (current) player.stop();
-      location.replace(lectureHash(id, 'normal'));
-    }
-  });
 
   // «أكمل من»: إذا كان المستمع يعيد جزءًا سمعه، زر يقفز إلى أول جزء لم يسمعه بعد
   const resumeAt = fast || dragging != null ? null : progress.nextUnheard(id, time);
@@ -2244,17 +2241,11 @@ function LecturePage({ id, variant, player }) {
                 onClick=${() => { if (current) player.setSkipSil(!player.skipSil); else { player.playLecture(id, variant); player.setSkipSil(true); } }}>
                 <span className="sil-knob" aria-hidden="true"></span>
                 <span className="sil-label">${t('skipSilences')}</span>
-                <small>${t('skipSilencesSaves', { m: Math.round(silences.total(id) / 60) })}</small>
+                <small>${t('skipSilencesSaves', { m: Math.round((lec.normal - silences.total(id)) / 60) })}</small>
               </button>`
             : html`<${Popover} label=${t('skipSilences')} wrapClass="seg-pop sil-pop" btnClass="sil-toggle sil-toggle-locked"
                 button=${html`<${React.Fragment}><${Icon} name="lock" size=${13} /><span className="sil-label">${t('skipSilences')}</span><//>`}>${done ? t('pleaseWait') : t('skipSilencesLocked')}<//>`)
-          : html`<div className="seg speed-seg" role="tablist" aria-label=${t('courseSpeed')}>
-            <button role="tab" aria-selected=${!fast} className=${!fast ? 'on' : ''} onClick=${() => pick('normal')}>${t('lectureNormal')}</button>
-            ${done
-              ? html`<button role="tab" aria-selected=${fast} className=${fast ? 'on' : ''} onClick=${() => pick('fast')}>${t('lectureFast')}</button>`
-              : html`<${Popover} label=${t('lectureFast')} wrapClass="seg-pop" btnClass="seg-locked"
-                  button=${html`<${React.Fragment}><${Icon} name="lock" size=${13} />${t('lectureFast')}<//>`}>${t('fastLocked')}<//>`}
-          </div>`}
+          : null}
           <${OfflineControl} id=${id} variant=${variant} />
         </div>
 
@@ -2291,7 +2282,7 @@ function LecturePage({ id, variant, player }) {
       ? html`<${CommentsBox} lid=${id} list=${comments} getTime=${getTime} onTime=${jumpTo} />`
       : html`<p className="tab-hint">${t('commentsNeedNet')}</p>`)}
     <p className="foot-link"><button className="link-btn muted" onClick=${() => go('#/feedback')}>${t('reportProblem')}</button></p>
-    ${unlocked && html`<p className="toast toast-float" role="status" onClick=${() => setUnlocked(false)}>${t('fastUnlocked')}</p>`}
+    ${unlocked && html`<p className="toast toast-float" role="status" onClick=${() => setUnlocked(false)}>${t('silUnlocked')}</p>`}
   </div>`;
 }
 
@@ -2900,8 +2891,8 @@ function StaffReport() {
 
   const p = STAFF_PERIODS.find(x => x.key === period);
   const today = new Date();
-  const r = buildListenReport(users, p.days ? dayKey(addDays(today, -(p.days - 1))) : '00000000', dayKey(today), !p.days);
-  const srcTotal = r.c + r.n + r.f;
+  const r = withRadio(buildListenReport(users, p.days ? dayKey(addDays(today, -(p.days - 1))) : '00000000', dayKey(today), !p.days));
+  const srcTotal = r.c + r.r;
   return html`<div className="staff-report">
     <div className="seg seg-3" role="tablist">
       ${STAFF_PERIODS.map(x => html`<button key=${x.key} role="tab" aria-selected=${period === x.key}
@@ -3105,17 +3096,18 @@ function periodRange(period, offset = 0) {
 // وقت الاستماع: أقل من دقيقة يُكتب نصًا بدل الصفر
 const fmtListen = (sec) => (sec > 0 && sec < 60 ? t('lessThanMinute') : fmtHours(sec));
 
+// مصادر الاستماع في التقارير: الكورس والراديو (محطتا الراديو العادية والسريعة معًا)
 const SOURCES = [
   { key: 'c', label: 'sourceCourse', cls: 'src-c' },
-  { key: 'n', label: 'sourceNormal', cls: 'src-n' },
-  { key: 'f', label: 'sourceFast', cls: 'src-f' },
+  { key: 'r', label: 'sourceRadio', cls: 'src-n' },
 ];
+const withRadio = (o) => ({ ...o, r: (o.n || 0) + (o.f || 0) });
 
 function ReportPage() {
   useProgressVersion();
   const [period, setPeriod] = useState('week');
   const r = periodRange(period);
-  const st = progress.stats(dayKey(r.from), dayKey(r.to));
+  const st = withRadio(progress.stats(dayKey(r.from), dayKey(r.to)));
   const pr = periodRange(period, 1);
   const prev = progress.stats(dayKey(pr.from), dayKey(pr.to));
   const total = st.total;
@@ -3126,7 +3118,7 @@ function ReportPage() {
     Object.entries(st.bySrc).forEach(([k, v]) => {
       if (k >= from && k <= to) { src.c += v.c; src.n += v.n; src.f += v.f; }
     });
-    return { ...b, src, s: src.c + src.n + src.f };
+    return { ...b, src: withRadio(src), s: src.c + src.n + src.f };
   });
   const maxBar = Math.max(60, ...bars.map(b => b.s));
 
