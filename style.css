@@ -843,7 +843,7 @@ span.note-time { color: var(--note); font-weight: 700; }
 
 /* زر «حذف السكتات» (تجربة) */
 .sil-toggle {
-  flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; padding: 8px 12px;
+  width: 100%; margin: 0 0 12px; min-width: 0; display: flex; align-items: center; gap: 10px; padding: 8px 12px;
   border-radius: 12px; background: var(--sunken); border: 1px solid var(--line-2); text-align: right;
 }
 .sil-knob { position: relative; flex-shrink: 0; width: 36px; height: 20px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--line-2); transition: background .2s; }
@@ -852,3 +852,9 @@ span.note-time { color: var(--note); font-weight: 700; }
 .sil-toggle.on .sil-knob::after { background: var(--course-ink); transform: translateX(-16px); }
 .sil-label { font-size: 13px; font-weight: 800; }
 .sil-toggle small { margin-inline-start: auto; font-size: 11px; color: var(--faint); }
+
+.sil-locked { margin: 0 0 12px; }
+.pub-arrow { font-size: 11px; text-decoration: none; display: inline-block; }
+.sil-admin input[type="file"] { width: 100%; }
+.sil-preview { margin: 8px 0; }
+.sil-preview p { margin: 2px 0; font-size: 13px; }

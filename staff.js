@@ -105,6 +105,22 @@ const staff = (() => {
     try { await withTimeout(database.ref('/published/' + lid).set(v)); return { ok: true }; }
     catch (e) { return { error: 'staffLectureSaveFailed' }; }
   }
+  // ملف سكتات لقاء: النص المضغوط ووقت الرفع (يعرف الزوار أن الملف تغيّر فيحمّلونه من جديد)
+  async function saveSilences(lid, str) {
+    try {
+      await withTimeout(database.ref('/sil/' + lid).set(str));
+      await withTimeout(database.ref('/silat/' + lid).set(Date.now()));
+      return { ok: true };
+    } catch (e) { return { error: 'silSaveFailed' }; }
+  }
+  async function removeSilences(lid) {
+    try {
+      await withTimeout(database.ref('/silat/' + lid).remove());
+      await withTimeout(database.ref('/sil/' + lid).remove());
+      return { ok: true };
+    } catch (e) { return { error: 'silSaveFailed' }; }
+  }
+
   async function removePublished(lid) {
     try { await withTimeout(database.ref('/published/' + lid).remove()); return { ok: true }; }
     catch (e) { return { error: 'staffLectureSaveFailed' }; }
@@ -125,7 +141,7 @@ const staff = (() => {
     get list() { return list; },
     nameOf: (uid) => (list[uid] && list[uid].name) || null,
     names: () => Object.values(list).map(s => s && s.name).filter(Boolean),
-    signIn, signOut, add, remove, countSubscribers, loadUsers, saveLecture, removeLecture, savePublished, removePublished,
+    signIn, signOut, add, remove, countSubscribers, loadUsers, saveLecture, removeLecture, savePublished, removePublished, saveSilences, removeSilences,
     subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn); },
   };
 })();

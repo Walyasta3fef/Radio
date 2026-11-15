@@ -106,9 +106,10 @@ function useOnline() {
 // =====================
 // الكورس عالسريع: النسخة السريعة من كل لقاء، وتُفتح بعد إكمال اللقاء على السرعة العادية
 // =====================
-// حذف السكتات (تجربة): متاح حاليًا للمالك فقط وفي اللقاءات التي لها قائمة سكتات، إلى أن تُعتمد التجربة
-const SKIP_SIL_KEY = 'skip_sil';
-const canSkipSilence = (id) => silences.has(id) && !!staff.isOwner;
+// حذف السكتات: متاح لكل مستمع بعد إكمال اللقاء على السرعة العادية، وفي اللقاءات التي رُفع لها ملف سكتات فقط
+const canSkipSilence = (id) => silences.ready(id) && progress.isDone(id);
+// بعد القفز فوق سكتة قد يرسل المتصفح إشارة انتظار قصيرة لا يُراد إظهارها
+const JUMP_QUIET_MS = 1500;
 
 const lectureHash = (id, variant) => (variant === 'fast' ? '#/fast/' : '#/lecture/') + id;
 const fastNext = (id) => COURSE_ORDER.slice(courseIndex(id) + 1).find(x => progress.isDone(x)) || null;
@@ -128,10 +129,11 @@ function usePlayer(volume) {
   const modeRef = useRef(null);
   const lectureRef = useRef(null);
   const variantRef = useRef('normal');
-  // «حذف السكتات»: القفز فوق مواضع الصمت في الملف الأصلي للّقاء. اختيار يُحفظ على الجهاز
-  const [skipSil, setSkipSilState] = useState(() => storage.get(SKIP_SIL_KEY) === '1');
-  const skipSilRef = useRef(skipSil);
-  const setSkipSil = useCallback((v) => { skipSilRef.current = !!v; storage.set(SKIP_SIL_KEY, v ? '1' : ''); setSkipSilState(!!v); }, []);
+  // «حذف السكتات»: القفز فوق مواضع الصمت في الملف الأصلي للّقاء. لا يُحفظ الاختيار: يعود عاديًا عند فتح الموقع أو تغيير اللقاء
+  const [skipSil, setSkipSilState] = useState(false);
+  const skipSilRef = useRef(false);
+  const lastJumpRef = useRef(0);
+  const setSkipSil = useCallback((v) => { skipSilRef.current = !!v; setSkipSilState(!!v); }, []);
   const wantPlayRef = useRef(false);     // هل يريد المستخدم الاستماع الآن
   const loadedKeyRef = useRef(null);     // المحمّل حاليًا، مثل normal:L05 أو lecture:c01 أو flecture:c01 (النسخة السريعة)
   const statusRef = useRef('idle');
@@ -204,6 +206,7 @@ function usePlayer(volume) {
     modeRef.current = m;
     lectureRef.current = id;
     variantRef.current = v;
+    setSkipSil(false);
     setShifted(false);
     setMode(m);
     setLectureId(id);
@@ -396,7 +399,9 @@ function usePlayer(volume) {
     const v = variantRef.current;
     const audio = audioRef.current;
     const base = audio && audio.readyState >= 1 ? audio.currentTime : posOf(id, v);
-    seekLecture(id, base + delta, v);
+    // مع «حذف السكتات» تُحتسب الثواني من الكلام فقط، فلا يقع القفز داخل سكتة
+    const target = skipSilRef.current && v === 'normal' && silences.ready(id) ? silences.shift(id, base, delta) : base + delta;
+    seekLecture(id, target, v);
   }, [seekLecture]);
 
   const retry = useCallback(() => {
@@ -418,10 +423,11 @@ function usePlayer(volume) {
       if (skipSilRef.current && !audio.paused && !audio.seeking && resumeRef.current == null
           && modeRef.current === 'lecture' && variantRef.current === 'normal') {
         const lid = lectureRef.current;
-        if (lid && loadedKeyRef.current === lecKey(lid, 'normal') && canSkipSilence(lid)) {
+        if (lid && loadedKeyRef.current === lecKey(lid, 'normal') && silences.ready(lid)) {
           const end = silences.endAt(lid, ct);
           if (end != null && end < LECTURE_BY_ID[lid].normal - 1) {
             lastSampleRef.current = null;
+            lastJumpRef.current = Date.now();
             audio.currentTime = end;
             return;
           }
@@ -466,6 +472,7 @@ function usePlayer(volume) {
       if (id) setMediaMeta(id, modeRef.current === 'lecture');
     };
     const onWaiting = () => {
+      if (Date.now() - lastJumpRef.current < JUMP_QUIET_MS) return;
       if (wantPlayRef.current && statusRef.current !== 'next' && statusRef.current !== 'offline') updateStatus('loading');
     };
     const onMeta = () => {
@@ -1022,6 +1029,12 @@ const relTime = (() => {
     return '';
   };
 })();
+
+function useSilencesVersion() {
+  const [v, setV] = useState(0);
+  useEffect(() => silences.subscribe(() => setV(x => x + 1)), []);
+  return v;
+}
 
 function useStaffVersion() {
   const [v, setV] = useState(0);
@@ -2005,7 +2018,7 @@ function PublishedLine({ lid }) {
   if (!p) return null;
   const text = t('publishedOn', { d: fmtPubDate(p.d) });
   return html`<p className="pub-line">${p.u
-    ? html`<a href=${p.u} target="_blank" rel="noopener noreferrer">${text}</a>`
+    ? html`<a href=${p.u} target="_blank" rel="noopener noreferrer">${text}<span className="pub-arrow" aria-hidden="true"> ↗</span></a>`
     : text}</p>`;
 }
 
@@ -2069,6 +2082,73 @@ function PublishedAdmin() {
   </div>`;
 }
 
+// ملفات السكتات في صفحة المميزين (للمالك): اختيار اللقاء ثم رفع ملف Audacity كما هو
+function SilencesAdmin() {
+  useSilencesVersion();
+  const [lid, setLid] = useState(COURSE_ORDER[0]);
+  const [pending, setPending] = useState(null);   // { str, count, removed } بعد قراءة الملف وقبل الحفظ
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState(null);
+  const saved = COURSE_ORDER.filter(id => silences.available(id));
+  useEffect(() => { saved.forEach(id => silences.load(id)); }, [saved.join(',')]);
+
+  const onFile = async (e) => {
+    const f = e.target.files && e.target.files[0];
+    e.target.value = '';
+    setMsg(null); setPending(null);
+    if (!f) return;
+    if (f.size > 500000) return setMsg('silBadFile');
+    const rows = parseAudacityLabels(await f.text());
+    if (!rows) return setMsg('silBadFile');
+    const str = encodeSilences(rows);
+    const removed = skipRangesOf(rows).reduce((s, x) => s + (x[1] - x[0]), 0);
+    if (str.length > 20000) return setMsg('silTooBig');
+    setPending({ str, count: rows.length, removed });
+  };
+  const save = async () => {
+    if (!pending) return;
+    setBusy(true); setMsg(null);
+    const r = await staff.saveSilences(lid, pending.str);
+    setBusy(false);
+    if (r.error) return setMsg(r.error);
+    setPending(null); setMsg('silSaved');
+  };
+  const remove = async (id) => {
+    if (!window.confirm(t('silDeleteConfirm', { title: shortTitle(id) }))) return;
+    setBusy(true); setMsg(null);
+    const r = await staff.removeSilences(id);
+    setBusy(false);
+    if (r.error) setMsg(r.error);
+  };
+  const dur = LECTURE_BY_ID[lid].normal;
+  const mins = (s) => Math.round(s / 60);
+
+  return html`<div className="lec-admin sil-admin">
+    <select className="name-input" value=${lid} onChange=${e => { setLid(e.target.value); setPending(null); setMsg(null); }} aria-label=${t('pubLecture')}>
+      ${COURSE_ORDER.map(id => html`<option key=${id} value=${id}>${(silences.available(id) ? '✓ ' : '') + LECTURE_BY_ID[id].title}</option>`)}
+    </select>
+    <label className="pub-field"><small>${t('silFile')}</small>
+      <input type="file" accept=".txt,text/plain" onChange=${onFile} />
+    </label>
+    ${pending && html`<div className="sil-preview">
+      <p>${t('silCount', { n: pending.count })}</p>
+      <p>${t('silBefore', { m: mins(dur) })}</p>
+      <p>${t('silAfter', { m: mins(dur - pending.removed) })}</p>
+      <button className="cta" type="button" disabled=${busy} onClick=${save}>${busy ? t('pleaseWait') : silences.available(lid) ? t('lecSaveEdit') : t('save')}</button>
+    </div>`}
+    ${msg && html`<p className=${msg === 'silSaved' ? 'hint lec-ok' : 'form-error'}>${t(msg)}</p>`}
+    ${saved.length > 0 && html`<ul className="staff-list">
+      ${saved.map(id => html`<li key=${id}>
+        <span><b>${shortTitle(id)}</b><br /><span className="hint">${silences.ready(id) ? t('silSummary', { m: mins(silences.total(id)) }) : t('pleaseWait')}</span></span>
+        <span className="lec-actions">
+          <button className="link-btn" disabled=${busy} onClick=${() => { setLid(id); setPending(null); setMsg(null); }}>${t('silReplace')}</button>
+          <button className="link-btn muted" disabled=${busy} onClick=${() => remove(id)}>${t('delete')}</button>
+        </span>
+      </li>`)}
+    </ul>`}
+  </div>`;
+}
+
 const FAST_TOLD_KEY = 'fast_unlock_told';
 function LecturePage({ id, variant, player }) {
   useProgressVersion();
@@ -2118,9 +2198,12 @@ function LecturePage({ id, variant, player }) {
     wasDone.current = done;
   }, [done]);
 
-  // تجربة «حذف السكتات»: زر واحد بدل مفتاح السرعة، في اللقاءات التي لها قائمة سكتات
-  useStaffVersion();
-  const silTrial = !fast && canSkipSilence(id);
+  // «حذف السكتات»: يظهر في اللقاءات التي لها ملف سكتات، ويُفتح بعد إكمال اللقاء
+  useSilencesVersion();
+  useEffect(() => { silences.load(id); }, [id]);
+  const silHas = !fast && silences.ready(id);
+  const silOpen = silHas && done;
+  const silOn = current && player.skipSil;
 
   // «أكمل من»: إذا كان المستمع يعيد جزءًا سمعه، زر يقفز إلى أول جزء لم يسمعه بعد
   const resumeAt = fast || dragging != null ? null : progress.nextUnheard(id, time);
@@ -2144,15 +2227,7 @@ function LecturePage({ id, variant, player }) {
         <p className="lecture-title">${lec.title}</p>
         <${PublishedLine} lid=${id} />
 
-        ${silTrial ? html`<div className="speed-row">
-          <button className=${'sil-toggle' + (player.skipSil ? ' on' : '')} role="switch" aria-checked=${player.skipSil}
-              onClick=${() => player.setSkipSil(!player.skipSil)}>
-            <span className="sil-knob" aria-hidden="true"></span>
-            <span className="sil-label">${t('skipSilences')}</span>
-            <small>${t('skipSilencesSaves', { m: Math.round(silences.total(id) / 60) })}</small>
-          </button>
-          <${OfflineControl} id=${id} variant=${variant} />
-        </div>` : html`<div className="speed-row">
+        <div className="speed-row">
           <div className="seg speed-seg" role="tablist" aria-label=${t('courseSpeed')}>
             <button role="tab" aria-selected=${!fast} className=${!fast ? 'on' : ''} onClick=${() => pick('normal')}>${t('lectureNormal')}</button>
             ${done
@@ -2161,7 +2236,17 @@ function LecturePage({ id, variant, player }) {
                   button=${html`<${React.Fragment}><${Icon} name="lock" size=${13} />${t('lectureFast')}<//>`}>${t('fastLocked')}<//>`}
           </div>
           <${OfflineControl} id=${id} variant=${variant} />
-        </div>`}
+        </div>
+
+        ${silHas && (silOpen
+          ? html`<button className=${'sil-toggle' + (silOn ? ' on' : '')} role="switch" aria-checked=${silOn}
+              onClick=${() => { if (current) player.setSkipSil(!player.skipSil); else { player.playLecture(id, variant); player.setSkipSil(true); } }}>
+              <span className="sil-knob" aria-hidden="true"></span>
+              <span className="sil-label">${t('skipSilences')}</span>
+              <small>${t('skipSilencesSaves', { m: Math.round(silences.total(id) / 60) })}</small>
+            </button>`
+          : html`<div className="sil-locked"><${Popover} label=${t('skipSilences')} wrapClass="seg-pop" btnClass="seg-locked"
+              button=${html`<${React.Fragment}><${Icon} name="lock" size=${13} />${t('skipSilences')}<//>`}>${t('skipSilencesLocked')}<//></div>`)}
 
         <${SeekBar} id=${id} value=${shown} duration=${duration} marks=${fast ? [] : marks} noteMarks=${noteMarks} plain=${fast}
           onInput=${setDragging} onCommit=${commit} />
@@ -2940,6 +3025,7 @@ function StaffPage({ users }) {
         <${StaffSection} title=${t('staffReportTitle')}><${StaffReport} /><//>
         <${StaffSection} title=${t('lecAdminTitle')}><${LectureAdmin} /><//>
         <${StaffSection} title=${t('pubAdminTitle')} badge=${Object.keys(published.all()).length}><${PublishedAdmin} /><//>
+        <${StaffSection} title=${t('silAdminTitle')} badge=${silences.list().length}><${SilencesAdmin} /><//>
         <${StaffSection} title=${t('staffMembersTitle')} badge=${Object.keys(staff.list).length}>
           <form onSubmit=${addOne}>
             <input className="name-input" dir="ltr" placeholder=${t('staffUidPh')} value=${uid} onInput=${e => setUid(e.target.value)} aria-label=${t('staffUidPh')} />
