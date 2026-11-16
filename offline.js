@@ -150,6 +150,47 @@ const offline = (() => {
       job.ctrl.signal.addEventListener('abort', done);
     });
   }
+  // الشاشة مطفأة أو الصفحة في الخلفية: المتصفح يوقف التحميل، فيُنتظر رجوعها دون احتساب ذلك فشلًا
+  function waitVisible(job) {
+    if (!document.hidden) return Promise.resolve();
+    return new Promise(resolve => {
+      const done = () => { if (document.hidden && !job.ctrl.signal.aborted) return; document.removeEventListener('visibilitychange', done); job.ctrl.signal.removeEventListener('abort', done); resolve(); };
+      document.addEventListener('visibilitychange', done);
+      job.ctrl.signal.addEventListener('abort', done);
+    });
+  }
+
+  // العنوان النهائي للملف بعد تحويل الأرشيف: طلب عادي يُقطع فور وصول الرد فلا يُحمَّل منه شيء يُذكر.
+  // طلب جزء من العنوان الأصلي مباشرة يرفضه المتصفح، لأن الأرشيف يحوّله إلى خادم آخر
+  async function resolveUrl(job, url) {
+    const c = new AbortController();
+    const stop = () => c.abort();
+    job.ctrl.signal.addEventListener('abort', stop);
+    try {
+      const res = await fetch(url, { signal: c.signal, mode: 'cors', credentials: 'omit' });
+      const final = res.url || url;
+      c.abort();
+      return res.ok ? final : url;
+    } finally { job.ctrl.signal.removeEventListener('abort', stop); }
+  }
+
+  // منع الشاشة من الانطفاء طوال التحميل، في المتصفحات التي تدعم ذلك
+  let wake = null;
+  async function holdScreen() {
+    if (!jobs.size || document.hidden || wake || !navigator.wakeLock) return;
+    try {
+      wake = await navigator.wakeLock.request('screen');
+      wake.addEventListener('release', () => { wake = null; });
+      if (!jobs.size) freeScreen();
+    } catch (e) { wake = null; }
+  }
+  function freeScreen() {
+    if (jobs.size || !wake) return;
+    try { wake.release(); } catch (e) {}
+    wake = null;
+  }
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) holdScreen(); });
+
   const sleep = (ms, job) => new Promise(r => { const tm = setTimeout(r, ms); job.ctrl.signal.addEventListener('abort', () => { clearTimeout(tm); r(); }); });
 
   // طلب جزء من الملف. يعيد الاستجابة إن كانت جزئية (206)، أو null إن لم يدعم الخادم طلب الأجزاء
@@ -163,7 +204,8 @@ const offline = (() => {
   // التحميل على أجزاء. يعيد الحجم عند الاكتمال، أو null إن لم يدعم الخادم الأجزاء (فيُستعمل التحميل الكامل)
   async function fetchParts(variant, id, job) {
     const k = keyOf(variant, id);
-    let url = mediaUrl(variant, id);
+    const original = mediaUrl(variant, id);
+    let url = await resolveUrl(job, original);
     let rec = parts[k];
     if (!rec || !rec.total) {
       let res;
@@ -174,7 +216,6 @@ const offline = (() => {
       const m = /\/(\d+)\s*$/.exec(res.headers.get('content-range') || '');
       const total = m ? parseInt(m[1], 10) : 0;
       if (!total) { try { res.body && res.body.cancel(); } catch (e) {} return null; }
-      if (res.url) url = res.url;     // العنوان النهائي بعد التحويل، فلا يتكرر التحويل مع كل جزء
       let est = null;
       try { est = navigator.storage && navigator.storage.estimate ? await navigator.storage.estimate() : null; } catch (e) {}
       if (est && est.quota && est.quota - (est.usage || 0) < total * 2.05) throw new Error('space');
@@ -193,7 +234,7 @@ const offline = (() => {
     const queue = [];
     for (let i = 0; i < n; i++) if (!rec.got.includes(i)) queue.push(i);
     const cache = await openCache();
-    const original = mediaUrl(variant, id);
+    job.resumable = true;
 
     async function one(i) {
       const want = partLen(rec.total, i);
@@ -201,13 +242,14 @@ const offline = (() => {
         if (job.ctrl.signal.aborted) throw new Error('aborted');
         if (fail) throw fail;
         await waitOnline(job);
+        await waitVisible(job);
         try {
           let res;
           try { res = await fetchRange(job, url, i * PART_SIZE, i * PART_SIZE + want - 1); }
           catch (e) {
-            // العنوان النهائي قد يتغيّر: الرجوع إلى العنوان الأصلي
-            if (job.ctrl.signal.aborted || url === original) throw e;
-            url = original;
+            // العنوان النهائي قد يتغيّر مع الوقت: يُطلب من جديد
+            if (job.ctrl.signal.aborted) throw e;
+            url = await resolveUrl(job, original);
             res = await fetchRange(job, url, i * PART_SIZE, i * PART_SIZE + want - 1);
           }
           if (!res) throw new Error('range');
@@ -219,6 +261,8 @@ const offline = (() => {
           return;
         } catch (e) {
           if (job.ctrl.signal.aborted || (e && (e.name === 'QuotaExceededError' || e.message === 'space'))) throw e;
+          // ما فشل والصفحة في الخلفية أو بلا اتصال لا يُحتسب من المحاولات
+          if (document.hidden || !navigator.onLine) { tries--; continue; }
           if (tries >= PART_RETRIES) throw e;
           await sleep(1500 * (tries + 1), job);
         }
@@ -266,8 +310,9 @@ const offline = (() => {
     if (!supported || !LECTURE_BY_ID[id] || jobs.has(k) || has(variant, id)) return;
     errors.delete(k);
     if (!navigator.onLine) { errors.set(k, 'dlNeedNet'); notify(); return; }
-    const job = { loaded: 0, total: 0, storing: false, waiting: false, startAt: Date.now(), startLoaded: null, ctrl: new AbortController() };
+    const job = { loaded: 0, total: 0, storing: false, waiting: false, resumable: null, ctrl: new AbortController() };
     jobs.set(k, job);
+    holdScreen();
     broken.delete(k);
     notify();
     try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {}); } catch (e) {}
@@ -282,6 +327,7 @@ const offline = (() => {
       // الخادم لا يدعم طلب الأجزاء: التحميل الكامل كما كان
       await dropParts(variant, id);
       job.loaded = 0;
+      job.resumable = false;
       try { size = await fetchInto(variant, id, job, canStream); }
       catch (e) {
         failure = e;
@@ -296,6 +342,7 @@ const offline = (() => {
     }
 
     jobs.delete(k);
+    freeScreen();
     if (!failure && size) {
       index[k] = size;
       persist();
@@ -345,14 +392,7 @@ const offline = (() => {
   function state(variant, id) {
     const k = keyOf(variant, id);
     const job = jobs.get(k);
-    if (job) {
-      // الوقت المتبقي التقريبي، بعد ثوانٍ من بدء التحميل حتى تستقر السرعة
-      if (job.startLoaded === null && job.storing) { job.startLoaded = job.loaded; job.startAt = Date.now(); }
-      const secs = (Date.now() - job.startAt) / 1000;
-      const rate = job.startLoaded !== null && secs > 4 ? (job.loaded - job.startLoaded) / secs : 0;
-      const left = rate > 0 && job.total ? Math.round((job.total - job.loaded) / rate) : null;
-      return { st: 'loading', loaded: job.loaded, total: job.total, waiting: job.waiting, left };
-    }
+    if (job) return { st: 'loading', loaded: job.loaded, total: job.total, waiting: job.waiting, resumable: job.resumable };
     if (has(variant, id)) return { st: 'done', size: index[k] };
     if (parts[k] && parts[k].total) return { st: 'partial', loaded: partLoaded(parts[k]), total: parts[k].total, error: errors.get(k) || null };
     const size = sizes.s[k] || 0;

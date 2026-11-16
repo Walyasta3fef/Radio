@@ -1746,8 +1746,6 @@ function OfflineControl({ id, variant }) {
   const s = offline.state(variant, id);
   const pct = (s.st === 'loading' || s.st === 'partial') && s.total ? Math.min(100, s.loaded / s.total * 100) : 0;
   const R = 9, C = 2 * Math.PI * R;
-  // الوقت المتبقي التقريبي بالدقائق
-  const left = s.left == null ? null : s.left < 60 ? t('dlLeftLessMin') : t('dlLeftMin', { m: Math.round(s.left / 60) });
 
   const button = s.st === 'loading' || s.st === 'partial'
     ? html`<svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true" className=${s.st === 'loading' && !s.total ? 'dl-spin' : ''}>
@@ -1759,14 +1757,17 @@ function OfflineControl({ id, variant }) {
 
   return html`<${Popover} label=${t('dlLabel')} btnClass=${'dl-icon dl-' + s.st} button=${button} keepOpen>
     ${s.st === 'loading' && html`<span className="dl-pop">
-      <b>${t('dlLoading')} <bdi dir="ltr">${s.total ? Math.floor(pct) + '%' : fmtSize(s.loaded)}</bdi></b>
-      ${s.waiting ? html`<span className="warn">${t('dlWaitingNet')}</span>` : left && html`<span>${left}</span>`}
+      <b>${t('dlLoading')} <bdi dir="ltr">${s.total ? Math.floor(pct) + '%' : ''}</bdi></b>
+      <span>${s.total ? t('dlLoadedOf', { a: fmtSize(s.loaded), b: fmtSize(s.total) }) : fmtSize(s.loaded)}</span>
+      ${s.waiting && html`<span className="warn">${t('dlWaitingNet')}</span>`}
+      ${s.resumable === false && html`<span className="warn">${t('dlNoResume')}</span>`}
       <span>${t('dlKeepOpen')}</span>
       <button className="small-btn" onClick=${() => offline.cancel(variant, id)}>${t('dlPause')}</button>
     </span>`}
     ${s.st === 'partial' && html`<span className="dl-pop">
       <b>${t('dlPaused', { p: Math.floor(pct) })}</b>
-      <span>${fmtSize(s.loaded)} · ${t('dlResumeHint')}</span>
+      <span>${t('dlLoadedOf', { a: fmtSize(s.loaded), b: fmtSize(s.total) })}</span>
+      <span>${t('dlResumeHint')}</span>
       ${s.error && html`<span className="warn">${t(s.error)}</span>`}
       <span className="dl-actions">
         <button className="small-btn dl-go" onClick=${() => offline.download(variant, id)}>${t('dlResume')}</button>
@@ -1780,7 +1781,7 @@ function OfflineControl({ id, variant }) {
     </span>`}
     ${(s.st === 'none' || s.st === 'error') && html`<span className="dl-pop">
       <b>${t('dlButton')}</b>
-      ${s.size > 0 && html`<span>${fmtSize(s.size)}</span>`}
+      ${s.size > 0 && html`<span>${t('dlSize', { size: fmtSize(s.size) })}</span>`}
       ${s.st === 'error' && html`<span className="warn">${t(s.error)}</span>`}
       <button className="small-btn dl-go" onClick=${() => offline.download(variant, id)}>${s.st === 'error' ? t('dlRetry') : t('dlStart')}</button>
     </span>`}
