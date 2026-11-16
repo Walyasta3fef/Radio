@@ -1744,11 +1744,13 @@ function OfflineControl({ id, variant }) {
   useEffect(() => { offline.loadSizes(); }, []);
   if (!offline.supported) return null;
   const s = offline.state(variant, id);
-  const pct = s.st === 'loading' && s.total ? Math.min(100, s.loaded / s.total * 100) : 0;
+  const pct = (s.st === 'loading' || s.st === 'partial') && s.total ? Math.min(100, s.loaded / s.total * 100) : 0;
   const R = 9, C = 2 * Math.PI * R;
+  // الوقت المتبقي التقريبي بالدقائق
+  const left = s.left == null ? null : s.left < 60 ? t('dlLeftLessMin') : t('dlLeftMin', { m: Math.round(s.left / 60) });
 
-  const button = s.st === 'loading'
-    ? html`<svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true" className=${s.total ? '' : 'dl-spin'}>
+  const button = s.st === 'loading' || s.st === 'partial'
+    ? html`<svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true" className=${s.st === 'loading' && !s.total ? 'dl-spin' : ''}>
         <circle cx="12" cy="12" r=${R} fill="none" stroke="currentColor" strokeOpacity=".25" strokeWidth="2.5"></circle>
         <circle cx="12" cy="12" r=${R} fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"
           strokeDasharray=${C} strokeDashoffset=${C * (1 - (s.total ? pct / 100 : 0.25))} transform="rotate(-90 12 12)"></circle>
@@ -1758,8 +1760,18 @@ function OfflineControl({ id, variant }) {
   return html`<${Popover} label=${t('dlLabel')} btnClass=${'dl-icon dl-' + s.st} button=${button} keepOpen>
     ${s.st === 'loading' && html`<span className="dl-pop">
       <b>${t('dlLoading')} <bdi dir="ltr">${s.total ? Math.floor(pct) + '%' : fmtSize(s.loaded)}</bdi></b>
+      ${s.waiting ? html`<span className="warn">${t('dlWaitingNet')}</span>` : left && html`<span>${left}</span>`}
       <span>${t('dlKeepOpen')}</span>
-      <button className="small-btn" onClick=${() => offline.cancel(variant, id)}>${t('cancel')}</button>
+      <button className="small-btn" onClick=${() => offline.cancel(variant, id)}>${t('dlPause')}</button>
+    </span>`}
+    ${s.st === 'partial' && html`<span className="dl-pop">
+      <b>${t('dlPaused', { p: Math.floor(pct) })}</b>
+      <span>${fmtSize(s.loaded)} · ${t('dlResumeHint')}</span>
+      ${s.error && html`<span className="warn">${t(s.error)}</span>`}
+      <span className="dl-actions">
+        <button className="small-btn dl-go" onClick=${() => offline.download(variant, id)}>${t('dlResume')}</button>
+        <button className="small-btn danger" onClick=${() => offline.remove(variant, id)}>${t('delete')}</button>
+      </span>
     </span>`}
     ${s.st === 'done' && html`<span className="dl-pop">
       <b>${t('dlDone')}</b>
@@ -1803,8 +1815,9 @@ function CoursePage({ player, users }) {
     <div className="panel summary tint-course">
       <h1>${t('coursePageTitle')}
         <${InfoTip} label=${t('infoLabel')} text=${t('courseInfo')}>
-          ${saved.count > 0 && html`<span className="dl-pop dl-pop-extra">
-            <span>${t('dlUsage', { n: saved.count, size: fmtSize(saved.bytes) })}</span>
+          ${(saved.count > 0 || saved.partial > 0) && html`<span className="dl-pop dl-pop-extra">
+            <span>${saved.count > 0 ? t('dlUsage', { n: saved.count, size: fmtSize(saved.bytes) }) : t('dlUsagePartialOnly', { n: saved.partial, size: fmtSize(saved.bytes) })}</span>
+            ${saved.count > 0 && saved.partial > 0 && html`<span>${t('dlUsagePartial', { n: saved.partial })}</span>`}
             <button className="small-btn danger" onClick=${removeAll}>${t('dlRemoveAll')}</button>
           </span>`}
         <//>
@@ -1830,7 +1843,8 @@ function CoursePage({ player, users }) {
         const done = progress.isDone(id);
         const n = counts[id] || 0;
         const playing = player.isPlaying && player.mode === 'lecture' && player.lectureId === id;
-        const isSaved = offline.has('normal', id) || offline.has('fast', id);
+        const isSaved = offline.has('normal', id);
+        const isPartial = !isSaved && offline.state('normal', id).st === 'partial';
         return html`<li key=${id}>
           <button className=${'lesson' + (playing ? ' lesson-playing' : '') + (done ? ' lesson-done' : '')}
               onClick=${() => go('#/lecture/' + id)}>
@@ -1843,9 +1857,10 @@ function CoursePage({ player, users }) {
               </span>
               ${pct > 0 && !done && html`<${HeardBar} id=${id} />`}
             </span>
-            ${(done || n > 0 || newBy[id] || notes.has(id) || isSaved) && html`<span className="lesson-side">
+            ${(done || n > 0 || newBy[id] || notes.has(id) || isSaved || isPartial) && html`<span className="lesson-side">
               ${done && html`<span className="done-badge" aria-label=${t('lectureDone')}><${Icon} name="check" size=${14} /></span>`}
               ${isSaved && html`<span className="note-badge" aria-label=${t('dlDone')}><${Icon} name="saved" size=${14} /></span>`}
+              ${isPartial && html`<span className="note-badge dl-partial-badge" aria-label=${t('dlPartialBadge')}><${Icon} name="download" size=${14} /></span>`}
               ${notes.has(id) && html`<span className="note-badge" aria-label=${t('lectureHasNotes')}><${Icon} name="note" size=${13} /></span>`}
               ${n > 0 && html`<span className=${'c-badge' + (newBy[id] ? ' new' : '')} aria-label=${t('commentsCount', { n })}><${Icon} name="chat" size=${13} />${n}</span>`}
             </span>`}

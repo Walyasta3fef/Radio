@@ -285,6 +285,16 @@ const STRINGS = {
   dlFailed: 'تعذّر التحميل، حاول مرة أخرى.',
   dlUsage: '{n} لقاء محمّل على جهازك ({size})',
   dlRemoveAll: 'حذف الكل',
+  dlPause: 'إيقاف مؤقت',
+  dlResume: 'استكمال التحميل',
+  dlPaused: 'توقف التحميل عند {p}%',
+  dlResumeHint: 'سيكمل من حيث توقف',
+  dlWaitingNet: 'في انتظار عودة الاتصال، وسيكمل تلقائيًا.',
+  dlLeftMin: 'متبقٍ نحو {m} دقيقة',
+  dlLeftLessMin: 'متبقٍ أقل من دقيقة',
+  dlUsagePartial: 'و{n} تحميل غير مكتمل',
+  dlUsagePartialOnly: '{n} تحميل غير مكتمل على جهازك ({size})',
+  dlPartialBadge: 'تحميل غير مكتمل',
   dlRemoveAllConfirm: 'حذف كل اللقاءات المحمّلة من جهازك؟',
 
   // ملاحظات اللقاء

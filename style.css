@@ -699,6 +699,9 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid 
 .dl-icon:hover { color: var(--text); }
 .dl-icon.dl-done, .dl-icon.dl-loading { color: var(--course); border-color: var(--course-line); }
 .dl-icon.dl-error { color: var(--warn); }
+.dl-icon.dl-partial { color: var(--muted); }
+.dl-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.dl-partial-badge { opacity: .55; }
 .dl-spin { animation: dl-spin 1s linear infinite; }
 @keyframes dl-spin { to { transform: rotate(360deg); } }
 .dl-pop { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }

@@ -10,6 +10,12 @@ const OFFLINE_SIZES_KEY = 'afaf_media_sizes_v1';
 const AUDIO_CACHE = 'audio-v1';              // ملف sw.js يُبقي كل مخزن يبدأ بـ audio- عند التحديث
 const SIZES_FRESH_MS = 7 * 24 * 3600 * 1000;
 const SIZES_RETRY_MS = 10 * 60 * 1000;
+// التحميل على أجزاء: كل جزء يُحفظ فور اكتماله، فإذا توقف التحميل أكمل من حيث توقف
+const OFFLINE_PARTS_KEY = 'afaf_offline_parts_v1';
+const PART_SIZE = 4 * 1024 * 1024;
+const PART_PARALLEL = 3;                     // عدد الأجزاء التي تُحمَّل في الوقت نفسه
+const PART_RETRIES = 4;                      // محاولات الجزء الواحد قبل الإيقاف
+const PART_KEEP_MS = 30 * 24 * 3600 * 1000;  // التحميل الناقص المتروك يُحذف بعد 30 يومًا من آخر نشاط
 
 const offline = (() => {
   const supported = (() => {
@@ -21,6 +27,9 @@ const offline = (() => {
 
   const savedIndex = storage.getJSON(OFFLINE_KEY);
   const index = savedIndex && typeof savedIndex === 'object' ? savedIndex : {};   // { 'normal:L05': الحجم بالبايت }
+  // التحميلات الناقصة: { 'normal:c01': { total, got: [أرقام الأجزاء المحفوظة], at: آخر نشاط } }
+  const savedParts = storage.getJSON(OFFLINE_PARTS_KEY);
+  const parts = savedParts && typeof savedParts === 'object' ? savedParts : {};
   const urls = new Map();        // روابط التشغيل الجاهزة للملفات المحمّلة
   const preparing = new Map();
   const jobs = new Map();        // التحميلات الجارية: { loaded, total, ctrl }
@@ -32,7 +41,12 @@ const offline = (() => {
   const keyOf = (variant, id) => variant + ':' + id;
   // مفتاح الملف داخل المخزن: عنوان داخلي ثابت لا يُطلب من الشبكة أبدًا
   const cacheUrl = (variant, id) => new URL('offline-audio/' + variant + '/' + id + '.mp3', location.href.split('#')[0]).href;
+  const partUrl = (variant, id, i) => new URL('offline-part/' + variant + '/' + id + '/' + i, location.href.split('#')[0]).href;
   const openCache = () => caches.open(AUDIO_CACHE);
+  const persistParts = () => storage.setJSON(OFFLINE_PARTS_KEY, parts);
+  const partCount = (total) => Math.ceil(total / PART_SIZE);
+  const partLen = (total, i) => Math.min(PART_SIZE, total - i * PART_SIZE);
+  const partLoaded = (rec) => rec.got.reduce((s, i) => s + partLen(rec.total, i), 0);
 
   const persist = () => storage.setJSON(OFFLINE_KEY, index);
   const notify = () => { clearTimeout(notifyTimer); notifyTimer = null; listeners.forEach(fn => fn()); };
@@ -126,12 +140,133 @@ const offline = (() => {
     return job.loaded;
   }
 
+  // انتظار عودة الاتصال، أو إلغاء التحميل
+  function waitOnline(job) {
+    if (navigator.onLine) return Promise.resolve();
+    job.waiting = true; notify();
+    return new Promise((resolve, reject) => {
+      const done = () => { window.removeEventListener('online', done); job.ctrl.signal.removeEventListener('abort', done); job.waiting = false; notify(); job.ctrl.signal.aborted ? reject(new Error('aborted')) : resolve(); };
+      window.addEventListener('online', done);
+      job.ctrl.signal.addEventListener('abort', done);
+    });
+  }
+  const sleep = (ms, job) => new Promise(r => { const tm = setTimeout(r, ms); job.ctrl.signal.addEventListener('abort', () => { clearTimeout(tm); r(); }); });
+
+  // طلب جزء من الملف. يعيد الاستجابة إن كانت جزئية (206)، أو null إن لم يدعم الخادم طلب الأجزاء
+  async function fetchRange(job, url, from, to) {
+    const res = await fetch(url, { signal: job.ctrl.signal, mode: 'cors', credentials: 'omit', headers: { Range: 'bytes=' + from + '-' + to } });
+    if (res.status === 200) { try { res.body && res.body.cancel(); } catch (e) {} return null; }
+    if (res.status !== 206) throw new Error('http ' + res.status);
+    return res;
+  }
+
+  // التحميل على أجزاء. يعيد الحجم عند الاكتمال، أو null إن لم يدعم الخادم الأجزاء (فيُستعمل التحميل الكامل)
+  async function fetchParts(variant, id, job) {
+    const k = keyOf(variant, id);
+    let url = mediaUrl(variant, id);
+    let rec = parts[k];
+    if (!rec || !rec.total) {
+      let res;
+      // متصفح أو خادم يرفض طلب الأجزاء: الرجوع إلى التحميل الكامل
+      try { res = await fetchRange(job, url, 0, PART_SIZE - 1); }
+      catch (e) { if (job.ctrl.signal.aborted || !navigator.onLine || !(e instanceof TypeError)) throw e; return null; }
+      if (!res) return null;
+      const m = /\/(\d+)\s*$/.exec(res.headers.get('content-range') || '');
+      const total = m ? parseInt(m[1], 10) : 0;
+      if (!total) { try { res.body && res.body.cancel(); } catch (e) {} return null; }
+      if (res.url) url = res.url;     // العنوان النهائي بعد التحويل، فلا يتكرر التحويل مع كل جزء
+      let est = null;
+      try { est = navigator.storage && navigator.storage.estimate ? await navigator.storage.estimate() : null; } catch (e) {}
+      if (est && est.quota && est.quota - (est.usage || 0) < total * 2.05) throw new Error('space');
+      const blob = await res.blob();
+      if (blob.size !== partLen(total, 0)) throw new Error('short');
+      rec = parts[k] = { total, got: [], at: Date.now() };
+      await (await openCache()).put(partUrl(variant, id, 0), new Response(blob));
+      rec.got.push(0); persistParts();
+    }
+    job.total = rec.total;
+    job.loaded = partLoaded(rec);
+    job.storing = true;
+    rec.at = Date.now(); persistParts(); notify();
+
+    const n = partCount(rec.total);
+    const queue = [];
+    for (let i = 0; i < n; i++) if (!rec.got.includes(i)) queue.push(i);
+    const cache = await openCache();
+    const original = mediaUrl(variant, id);
+
+    async function one(i) {
+      const want = partLen(rec.total, i);
+      for (let tries = 0; ; tries++) {
+        if (job.ctrl.signal.aborted) throw new Error('aborted');
+        if (fail) throw fail;
+        await waitOnline(job);
+        try {
+          let res;
+          try { res = await fetchRange(job, url, i * PART_SIZE, i * PART_SIZE + want - 1); }
+          catch (e) {
+            // العنوان النهائي قد يتغيّر: الرجوع إلى العنوان الأصلي
+            if (job.ctrl.signal.aborted || url === original) throw e;
+            url = original;
+            res = await fetchRange(job, url, i * PART_SIZE, i * PART_SIZE + want - 1);
+          }
+          if (!res) throw new Error('range');
+          const blob = await res.blob();
+          if (blob.size !== want) throw new Error('short');
+          await cache.put(partUrl(variant, id, i), new Response(blob));
+          rec.got.push(i); rec.at = Date.now(); persistParts();
+          job.loaded += want; notifySoon();
+          return;
+        } catch (e) {
+          if (job.ctrl.signal.aborted || (e && (e.name === 'QuotaExceededError' || e.message === 'space'))) throw e;
+          if (tries >= PART_RETRIES) throw e;
+          await sleep(1500 * (tries + 1), job);
+        }
+      }
+    }
+    // عند فشل جزء تتوقف بقية الأجزاء، ويُنتظر انتهاء الجاري منها قبل الإبلاغ
+    let fail = null;
+    async function worker() {
+      while (queue.length && !fail) {
+        try { await one(queue.shift()); } catch (e) { fail = fail || e; }
+      }
+    }
+    await Promise.all(Array.from({ length: Math.min(PART_PARALLEL, queue.length) }, worker));
+    if (fail) throw fail;
+
+    // تجميع الأجزاء في ملف واحد، ثم حذفها
+    const blobs = [];
+    for (let i = 0; i < n; i++) {
+      const r = await cache.match(partUrl(variant, id, i));
+      const b = r && await r.blob();
+      if (!b || b.size !== partLen(rec.total, i)) { rec.got = rec.got.filter(x => x !== i); persistParts(); throw new Error('short'); }
+      blobs.push(b);
+    }
+    const whole = new Blob(blobs, { type: 'audio/mpeg' });
+    if (whole.size !== rec.total) throw new Error('short');
+    await cache.put(cacheUrl(variant, id), new Response(whole, { headers: { 'Content-Type': 'audio/mpeg' } }));
+    await dropParts(variant, id);
+    return whole.size;
+  }
+
+  async function dropParts(variant, id) {
+    const k = keyOf(variant, id);
+    const rec = parts[k];
+    delete parts[k];
+    persistParts();
+    if (!rec) return;
+    try {
+      const cache = await openCache();
+      for (let i = 0; i < partCount(rec.total); i++) await cache.delete(partUrl(variant, id, i));
+    } catch (e) {}
+  }
+
   async function download(variant, id) {
     const k = keyOf(variant, id);
     if (!supported || !LECTURE_BY_ID[id] || jobs.has(k) || has(variant, id)) return;
     errors.delete(k);
     if (!navigator.onLine) { errors.set(k, 'dlNeedNet'); notify(); return; }
-    const job = { loaded: 0, total: 0, storing: false, ctrl: new AbortController() };
+    const job = { loaded: 0, total: 0, storing: false, waiting: false, startAt: Date.now(), startLoaded: null, ctrl: new AbortController() };
     jobs.set(k, job);
     broken.delete(k);
     notify();
@@ -140,15 +275,23 @@ const offline = (() => {
     const canStream = typeof ReadableStream === 'function' && typeof Response === 'function'
       && 'body' in Response.prototype;
     let size = 0, failure = null;
-    try { size = await fetchInto(variant, id, job, canStream); }
-    catch (e) {
-      failure = e;
-      // متصفح لا يقبل الكتابة أثناء التحميل: محاولة واحدة بالطريقة البسيطة
-      const storeFailed = canStream && job.storing && !job.loaded && !job.ctrl.signal.aborted
-        && navigator.onLine && e && e.name !== 'QuotaExceededError' && e.message !== 'space';
-      if (storeFailed) {
-        job.storing = false;
-        try { size = await fetchInto(variant, id, job, false); failure = null; } catch (e2) { failure = e2; }
+    let chunked = null;
+    try { chunked = await fetchParts(variant, id, job); } catch (e) { failure = e; }
+    if (chunked) size = chunked;
+    else if (chunked === null && !failure) {
+      // الخادم لا يدعم طلب الأجزاء: التحميل الكامل كما كان
+      await dropParts(variant, id);
+      job.loaded = 0;
+      try { size = await fetchInto(variant, id, job, canStream); }
+      catch (e) {
+        failure = e;
+        // متصفح لا يقبل الكتابة أثناء التحميل: محاولة واحدة بالطريقة البسيطة
+        const storeFailed = canStream && job.storing && !job.loaded && !job.ctrl.signal.aborted
+          && navigator.onLine && e && e.name !== 'QuotaExceededError' && e.message !== 'space';
+        if (storeFailed) {
+          job.storing = false;
+          try { size = await fetchInto(variant, id, job, false); failure = null; } catch (e2) { failure = e2; }
+        }
       }
     }
 
@@ -160,7 +303,8 @@ const offline = (() => {
       prepare(variant, id);
       return;
     }
-    try { await (await openCache()).delete(cacheUrl(variant, id)); } catch (e) {}
+    // التحميل الناقص على أجزاء يبقى ليُستكمل لاحقًا
+    if (!parts[k]) { try { await (await openCache()).delete(cacheUrl(variant, id)); } catch (e) {} }
     const key = errorKey(failure, job.ctrl.signal.aborted);
     if (key) {
       errors.set(k, key);
@@ -182,13 +326,16 @@ const offline = (() => {
     forget(k);
     notify();
     try { await (await openCache()).delete(cacheUrl(variant, id)); } catch (e) {}
+    await dropParts(variant, id);
+    notify();
   }
 
   async function removeAll() {
     Array.from(jobs.keys()).forEach(k => { const [v, id] = k.split(':'); cancel(v, id); });
     Object.keys(index).forEach(k => delete index[k]);
+    Object.keys(parts).forEach(k => delete parts[k]);
     urls.clear(); errors.clear(); broken.clear();
-    persist();
+    persist(); persistParts();
     notify();
     try { await caches.delete(AUDIO_CACHE); } catch (e) {}
   }
@@ -198,8 +345,16 @@ const offline = (() => {
   function state(variant, id) {
     const k = keyOf(variant, id);
     const job = jobs.get(k);
-    if (job) return { st: 'loading', loaded: job.loaded, total: job.total };
+    if (job) {
+      // الوقت المتبقي التقريبي، بعد ثوانٍ من بدء التحميل حتى تستقر السرعة
+      if (job.startLoaded === null && job.storing) { job.startLoaded = job.loaded; job.startAt = Date.now(); }
+      const secs = (Date.now() - job.startAt) / 1000;
+      const rate = job.startLoaded !== null && secs > 4 ? (job.loaded - job.startLoaded) / secs : 0;
+      const left = rate > 0 && job.total ? Math.round((job.total - job.loaded) / rate) : null;
+      return { st: 'loading', loaded: job.loaded, total: job.total, waiting: job.waiting, left };
+    }
     if (has(variant, id)) return { st: 'done', size: index[k] };
+    if (parts[k] && parts[k].total) return { st: 'partial', loaded: partLoaded(parts[k]), total: parts[k].total, error: errors.get(k) || null };
     const size = sizes.s[k] || 0;
     if (errors.has(k)) return { st: 'error', error: errors.get(k), size };
     return { st: 'none', size };
@@ -207,7 +362,11 @@ const offline = (() => {
 
   function usage() {
     const keys = Object.keys(index);
-    return { count: keys.length, bytes: keys.reduce((s, k) => s + (index[k] || 0), 0) };
+    const half = Object.values(parts).filter(r => r && r.total);
+    return {
+      count: keys.length, partial: half.length,
+      bytes: keys.reduce((s, k) => s + (index[k] || 0), 0) + half.reduce((s, r) => s + partLoaded(r), 0),
+    };
   }
 
   // أحجام الملفات قبل التحميل: تُقرأ من فهرس الأرشيف مرة كل أسبوع، وغيابها لا يمنع التحميل
@@ -266,6 +425,20 @@ const offline = (() => {
           const blob = res && await res.blob();
           if (blob && blob.size) { index[keyOf(m[1], m[2])] = blob.size; changed = true; }
         } catch (e) {}
+      }
+      // التحميلات الناقصة: حذف المتروك منها، ومطابقة أجزائها مع الموجود فعلًا
+      for (const [k, rec] of Object.entries(parts)) {
+        const [v, id] = k.split(':');
+        if (jobs.has(k)) continue;
+        if (!rec || !rec.total || !Array.isArray(rec.got) || v === 'fast' || !LECTURE_BY_ID[id] || Date.now() - (rec.at || 0) > PART_KEEP_MS || index[k]) {
+          await dropParts(v, id); changed = true; continue;
+        }
+        const kept = rec.got.filter(i => present.has(partUrl(v, id, i)));
+        if (kept.length !== rec.got.length) { rec.got = kept; persistParts(); changed = true; }
+      }
+      for (const r of keys) {
+        const m = /offline-part\/(\w+)\/(\w+)\/\d+$/.exec(r.url);
+        if (m && !parts[keyOf(m[1], m[2])]) { try { await cache.delete(r); } catch (e) {} }
       }
       if (changed) { persist(); notify(); }
     } catch (e) {}
