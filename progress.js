@@ -23,7 +23,8 @@ const dayKey = (d = new Date()) =>
 const progress = (() => {
   // الحالة:
   // lectures: لكل لقاء { h: الشرائح المسموعة مشفّرة، c: عددها، p: موضع التوقف، t: وقت آخر تحديث للموضع، d: اكتمل،
-  //   fp: موضع التوقف في النسخة السريعة من الكورس، ft: وقت آخر تحديث له }
+  //   fp: موضع التوقف في النسخة السريعة من الكورس، ft: وقت آخر تحديث له،
+  //   z: الشرائح التي قُفز فيها فوق سكتة ولم تُسمع بعدها بالسرعة العادية (مشفّرة) }
   // sec: وقت الاستماع القديم قبل التقرير اليومي (لكل جهاز)، days: أيام الاستماع، last: آخر لقاء
   // daily: وقت الاستماع الفعلي لكل جهاز ولكل يوم، مع التكرار:
   //   { جهاز: { يوم: { c: الكورس، n: الراديو العادي، f: الراديو السريع، l: { لقاء: ثوانٍ } } } }
@@ -74,6 +75,13 @@ const progress = (() => {
     if (!bitsCache[id]) bitsCache[id] = decode(id, state.lectures[id] && state.lectures[id].h);
     return bitsCache[id];
   }
+  const zCache = {};
+  function zbits(id) {
+    if (!zCache[id]) zCache[id] = decode(id, state.lectures[id] && state.lectures[id].z);
+    return zCache[id];
+  }
+  const anyBit = (arr) => arr.some(b => b);
+  const encodeZ = (arr) => anyBit(arr) ? encode(arr) : '';
 
   function encode(arr) {
     let s = '';
@@ -104,8 +112,9 @@ const progress = (() => {
     dirty = false;
   }
 
-  // تسجيل جزء مسموع فعلًا من لقاء
-  function record(id, from, to) {
+  // تسجيل جزء مسموع فعلًا من لقاء. how: 'skip' سكتة قُفز فوقها فتُحتسب مسموعة وتُعلَّم،
+  // 'skipping' كلام مسموع أثناء «حذف السكتات»، وبلا قيمة استماع عادي يمحو علامة القفز عمّا سُمع
+  function record(id, from, to, how) {
     if (!LECTURE_BY_ID[id] || !(to > from)) return;
     const e = entry(id);
     const arr = bits(id);
@@ -113,10 +122,14 @@ const progress = (() => {
     const a = Math.max(0, Math.floor(from / SLOT_SECONDS));
     const b = Math.min(total - 1, Math.floor(to / SLOT_SECONDS));
     let changed = false;
+    const z = (how === 'skip' || e.z) ? zbits(id) : null;
     for (let i = a; i <= b; i++) {
       const byte = i >> 3, mask = 1 << (i & 7);
       if (!(arr[byte] & mask)) { arr[byte] |= mask; e.c++; changed = true; }
+      if (how === 'skip') { if (!(z[byte] & mask)) { z[byte] |= mask; changed = true; } }
+      else if (!how && z && (z[byte] & mask)) { z[byte] &= ~mask; changed = true; }
     }
+    if (z) e.z = encodeZ(z);
     if (changed) {
       e.h = encode(arr);
       if (!e.d && e.c / total >= DONE_RATIO) { e.d = 1; e.da = dayKey(); }
@@ -255,6 +268,8 @@ const progress = (() => {
   }
 
   const isDone = (id) => !!(state.lectures[id] && state.lectures[id].d);
+  // اكتمل اللقاء وفيه سكتات قُفز فوقها ولم تُسمع بعد بالسرعة العادية
+  const doneSkipped = (id) => isDone(id) && !!state.lectures[id].z;
 
   function summary() {
     let heard = 0, total = 0, done = 0;
@@ -300,6 +315,12 @@ const progress = (() => {
       const e = entry(id);
       const mine = bits(id);
       const theirs = decode(id, r.h);
+      // علامة القفز تبقى للشريحة فقط إن لم تُسمع بالعادي في أي من الجهتين
+      if (e.z || r.z) {
+        const zm = zbits(id), zt = decode(id, r.z);
+        for (let i = 0; i < zm.length; i++) zm[i] = (zm[i] | ~mine[i]) & (zt[i] | ~theirs[i]) & (mine[i] | theirs[i]) & 255;
+        e.z = encodeZ(zm);
+      }
       for (let i = 0; i < mine.length; i++) mine[i] |= theirs[i];
       e.h = encode(mine);
       e.c = popcount(mine);
@@ -343,6 +364,7 @@ const progress = (() => {
   function reset() {
     state = empty();
     bitsCache = {};
+    Object.keys(zCache).forEach(k => delete zCache[k]);
     storage.set(PROGRESS_KEY, '');
     dirty = false;
     rev++;
@@ -372,7 +394,7 @@ const progress = (() => {
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') save(); });
 
   return {
-    record, addTime, stats, nextUnheard, seenAt, markSeen, legacySeconds, setPosition, position, setFastPosition, fastPosition, percent, segments, isDone, summary, continueId, hasAny,
+    record, addTime, doneSkipped, stats, nextUnheard, seenAt, markSeen, legacySeconds, setPosition, position, setFastPosition, fastPosition, percent, segments, isDone, summary, continueId, hasAny,
     merge, exportState, reset, subscribe, save,
     get rev() { return rev; },
   };

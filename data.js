@@ -259,6 +259,9 @@ const published = (() => {
 })();
 
 const COURSE_HEAD = ['c01', 'c02', 'c03', 'c04', 'L01', 'L02', 'L08'];
+// لقاءات أساسية لا يُتاح فيها «حذف السكتات» إلا بعد إكمالها بالسرعة العادية، وهو متاح في غيرها من البداية
+const SILENCE_AFTER_DONE = ['c01', 'c02', 'c03', 'c04', 'L01', 'L02', 'L08'];
+
 const COURSE_ORDER = [
   ...COURSE_HEAD,
   ...LECTURES.map(l => l.id).filter(id => !COURSE_HEAD.includes(id)),

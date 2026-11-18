@@ -863,3 +863,8 @@ span.note-time { color: var(--note); font-weight: 700; }
 .sil-admin input[type="file"] { width: 100%; }
 .sil-preview { margin: 8px 0; }
 .sil-preview p { margin: 2px 0; font-size: 13px; }
+
+.skip-mark { display: inline-flex; align-items: center; color: var(--faint); opacity: .8; background: none; border: 0; padding: 0 2px; cursor: pointer; }
+.skip-pop { display: inline-flex; margin-inline-start: 4px; vertical-align: middle; }
+.sil-ask p { line-height: 1.9; margin: 0 0 14px; }
+.sil-ask .modal-actions { display: flex; flex-direction: column; gap: 8px; align-items: stretch; }

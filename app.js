@@ -107,8 +107,8 @@ function useOnline() {
 // =====================
 // الكورس عالسريع: النسخة السريعة من كل لقاء، وتُفتح بعد إكمال اللقاء على السرعة العادية
 // =====================
-// حذف السكتات: متاح لكل مستمع بعد إكمال اللقاء على السرعة العادية، وفي اللقاءات التي رُفع لها ملف سكتات فقط
-const canSkipSilence = (id) => silences.ready(id) && progress.isDone(id);
+// حذف السكتات: في اللقاءات التي رُفع لها ملف سكتات، ويُفتح في اللقاءات الأساسية بعد إكمالها بالسرعة العادية
+const silenceLocked = (id) => SILENCE_AFTER_DONE.includes(id) && !progress.isDone(id);
 // بعد القفز فوق سكتة قد يرسل المتصفح إشارة انتظار قصيرة لا يُراد إظهارها
 const JUMP_QUIET_MS = 1500;
 
@@ -429,6 +429,12 @@ function usePlayer(volume) {
         if (lid && loadedKeyRef.current === lecKey(lid, 'normal') && silences.ready(lid)) {
           const end = silences.endAt(lid, ct);
           if (end != null && end < LECTURE_BY_ID[lid].normal - 1) {
+            // السكتة التي دخلها التشغيل طبيعيًا (لا بتقديم يدوي) تُحتسب مسموعة، مع علامة أنها قُفز فوقها
+            const prev = lastSampleRef.current;
+            if (prev != null && ct - prev > 0 && ct - prev <= 3) {
+              progress.record(lid, prev, ct, 'skipping');
+              progress.record(lid, ct, end, 'skip');
+            }
             lastSampleRef.current = null;
             lastJumpRef.current = Date.now();
             audio.currentTime = end;
@@ -450,7 +456,7 @@ function usePlayer(volume) {
             const src = modeRef.current === 'lecture' ? 'c' : modeRef.current === 'fast' ? 'f' : 'n';
             progress.addTime(src, k.split(':')[1], d);
             listenStats.add(d);
-            if (id) progress.record(id, prev, ct);
+            if (id) progress.record(id, prev, ct, skipSilRef.current ? 'skipping' : undefined);
           }
         }
         lastSampleRef.current = ct;
@@ -770,6 +776,8 @@ const ICON_PATHS = {
   plus: html`<g><path d="M12 5v14"></path><path d="M5 12h14"></path></g>`,
   trash: html`<g><path d="M4 7h16"></path><path d="M9 7V4h6v3"></path><path d="M6 7l1 13h10l1-13"></path></g>`,
   saved: html`<g><path d="M12 3v9"></path><path d="M8 9l4 4 4-4"></path><path d="M5 17l3 3 4-4"></path><path d="M14 20h5"></path></g>`,
+  // اكتمال اللقاء بحذف السكتات
+  bolt: html`<path d="M13 2L4 14h7l-1 8 9-12h-7l1-8z"></path>`,
   // رابط يفتح صفحة أخرى، مرسوم باتجاه القراءة العربية
   external: html`<g><path d="M10 3H3v7"></path><path d="M3 3l9 9"></path><path d="M5 14v5a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-5"></path></g>`,
   note: html`<g><path d="M12 20h9"></path><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"></path></g>`,
@@ -1859,6 +1867,7 @@ function CoursePage({ player, users }) {
               ${pct > 0 && !done && html`<${HeardBar} id=${id} />`}
             </span>
             ${(done || n > 0 || newBy[id] || notes.has(id) || isSaved || isPartial) && html`<span className="lesson-side">
+              ${done && progress.doneSkipped(id) && html`<span className="skip-mark" title=${t('doneSkipped')} aria-label=${t('doneSkipped')}><${Icon} name="bolt" size=${11} /></span>`}
               ${done && html`<span className="done-badge" aria-label=${t('lectureDone')}><${Icon} name="check" size=${14} /></span>`}
               ${isSaved && html`<span className="note-badge" aria-label=${t('dlDone')}><${Icon} name="saved" size=${14} /></span>`}
               ${isPartial && html`<span className="note-badge dl-partial-badge" aria-label=${t('dlPartialBadge')}><${Icon} name="download" size=${14} /></span>`}
@@ -2226,8 +2235,12 @@ function LecturePage({ id, variant, player }) {
   useSilencesVersion();
   useEffect(() => { silences.load(id); }, [id]);
   const silHas = !fast && silences.available(id);
-  const silOpen = done && silences.ready(id);
+  const silLocked = silenceLocked(id);
+  const silOpen = !silLocked && silences.ready(id);
   const silOn = current && player.skipSil;
+  // تذكير قبل كل تشغيل لحذف السكتات
+  const [silAsk, setSilAsk] = useState(false);
+  const silEnable = () => { setSilAsk(false); if (current) player.setSkipSil(true); else { player.playLecture(id, variant); player.setSkipSil(true); } };
 
   // «أكمل من»: إذا كان المستمع يعيد جزءًا سمعه، زر يقفز إلى أول جزء لم يسمعه بعد
   const resumeAt = fast || dragging != null ? null : progress.nextUnheard(id, time);
@@ -2254,16 +2267,26 @@ function LecturePage({ id, variant, player }) {
         <div className="speed-row">
           ${silHas ? (silOpen
             ? html`<button className=${'sil-toggle' + (silOn ? ' on' : '')} role="switch" aria-checked=${silOn}
-                onClick=${() => { if (current) player.setSkipSil(!player.skipSil); else { player.playLecture(id, variant); player.setSkipSil(true); } }}>
+                onClick=${() => { if (silOn) player.setSkipSil(false); else setSilAsk(true); }}>
                 <span className="sil-knob" aria-hidden="true"></span>
                 <span className="sil-label">${t('skipSilences')}</span>
                 <small>${t('skipSilencesSaves', { m: Math.round((lec.normal - silences.total(id)) / 60) })}</small>
               </button>`
             : html`<${Popover} label=${t('skipSilences')} wrapClass="seg-pop sil-pop" btnClass="sil-toggle sil-toggle-locked"
-                button=${html`<${React.Fragment}><${Icon} name="lock" size=${13} /><span className="sil-label">${t('skipSilences')}</span><//>`}>${done ? t('pleaseWait') : t('skipSilencesLocked')}<//>`)
+                button=${html`<${React.Fragment}><${Icon} name="lock" size=${13} /><span className="sil-label">${t('skipSilences')}</span><//>`}>${silLocked ? t('skipSilencesLocked') : t('pleaseWait')}<//>`)
           : null}
           <${OfflineControl} id=${id} variant=${variant} />
         </div>
+
+        ${silAsk && html`<div className="modal-back" onClick=${() => setSilAsk(false)}>
+          <div className="modal sil-ask" role="dialog" aria-modal="true" onClick=${e => e.stopPropagation()}>
+            <p>${t('skipSilencesAdvice')}</p>
+            <div className="modal-actions">
+              <button className="cta" onClick=${() => setSilAsk(false)}>${t('skipSilencesStay')}</button>
+              <button className="link-btn muted" onClick=${silEnable}>${t('skipSilencesGo')}</button>
+            </div>
+          </div>
+        </div>`}
 
         <${SeekBar} id=${id} value=${shown} duration=${duration} marks=${fast ? [] : marks} noteMarks=${noteMarks} plain=${fast}
           onInput=${setDragging} onCommit=${commit} />
@@ -2272,7 +2295,8 @@ function LecturePage({ id, variant, player }) {
           ${resumeAt != null ? html`<button className="resume-chip" onClick=${() => { player.seekLecture(id, resumeAt, variant); if (!active) player.playLecture(id, variant); }}>
             ${t('resumeFrom')} <bdi dir="ltr">${fmtTime(resumeAt)}</bdi>
           </button>` : !fast && (done || heard > 0) && html`<span className=${'times-heard' + (done ? ' heard-done' : '')}>
-            ${done ? html`<${React.Fragment}><${Icon} name="check" size=${12} /> ${t('lectureDone')}<//>`
+            ${done ? html`<${React.Fragment}><${Icon} name="check" size=${12} /> ${t('lectureDone')}${progress.doneSkipped(id) && html`<${Popover} label=${t('doneSkipped')} wrapClass="skip-pop" btnClass="skip-mark"
+                button=${html`<${Icon} name="bolt" size=${11} />`}>${t('doneSkipped')}<//>`}<//>`
               : html`<${React.Fragment}>${t('heardLabel')} <${Pct} value=${heard + '%'} /><//>`}
           </span>`}
           <span>${fmtTime(duration)}</span>
