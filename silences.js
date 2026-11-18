@@ -7,6 +7,7 @@
 // =====================
 const SILENCE_PAD = 0.2;       // يُترك هذا القدر من كل طرف حتى لا يُقصّ أول الكلام وآخره
 const SILENCE_MIN = 0.5;       // قفزة أقصر من هذا لا تستحق
+const SILENCE_SKIP_FROM = 1.5; // سكتة أقصر من هذا تُسمع كما هي: قفزتها تكلّف أكثر مما توفّر
 const SIL_AT_KEY = 'afaf_silat_v1';
 const SIL_DATA_KEY = 'afaf_sil_v1:';
 
@@ -63,6 +64,7 @@ function decodeSilences(str) {
 function skipRangesOf(rows) {
   const out = [];
   (rows || []).forEach(([a, b]) => {
+    if (b - a < SILENCE_SKIP_FROM) return;
     const s = a + SILENCE_PAD, e = b - SILENCE_PAD;
     if (e - s >= SILENCE_MIN) out.push([s, e]);
   });

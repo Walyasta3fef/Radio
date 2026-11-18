@@ -871,3 +871,8 @@ span.note-time { color: var(--note); font-weight: 700; }
 
 .dl-wrap { display: inline-flex; align-items: center; gap: 6px; }
 .dl-pct { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+.slow-net { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 10px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 12px; font-size: 13px; color: var(--muted); }
+.slow-net > span { flex: 1; min-width: 160px; line-height: 1.7; }
+.slow-net { position: relative; padding-inline-end: 34px; }
+.slow-net-x { position: absolute; top: 4px; inset-inline-end: 6px; }

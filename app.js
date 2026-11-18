@@ -109,8 +109,15 @@ function useOnline() {
 // =====================
 // حذف السكتات: في اللقاءات التي رُفع لها ملف سكتات، ويُفتح في اللقاءات الأساسية بعد إكمالها بالسرعة العادية
 const silenceLocked = (id) => SILENCE_AFTER_DONE.includes(id) && !progress.isDone(id);
-// بعد القفز فوق سكتة قد يرسل المتصفح إشارة انتظار قصيرة لا يُراد إظهارها
+// بعد القفز فوق سكتة قد يرسل المتصفح إشارة انتظار قصيرة لا يُراد إظهارها،
+// فإن طال الانتظار عن ثانية ظهرت «جاري التحميل»
 const JUMP_QUIET_MS = 1500;
+const JUMP_WAIT_SHOW_MS = 1000;
+// الاتصال الضعيف أثناء الاستماع إلى لقاء من الإنترنت: وقفتان أطول من ثانيتين خلال دقيقة، أو وقفة أطول من 6 ثوانٍ
+const SLOW_STALL_MS = 2000;
+const SLOW_LONG_MS = 6000;
+const SLOW_WINDOW_MS = 60000;
+const SLOW_GRACE_MS = 10000;   // التحميل بعد ضغط التشغيل أو التقديم اليدوي طبيعي، فلا يُحتسب
 
 const lectureHash = (id, variant) => (variant === 'fast' ? '#/fast/' : '#/lecture/') + id;
 // اللقاء الذي له ملف سكتات لا نسخة «عالسريع» له، فلا يدخل في تنقّل الكورس عالسريع
@@ -136,6 +143,10 @@ function usePlayer(volume) {
   const [skipSil, setSkipSilState] = useState(false);
   const skipSilRef = useRef(false);
   const lastJumpRef = useRef(0);
+  // اكتشاف الاتصال الضعيف: اللقاء الذي ظهر فيه، واللقاءات التي ظهر فيها من قبل في هذه الجلسة
+  const [slowNet, setSlowNet] = useState(null);
+  const slowShownRef = useRef(new Set());
+  const stallRef = useRef({ at: 0, list: [], user: 0, timer: null });
   const setSkipSil = useCallback((v) => { skipSilRef.current = !!v; setSkipSilState(!!v); }, []);
   const wantPlayRef = useRef(false);     // هل يريد المستخدم الاستماع الآن
   const loadedKeyRef = useRef(null);     // المحمّل حاليًا، مثل normal:L05 أو lecture:c01 أو flecture:c01 (النسخة السريعة)
@@ -210,6 +221,7 @@ function usePlayer(volume) {
     lectureRef.current = id;
     variantRef.current = v;
     setSkipSil(false);
+    setSlowNet(null);
     setShifted(false);
     setMode(m);
     setLectureId(id);
@@ -472,17 +484,62 @@ function usePlayer(volume) {
         else if (lid && variantRef.current === 'fast' && loadedKeyRef.current === lecKey(lid, 'fast')) progress.setFastPosition(lid, ct);
       }
     };
-    const onSeeking = () => { lastSampleRef.current = null; };
+    const onSeeking = () => {
+      lastSampleRef.current = null;
+      // تقديم يدوي (لا قفزة فوق سكتة): انتظار التحميل بعده طبيعي
+      if (Date.now() - lastJumpRef.current > 100) stallRef.current.user = Date.now();
+    };
+    // ضغط التشغيل من المستمع (لا إعادة المحاولة التلقائية بعد تعليق)
+    const onPlay = () => { if (!stallsRef.current) stallRef.current.user = Date.now(); };
     const onPlaying = () => {
+      stallEnd();
       stallsRef.current = 0;
       if (!wantPlayRef.current) return;
       updateStatus('playing');
       const id = loadedKeyRef.current && loadedKeyRef.current.split(':')[1];
       if (id) setMediaMeta(id, modeRef.current === 'lecture');
     };
-    const onWaiting = () => {
-      if (Date.now() - lastJumpRef.current < JUMP_QUIET_MS) return;
+    const showLoading = () => {
       if (wantPlayRef.current && statusRef.current !== 'next' && statusRef.current !== 'offline') updateStatus('loading');
+    };
+    // هل يصلح ما يحدث الآن أن يُعدّ دليلًا على ضعف الاتصال؟
+    const slowCandidate = () => {
+      const lid = lectureRef.current;
+      return modeRef.current === 'lecture' && lid && wantPlayRef.current && !audio.paused && !isLocal()
+        && navigator.onLine && !document.hidden && offline.supported && !slowShownRef.current.has(lid)
+        && Date.now() - stallRef.current.user > SLOW_GRACE_MS
+        && ['none', 'error'].includes(offline.state('normal', lid).st);
+    };
+    const flagSlow = () => {
+      const lid = lectureRef.current;
+      if (!slowCandidate()) return;
+      slowShownRef.current.add(lid);
+      setSlowNet(lid);
+    };
+    const stallEnd = () => {
+      const st = stallRef.current;
+      clearTimeout(st.timer); st.timer = null;
+      if (!st.at) return;
+      const d = Date.now() - st.at;
+      st.at = 0;
+      if (d < SLOW_STALL_MS) return;
+      const now = Date.now();
+      st.list = st.list.filter(x => now - x < SLOW_WINDOW_MS).concat(now);
+      if (st.list.length >= 2) flagSlow();
+    };
+    const onWaiting = () => {
+      const st = stallRef.current;
+      if (!st.at && slowCandidate()) {
+        st.at = Date.now();
+        clearTimeout(st.timer);
+        st.timer = setTimeout(() => { if (st.at && audio.readyState < 3) flagSlow(); }, SLOW_LONG_MS);
+      }
+      if (Date.now() - lastJumpRef.current < JUMP_QUIET_MS) {
+        // بعد قفزة: لا تظهر «جاري التحميل» إلا إن طال الانتظار
+        setTimeout(() => { if (audio.readyState < 3 && !audio.paused) showLoading(); }, JUMP_WAIT_SHOW_MS);
+        return;
+      }
+      showLoading();
     };
     const onMeta = () => {
       if (resumeRef.current != null) {
@@ -526,6 +583,7 @@ function usePlayer(volume) {
     };
     // إيقاف من النظام (مكالمة، تطبيق آخر، شاشة القفل) يُحترم ولا يُستأنف تلقائيًا
     const onPause = () => {
+      clearTimeout(stallRef.current.timer); stallRef.current.at = 0;
       if (!wantPlayRef.current || audio.ended) return;
       if (Date.now() - lastAttemptRef.current < 1500) return;
       if (statusRef.current === 'offline') return;
@@ -553,7 +611,7 @@ function usePlayer(volume) {
     };
 
     const events = {
-      timeupdate: onTime, seeking: onSeeking, playing: onPlaying, waiting: onWaiting,
+      timeupdate: onTime, seeking: onSeeking, playing: onPlaying, waiting: onWaiting, play: onPlay,
       loadedmetadata: onMeta, ended: onEnded, pause: onPause, error: onError,
     };
     Object.entries(events).forEach(([e, fn]) => audio.addEventListener(e, fn));
@@ -637,6 +695,7 @@ function usePlayer(volume) {
 
   return {
     audioRef, mode, lectureId, variant, isPlaying, status, live, shifted, currentTime, skipSil, setSkipSil,
+    slowNet, hideSlowNet: () => setSlowNet(null),
     toggleRadio, goLive, toggleLecture, playLecture, seekLecture, skip, stop, retry,
   };
 }
@@ -2186,6 +2245,21 @@ function SilencesAdmin() {
   </div>`;
 }
 
+// اقتراح تحميل اللقاء عند ضعف الاتصال، ثم متابعة نسبة التحميل في السطر نفسه
+function SlowNetHint({ id, onClose }) {
+  useOfflineVersion();
+  const s = offline.state('normal', id);
+  if (s.st === 'done') return null;
+  const loading = s.st === 'loading' || s.st === 'partial';
+  return html`<div className="slow-net" role="status">
+    <span>${loading
+      ? t('slowNetLoading', { p: s.total ? Math.floor(s.loaded / s.total * 100) : 0 })
+      : t('slowNetHint')}</span>
+    ${!loading && html`<button className="small-btn dl-go" onClick=${() => offline.download('normal', id)}>${t('slowNetDownload')}</button>`}
+    <button className="inapp-x slow-net-x" onClick=${onClose} aria-label=${t('inAppClose')}>×</button>
+  </div>`;
+}
+
 const FAST_TOLD_KEY = 'sil_unlock_told';
 function LecturePage({ id, variant, player }) {
   useProgressVersion();
@@ -2319,6 +2393,7 @@ function LecturePage({ id, variant, player }) {
         </div>
 
         <${StatusLine} active=${active} status=${status} onRetry=${player.retry} />
+        ${current && player.slowNet === id && html`<${SlowNetHint} id=${id} onClose=${player.hideSlowNet} />`}
       </div>
     </div>
     <${NotesBox} id=${id} getTime=${getTime} onTime=${jumpTo} readOnly=${fast} />
