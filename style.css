@@ -868,3 +868,6 @@ span.note-time { color: var(--note); font-weight: 700; }
 .skip-pop { display: inline-flex; margin-inline-start: 4px; vertical-align: middle; }
 .sil-ask p { line-height: 1.9; margin: 0 0 14px; }
 .sil-ask .modal-actions { display: flex; flex-direction: column; gap: 8px; align-items: stretch; }
+
+.dl-wrap { display: inline-flex; align-items: center; gap: 6px; }
+.dl-pct { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }

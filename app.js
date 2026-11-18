@@ -936,7 +936,8 @@ function Popover({ label, btnClass, wrapClass, button, children, keepOpen, btnPr
   useEffect(() => {
     if (!pos) return;
     const close = (e) => {
-      if (keepOpen && e && e.type === 'click' && popRef.current && popRef.current.contains(e.target)) return;
+      // زر داخل النافذة قد يختفي بعد الضغط عليه (تتغيّر محتوياتها)، فلا تُغلق بسببه
+      if (keepOpen && e && e.type === 'click' && popRef.current && (popRef.current.contains(e.target) || !e.target.isConnected)) return;
       setPos(null);
     };
     const id = setTimeout(() => {
@@ -1763,14 +1764,17 @@ function OfflineControl({ id, variant }) {
       </svg>`
     : html`<${Icon} name=${s.st === 'done' ? 'saved' : 'download'} size=${18} />`;
 
-  return html`<${Popover} label=${t('dlLabel')} btnClass=${'dl-icon dl-' + s.st} button=${button} keepOpen>
+  // نسبة التحميل ظاهرة بجانب الأيقونة طوال التحميل، دون الحاجة إلى فتح النافذة
+  return html`<span className="dl-wrap">
+    ${s.st === 'loading' && s.total > 0 && html`<bdi className="dl-pct" dir="ltr">${Math.floor(pct)}%</bdi>`}
+    <${Popover} label=${t('dlLabel')} btnClass=${'dl-icon dl-' + s.st} button=${button} keepOpen>
     ${s.st === 'loading' && html`<span className="dl-pop">
       <b>${t('dlLoading')} <bdi dir="ltr">${s.total ? Math.floor(pct) + '%' : ''}</bdi></b>
       <span>${s.total ? t('dlLoadedOf', { a: fmtSize(s.loaded), b: fmtSize(s.total) }) : fmtSize(s.loaded)}</span>
       ${s.waiting && html`<span className="warn">${t('dlWaitingNet')}</span>`}
       ${s.resumable === false && html`<span className="warn">${t('dlNoResume')}</span>`}
       <span>${t('dlKeepOpen')}</span>
-      <button className="small-btn" onClick=${() => offline.cancel(variant, id)}>${t('dlPause')}</button>
+      <button className="small-btn" onClick=${() => offline.cancel(variant, id)}>${s.resumable === true ? t('dlPause') : t('dlCancel')}</button>
     </span>`}
     ${s.st === 'partial' && html`<span className="dl-pop">
       <b>${t('dlPaused', { p: Math.floor(pct) })}</b>
@@ -1793,7 +1797,7 @@ function OfflineControl({ id, variant }) {
       ${s.st === 'error' && html`<span className="warn">${t(s.error)}</span>`}
       <button className="small-btn dl-go" onClick=${() => offline.download(variant, id)}>${s.st === 'error' ? t('dlRetry') : t('dlStart')}</button>
     </span>`}
-  <//>`;
+  <//></span>`;
 }
 
 function CoursePage({ player, users }) {
@@ -1867,7 +1871,7 @@ function CoursePage({ player, users }) {
               ${pct > 0 && !done && html`<${HeardBar} id=${id} />`}
             </span>
             ${(done || n > 0 || newBy[id] || notes.has(id) || isSaved || isPartial) && html`<span className="lesson-side">
-              ${done && progress.doneSkipped(id) && html`<span className="skip-mark" title=${t('doneSkipped')} aria-label=${t('doneSkipped')}><${Icon} name="bolt" size=${11} /></span>`}
+              ${done && progress.doneSkipped(id) > 0 && html`<span className="skip-mark" title=${t('doneSkipped', { p: Math.round(progress.doneSkipped(id) * 100) })} aria-label=${t('doneSkipped', { p: Math.round(progress.doneSkipped(id) * 100) })}><${Icon} name="bolt" size=${11} /></span>`}
               ${done && html`<span className="done-badge" aria-label=${t('lectureDone')}><${Icon} name="check" size=${14} /></span>`}
               ${isSaved && html`<span className="note-badge" aria-label=${t('dlDone')}><${Icon} name="saved" size=${14} /></span>`}
               ${isPartial && html`<span className="note-badge dl-partial-badge" aria-label=${t('dlPartialBadge')}><${Icon} name="download" size=${14} /></span>`}
@@ -2295,8 +2299,8 @@ function LecturePage({ id, variant, player }) {
           ${resumeAt != null ? html`<button className="resume-chip" onClick=${() => { player.seekLecture(id, resumeAt, variant); if (!active) player.playLecture(id, variant); }}>
             ${t('resumeFrom')} <bdi dir="ltr">${fmtTime(resumeAt)}</bdi>
           </button>` : !fast && (done || heard > 0) && html`<span className=${'times-heard' + (done ? ' heard-done' : '')}>
-            ${done ? html`<${React.Fragment}><${Icon} name="check" size=${12} /> ${t('lectureDone')}${progress.doneSkipped(id) && html`<${Popover} label=${t('doneSkipped')} wrapClass="skip-pop" btnClass="skip-mark"
-                button=${html`<${Icon} name="bolt" size=${11} />`}>${t('doneSkipped')}<//>`}<//>`
+            ${done ? html`<${React.Fragment}><${Icon} name="check" size=${12} /> ${t('lectureDone')}${progress.doneSkipped(id) > 0 && html`<${Popover} label=${t('doneSkipped', { p: Math.round(progress.doneSkipped(id) * 100) })} wrapClass="skip-pop" btnClass="skip-mark"
+                button=${html`<${Icon} name="bolt" size=${11} />`}>${t('doneSkipped', { p: Math.round(progress.doneSkipped(id) * 100) })}<//>`}<//>`
               : html`<${React.Fragment}>${t('heardLabel')} <${Pct} value=${heard + '%'} /><//>`}
           </span>`}
           <span>${fmtTime(duration)}</span>

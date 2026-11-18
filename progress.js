@@ -24,7 +24,7 @@ const progress = (() => {
   // الحالة:
   // lectures: لكل لقاء { h: الشرائح المسموعة مشفّرة، c: عددها، p: موضع التوقف، t: وقت آخر تحديث للموضع، d: اكتمل،
   //   fp: موضع التوقف في النسخة السريعة من الكورس، ft: وقت آخر تحديث له،
-  //   z: الشرائح التي قُفز فيها فوق سكتة ولم تُسمع بعدها بالسرعة العادية (مشفّرة) }
+  //   z: الشرائح المسموعة لأول مرة و«حذف السكتات» يعمل، ولم تُسمع بعدها بالسرعة العادية (مشفّرة) }
   // sec: وقت الاستماع القديم قبل التقرير اليومي (لكل جهاز)، days: أيام الاستماع، last: آخر لقاء
   // daily: وقت الاستماع الفعلي لكل جهاز ولكل يوم، مع التكرار:
   //   { جهاز: { يوم: { c: الكورس، n: الراديو العادي، f: الراديو السريع، l: { لقاء: ثوانٍ } } } }
@@ -112,8 +112,9 @@ const progress = (() => {
     dirty = false;
   }
 
-  // تسجيل جزء مسموع فعلًا من لقاء. how: 'skip' سكتة قُفز فوقها فتُحتسب مسموعة وتُعلَّم،
-  // 'skipping' كلام مسموع أثناء «حذف السكتات»، وبلا قيمة استماع عادي يمحو علامة القفز عمّا سُمع
+  // تسجيل جزء مسموع فعلًا من لقاء. how: بلا قيمة استماع عادي، 'skipping' كلام مسموع و«حذف السكتات» يعمل،
+  // 'skip' سكتة قُفز فوقها فتُحتسب مسموعة. لكل شريحة: الجديدة بحذف السكتات تُعلَّم،
+  // والمسموعة بالعادي تُمحى علامتها، والمسموعة من قبل لا تتغيّر بالاستماع بحذف السكتات
   function record(id, from, to, how) {
     if (!LECTURE_BY_ID[id] || !(to > from)) return;
     const e = entry(id);
@@ -122,12 +123,13 @@ const progress = (() => {
     const a = Math.max(0, Math.floor(from / SLOT_SECONDS));
     const b = Math.min(total - 1, Math.floor(to / SLOT_SECONDS));
     let changed = false;
-    const z = (how === 'skip' || e.z) ? zbits(id) : null;
+    const z = (how || e.z) ? zbits(id) : null;
     for (let i = a; i <= b; i++) {
       const byte = i >> 3, mask = 1 << (i & 7);
-      if (!(arr[byte] & mask)) { arr[byte] |= mask; e.c++; changed = true; }
-      if (how === 'skip') { if (!(z[byte] & mask)) { z[byte] |= mask; changed = true; } }
-      else if (!how && z && (z[byte] & mask)) { z[byte] &= ~mask; changed = true; }
+      if (!(arr[byte] & mask)) {
+        arr[byte] |= mask; e.c++; changed = true;
+        if (how) z[byte] |= mask;
+      } else if (!how && z && (z[byte] & mask)) { z[byte] &= ~mask; changed = true; }
     }
     if (z) e.z = encodeZ(z);
     if (changed) {
@@ -268,8 +270,22 @@ const progress = (() => {
   }
 
   const isDone = (id) => !!(state.lectures[id] && state.lectures[id].d);
-  // اكتمل اللقاء وفيه سكتات قُفز فوقها ولم تُسمع بعد بالسرعة العادية
-  const doneSkipped = (id) => isDone(id) && !!state.lectures[id].z;
+  // نسبة اللقاء المكتمل التي سُمعت بحذف السكتات فقط، إن بلغت ربعه فأكثر (وإلا 0)
+  const SKIPPED_MARK = 0.25;
+  function doneSkipped(id) {
+    if (!isDone(id) || !state.lectures[id].z) return 0;
+    const share = popcount(zbits(id)) / slotsOf(id);
+    return share >= SKIPPED_MARK ? share : 0;
+  }
+  // اللقاءات التي اكتملت قبل إتاحة الإكمال بحذف السكتات سُمعت كلها بالعادي
+  const SKIP_DONE_FROM = '20261118';
+  function cleanZ() {
+    Object.entries(state.lectures).forEach(([id, e]) => {
+      if (e && e.z && e.d && e.da && e.da < SKIP_DONE_FROM) { e.z = ''; delete zCache[id]; dirty = true; }
+    });
+  }
+  cleanZ();
+  if (dirty) save();
 
   function summary() {
     let heard = 0, total = 0, done = 0;
@@ -348,6 +364,7 @@ const progress = (() => {
     (remote.days || []).forEach(d => { if (!state.days.includes(d)) state.days.push(d); });
     state.legacyDays = Math.max(state.legacyDays || 0, remote.legacyDays || 0);
     if ((remote.lastAt || 0) > (state.lastAt || 0)) { state.last = remote.last; state.lastAt = remote.lastAt; }
+    cleanZ();
     touch();
     save();
     notifyNow();
