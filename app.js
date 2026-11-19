@@ -52,19 +52,124 @@ function parseRoute() {
   if (m && LECTURE_BY_ID[m[1]]) return { page: 'lecture', id: m[1], variant: 'normal' };
   // النسخة السريعة من لقاءات الكورس أُلغيت: روابطها القديمة تفتح الصفحة العادية
   m = /^#\/fast\/(\w+)$/.exec(h);
-  if (m && LECTURE_BY_ID[m[1]]) { history.replaceState(null, '', '#/lecture/' + m[1]); return { page: 'lecture', id: m[1], variant: 'normal' }; }
+  if (m && LECTURE_BY_ID[m[1]]) { history.replaceState(history.state, '', '#/lecture/' + m[1]); if (typeof NAV !== 'undefined') NAV.hashes[NAV.cur] = location.hash; return { page: 'lecture', id: m[1], variant: 'normal' }; }
   return { page: 'home' };
 }
+// =====================
+// موضع التمرير: الصفحة الجديدة تبدأ من أولها، والصفحة التي يُرجع إليها تعود إلى الموضع نفسه.
+// كل خطوة في سجل المتصفح تحمل رقمها (nav)، فيُعرف الرجوع من الانتقال إلى صفحة جديدة
+// =====================
+const RESTORE_MS = 1000;   // صفحة الكورس تكمل تحميل محتواها، فتُعاد المحاولة خلال الثانية الأولى
+const FLASH_MS = 1200;
+const normHash = (h) => (!h || h === '#' ? '#/' : h);
+// ep: رقم جلسة التنقل؛ الخطوات التي لم تُسجَّل في هذه الجلسة (قبل إعادة تحميل الصفحة مثلًا) لا يُعتمد على ترتيبها
+const NAV = { ep: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), cur: 0, hashes: [], scroll: [],
+  pushing: false, expect: null, lastLecture: null, prevPage: null };
+try { history.scrollRestoration = 'manual'; } catch (e) {}
+const stampEntry = () => {
+  NAV.hashes[NAV.cur] = normHash(location.hash);
+  try { history.replaceState(Object.assign({}, history.state, { nav: NAV.cur, ep: NAV.ep }), ''); } catch (e) {}
+};
+stampEntry();
+window.addEventListener('scroll', () => { NAV.scroll[NAV.cur] = window.scrollY; }, { passive: true });
+
+let restoreStop = null;
+function restoreScroll(apply) {
+  if (restoreStop) restoreStop();
+  const start = Date.now();
+  let timer = null;
+  // لمس الشاشة أو التمرير من المستخدم يوقف المحاولات حتى لا تعارضه
+  const stop = () => {
+    clearInterval(timer);
+    ['touchstart', 'wheel', 'keydown', 'mousedown'].forEach(ev => window.removeEventListener(ev, stop));
+    if (restoreStop === stop) restoreStop = null;
+  };
+  ['touchstart', 'wheel', 'keydown', 'mousedown'].forEach(ev => window.addEventListener(ev, stop, { passive: true }));
+  restoreStop = stop;
+  const tick = () => { apply(); if (Date.now() - start >= RESTORE_MS) stop(); };
+  setTimeout(tick, 0);
+  timer = setInterval(tick, 100);
+}
+
+// يضع اللقاء في وسط الشاشة ويلوّنه تلوينًا خفيفًا مرة واحدة
+function centerLesson(id) {
+  let flashed = false;
+  restoreScroll(() => {
+    const el = document.getElementById('lesson-' + id);
+    if (!el) return;
+    el.scrollIntoView({ block: 'center' });
+    if (!flashed) {
+      flashed = true;
+      el.classList.add('lesson-flash');
+      setTimeout(() => el.classList.remove('lesson-flash'), FLASH_MS);
+    }
+  });
+}
+
+function onNavigate(route) {
+  const st = history.state;
+  const pushed = NAV.pushing;
+  NAV.pushing = false;
+  const back = !pushed && st && st.ep === NAV.ep && typeof st.nav === 'number';
+  if (back) {
+    NAV.cur = st.nav;
+  } else if (pushed) {
+    NAV.cur += 1;
+    NAV.hashes.length = NAV.cur;
+    NAV.scroll.length = NAV.cur;
+    stampEntry();
+  } else {
+    // رجوع إلى خطوة من خارج هذه الجلسة: يُبدأ سجل جديد حتى لا يُرجع زر الموقع إلى خطوة خاطئة
+    NAV.ep += '+';
+    NAV.cur = 0; NAV.hashes = []; NAV.scroll = [];
+    stampEntry();
+  }
+  NAV.hashes[NAV.cur] = normHash(location.hash);
+  // احتياط: إن لم يصل زر «رجوع» إلى الصفحة المطلوبة فُتحت مباشرة
+  if (NAV.expect) {
+    const want = NAV.expect;
+    NAV.expect = null;
+    if (normHash(location.hash) !== want) { go(want); return; }
+  }
+  const fromLecture = NAV.prevPage === 'lecture';
+  NAV.prevPage = route.page;
+  if (route.page === 'lecture') NAV.lastLecture = route.id;
+  // الرجوع إلى الكورس من لقاء: اللقاء نفسه في وسط الشاشة، حتى لو تنقّل المستمع بين اللقاءات
+  if (route.page === 'course' && fromLecture && NAV.lastLecture) { centerLesson(NAV.lastLecture); return; }
+  if (back) {
+    const y = NAV.scroll[NAV.cur] || 0;
+    restoreScroll(() => { if (Math.abs(window.scrollY - y) > 1) window.scrollTo(0, y); });
+    return;
+  }
+  if (restoreStop) restoreStop();
+  window.scrollTo(0, 0);
+}
+
 function useRoute() {
   const [route, setRoute] = useState(parseRoute);
   useEffect(() => {
-    const onHash = () => { setRoute(parseRoute()); window.scrollTo(0, 0); };
+    NAV.prevPage = route.page;
+    if (route.page === 'lecture') NAV.lastLecture = route.id;
+    const onHash = () => { const r = parseRoute(); setRoute(r); onNavigate(r); };
     window.addEventListener('hashchange', onHash);
     return () => window.removeEventListener('hashchange', onHash);
   }, []);
   return route;
 }
-const go = (hash) => { location.hash = hash; };
+const go = (hash) => {
+  if (normHash(location.hash) === normHash(hash)) return;
+  NAV.pushing = true;
+  location.hash = hash;
+};
+// زر «رجوع» في الموقع: إن كانت الصفحة المطلوبة خطوة سابقة في السجل رجع إليها،
+// فيعمل زر الرجوع في الجهاز بعدها كما هو متوقع؛ وإلا فتحها
+const goBack = (to) => {
+  const target = normHash(to);
+  for (let i = NAV.cur - 1; i >= 0; i--) {
+    if (NAV.hashes[i] === target) { NAV.expect = target; history.go(i - NAV.cur); return; }
+  }
+  go(to);
+};
 
 function useClock() {
   const [now, setNow] = useState(serverNow());
@@ -876,7 +981,7 @@ function OnlineBadge({ count }) {
 }
 
 function BackButton({ to }) {
-  return html`<button className="back" onClick=${() => go(to)}>
+  return html`<button className="back" onClick=${() => goBack(to)}>
     <${Icon} name="back" />${t('back')}
   </button>`;
 }
@@ -1918,7 +2023,7 @@ function CoursePage({ player, users }) {
         const isSaved = offline.has('normal', id);
         const isPartial = !isSaved && offline.state('normal', id).st === 'partial';
         return html`<li key=${id}>
-          <button className=${'lesson' + (playing ? ' lesson-playing' : '') + (done ? ' lesson-done' : '')}
+          <button id=${'lesson-' + id} className=${'lesson' + (playing ? ' lesson-playing' : '') + (done ? ' lesson-done' : '')}
               onClick=${() => go('#/lecture/' + id)}>
             <span className="lesson-body">
               <span className="lesson-title">${LECTURE_BY_ID[id].title}</span>

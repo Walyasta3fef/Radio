@@ -306,6 +306,9 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid 
 .lesson:hover { background: var(--surface-2); }
 .lesson-playing { border-color: var(--course); }
 .lesson-done { border-color: var(--course-line); }
+/* الرجوع من لقاء إلى الكورس: تلوين خفيف للقاء ثم يختفي */
+.lesson-flash { animation: lesson-flash 1.2s ease-out; }
+@keyframes lesson-flash { 0%, 35% { background: rgba(168, 201, 155, .18); border-color: var(--course); } 100% { background: var(--surface); } }
 .lesson-side { flex-shrink: 0; display: flex; flex-direction: column; align-items: center; gap: 6px; }
 .done-badge {
   width: 26px; height: 26px; border-radius: 50%;
