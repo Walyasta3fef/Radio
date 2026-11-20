@@ -2448,7 +2448,7 @@ function LecturePage({ id, variant, player }) {
         <${PublishedLine} lid=${id} />
 
         <div className="speed-row">
-          ${silHas ? (silOpen
+          ${silHas && !silLocked ? (silOpen
             ? html`<button className=${'sil-toggle' + (silOn ? ' on' : '')} role="switch" aria-checked=${silOn}
                 onClick=${() => { if (silOn) player.setSkipSil(false); else setSilAsk(true); }}>
                 <span className="sil-knob" aria-hidden="true"></span>
@@ -2456,7 +2456,7 @@ function LecturePage({ id, variant, player }) {
                 <small>${t('skipSilencesSaves', { m: Math.round((lec.normal - silences.total(id)) / 60) })}</small>
               </button>`
             : html`<${Popover} label=${t('skipSilences')} wrapClass="seg-pop sil-pop" btnClass="sil-toggle sil-toggle-locked"
-                button=${html`<${React.Fragment}><${Icon} name="lock" size=${13} /><span className="sil-label">${t('skipSilences')}</span><//>`}>${silLocked ? t('skipSilencesLocked') : t('pleaseWait')}<//>`)
+                button=${html`<${React.Fragment}><${Icon} name="lock" size=${13} /><span className="sil-label">${t('skipSilences')}</span><//>`}>${t('pleaseWait')}<//>`)
           : null}
           <${OfflineControl} id=${id} variant=${variant} />
         </div>
