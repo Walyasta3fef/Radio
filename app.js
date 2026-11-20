@@ -862,6 +862,30 @@ const IDLE_DISCONNECT_MS = 5 * 60 * 1000;
 // أماكن الاستماع: من يقف في غيرها (الرئيسية، الحساب، المجتمع) لا يُعدّ مستمعًا
 const LISTEN_PLACES = ['normal', 'fast', 'course'];
 
+// السجل المتروك: سجل في /status لم يحذفه الخادم عند انقطاع صاحبه (تبويب جمّده الجهاز، أو انقطاع في لحظة التسجيل).
+// كل زائر متصل يجدّد «آخر ظهور» في /seen كل 10 دقائق، ولا يتابع /seen أحد فلا يُوزَّع التجديد على الزوار.
+// وكل زائر عند اتصاله يقرأ /seen مرة واحدة ويحذف السجلات التي لم تتجدد منذ أكثر من 25 دقيقة
+const SEEN_EVERY_MS = 10 * 60 * 1000;
+const SEEN_STALE_MS = 25 * 60 * 1000;
+
+async function sweepStalePresence(myKey) {
+  try {
+    const [st, sn] = await Promise.all([database.ref('/status').once('value'), database.ref('/seen').once('value')]);
+    const status = st.val() || {}, seen = sn.val() || {};
+    const limit = serverNow() - SEEN_STALE_MS;
+    const updates = {};
+    Object.entries(status).forEach(([k, v]) => {
+      if (k === myKey) return;
+      const last = Math.max(Number(seen[k]) || 0, Number(v && v.since) || 0);
+      if (last < limit) updates['/status/' + k] = null;
+    });
+    Object.entries(seen).forEach(([k, ts]) => {
+      if (k !== myKey && !(Number(ts) >= limit) && !status[k]) updates['/seen/' + k] = null;
+    });
+    if (Object.keys(updates).length) await database.ref().update(updates);
+  } catch (e) { /* التنظيف ليس ضروريًا لعمل الموقع */ }
+}
+
 function usePresence(at) {
   const [users, setUsers] = useState([]);
   const atRef = useRef(at);
@@ -871,13 +895,25 @@ function usePresence(at) {
     let code = null;
     let connected = false;
     let disposed = false;
+    let swept = false;
+    let written = null;   // آخر سجل كُتب فعلًا لهذا الاتصال
+    const key = 'd' + DEVICE_ID;
+    const seenRef = database.ref('/seen/' + key);
+    const touchSeen = () => seenRef.set(firebase.database.ServerValue.TIMESTAMP).catch(() => {});
 
     const register = () => {
       if (disposed || !connected || !code || myRefHolder.current) return;
-      const ref = database.ref('/status/d' + DEVICE_ID);
+      const ref = database.ref('/status/' + key);
       myRefHolder.current = ref;
+      // /seen منفصل حتى لا يتعطل التسجيل في /status إن رُفض (قبل نشر القواعد مثلًا)
+      seenRef.onDisconnect().remove().catch(() => {});
       ref.onDisconnect().remove()
-        .then(() => ref.set({ countryCode: code, at: atRef.current, since: firebase.database.ServerValue.TIMESTAMP }))
+        .then(() => {
+          ref.set({ countryCode: code, at: atRef.current, since: firebase.database.ServerValue.TIMESTAMP })
+            .then(() => { if (myRefHolder.current === ref) written = ref; }).catch(() => {});
+          touchSeen();
+          if (!swept) { swept = true; setTimeout(() => sweepStalePresence(key), 3000); }
+        })
         .catch(console.error);
     };
 
@@ -887,22 +923,30 @@ function usePresence(at) {
     const onConn = connRef.on('value', snap => {
       connected = snap.val() === true;
       // عند انقطاع الاتصال يحذف الخادم السجل القديم، وعند العودة يُسجَّل من جديد
-      if (!connected) { myRefHolder.current = null; return; }
+      if (!connected) { myRefHolder.current = null; written = null; return; }
       register();
     });
+
+    const beat = setInterval(() => { if (connected && myRefHolder.current) touchSeen(); }, SEEN_EVERY_MS);
 
     const statusRef = database.ref('/status');
     const onStatus = statusRef.on('value', snap => {
       const list = [];
       snap.forEach(child => { const v = child.val(); if (v) list.push(v); });
       setUsers(list);
+      // إن حُذف سجلي وأنا متصل (حذفه زائر آخر ظنًّا أنه متروك بعد أن جمّد الجهاز التبويب) يُكتب من جديد
+      if (connected && written && myRefHolder.current === written && !snap.hasChild(key)) {
+        myRefHolder.current = null; written = null;
+        register();
+      }
     });
 
     return () => {
       disposed = true;
+      clearInterval(beat);
       connRef.off('value', onConn);
       statusRef.off('value', onStatus);
-      if (myRefHolder.current) myRefHolder.current.remove().catch(() => {});
+      if (myRefHolder.current) { myRefHolder.current.remove().catch(() => {}); seenRef.remove().catch(() => {}); }
     };
   }, []);
 
@@ -939,7 +983,8 @@ const ICON_PATHS = {
   lock: html`<g><rect x="5" y="11" width="14" height="9" rx="2"></rect><path d="M8 11V8a4 4 0 0 1 8 0v3"></path></g>`,
   plus: html`<g><path d="M12 5v14"></path><path d="M5 12h14"></path></g>`,
   trash: html`<g><path d="M4 7h16"></path><path d="M9 7V4h6v3"></path><path d="M6 7l1 13h10l1-13"></path></g>`,
-  saved: html`<g><path d="M12 3v9"></path><path d="M8 9l4 4 4-4"></path><path d="M5 17l3 3 4-4"></path><path d="M14 20h5"></path></g>`,
+  // اللقاء محفوظ على الجهاز: دائرة ممتلئة بداخلها سهم إلى أسفل (علامة الصح للقاء المكتمل)
+  saved: html`<g><circle cx="12" cy="12" r="10" fill="currentColor" stroke="none"></circle><path d="M12 6.5v10M7.8 12.5l4.2 4.2 4.2-4.2" stroke="var(--course-ink)" strokeWidth="2.4"></path></g>`,
   // اكتمال اللقاء بحذف السكتات
   bolt: html`<path d="M13 2L4 14h7l-1 8 9-12h-7l1-8z"></path>`,
   // رابط يفتح صفحة أخرى، مرسوم باتجاه القراءة العربية
