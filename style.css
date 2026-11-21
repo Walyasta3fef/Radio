@@ -299,6 +299,13 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid 
 }
 
 .lessons { list-style: none; display: flex; flex-direction: column; gap: 8px; margin-top: 16px; }
+/* الأساسيات: إطار خفيف يجمع اللقاءات السبعة، ويخضرّ عند إكمالها */
+.core-group { border: 1px solid var(--line-2); border-radius: 18px; padding: 10px 8px 8px; }
+.core-group.core-complete { border-color: var(--course-line); background: var(--course-soft); }
+.core-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding: 0 6px 8px; }
+.core-head b { font-size: 14px; color: var(--muted); }
+.core-complete .core-head b { color: var(--course); }
+.lessons.core-list { margin-top: 0; }
 .lesson {
   width: 100%; display: flex; align-items: center; gap: 12px; text-align: right;
   background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 12px;
@@ -517,6 +524,13 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid 
   background: var(--course); color: var(--course-ink);
 }
 .mini-radio .mini-btn { background: var(--radio); color: var(--radio-ink); }
+/* المشغّل الموقوف: زر صغير لإخفائه */
+.mini-x {
+  width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--muted); font-size: 20px; line-height: 1; margin-inline-start: -6px;
+}
+.mini-x:hover { color: var(--text); }
 
 /* =====================
    مؤشر التحميل

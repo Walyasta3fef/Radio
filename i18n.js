@@ -51,6 +51,9 @@ const STRINGS = {
 
   next: 'التالي: {title}',
   listeners: '{n} مستمع',
+  onlineNow: '{n} متصل الآن',
+  miniClose: 'إخفاء المشغّل',
+  coreTitle: 'الأساسيات',
   subscribersStat: 'مشترك',
   listenHoursStat: 'ساعة استماع',
   listenMinutesStat: 'دقيقة استماع',

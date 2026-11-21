@@ -983,10 +983,8 @@ const ICON_PATHS = {
   lock: html`<g><rect x="5" y="11" width="14" height="9" rx="2"></rect><path d="M8 11V8a4 4 0 0 1 8 0v3"></path></g>`,
   plus: html`<g><path d="M12 5v14"></path><path d="M5 12h14"></path></g>`,
   trash: html`<g><path d="M4 7h16"></path><path d="M9 7V4h6v3"></path><path d="M6 7l1 13h10l1-13"></path></g>`,
-  // اللقاء محفوظ على الجهاز: دائرة ممتلئة بداخلها سهم إلى أسفل (علامة الصح للقاء المكتمل)
-  saved: html`<g><circle cx="12" cy="12" r="10" fill="currentColor" stroke="none"></circle><path d="M12 6.5v10M7.8 12.5l4.2 4.2 4.2-4.2" stroke="var(--course-ink)" strokeWidth="2.4"></path></g>`,
-  // اكتمال اللقاء بحذف السكتات
-  bolt: html`<path d="M13 2L4 14h7l-1 8 9-12h-7l1-8z"></path>`,
+  // اللقاء محفوظ على الجهاز: هاتف (السهم للتحميل، وعلامة الصح للقاء المكتمل)
+  saved: html`<g><rect x="6.5" y="2.5" width="11" height="19" rx="2.6"></rect><path d="M10.5 18.2h3"></path><path d="M9.6 6.4h4.8" strokeOpacity=".55"></path></g>`,
   // رابط يفتح صفحة أخرى، مرسوم باتجاه القراءة العربية
   external: html`<g><path d="M10 3H3v7"></path><path d="M3 3l9 9"></path><path d="M5 14v5a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-5"></path></g>`,
   note: html`<g><path d="M12 20h9"></path><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"></path></g>`,
@@ -1021,8 +1019,10 @@ function LiveDot() {
   return html`<span className="live-dot pulse-dot"></span>`;
 }
 
-function OnlineBadge({ count }) {
-  return html`<div className="chip" title=${t('listeners', { n: count })}><${LiveDot} />${count}</div>`;
+// عدد كل من يفتح الموقع الآن، والزائر نفسه منهم؛ لا يقل عن 1 لأن صاحب الصفحة متصل
+function OnlineBadge({ users }) {
+  const count = Math.max(1, users.length);
+  return html`<div className="chip" title=${t('onlineNow', { n: count })} aria-label=${t('onlineNow', { n: count })}><${LiveDot} />${count}</div>`;
 }
 
 function BackButton({ to }) {
@@ -1739,7 +1739,6 @@ function HomePage({ player, users }) {
     if (player.isPlaying && MODES.includes(player.mode) && player.mode !== mode) setModeState(player.mode);
   }, [player.isPlaying, player.mode]);
   const rv = radioView(player, mode, now);
-  const count = users.filter(u => u.at === mode).length;
 
   // «ابدأ من هنا»: رسالة للجميع؛ «حسنًا» تخفيها حتى الغد، و«لا تظهر مرة أخرى» نهائيًا
   const [introOff, setIntroOff] = useState(() =>
@@ -1788,7 +1787,7 @@ function HomePage({ player, users }) {
       <${TotalStats} />
       <div className="top-left">
         <${NameChip} />
-        <${OnlineBadge} count=${users.filter(u => LISTEN_PLACES.includes(u.at)).length} />
+        <${OnlineBadge} users=${users} />
       </div>
     </div>
 
@@ -1862,7 +1861,7 @@ function HomePage({ player, users }) {
           </div>
           <${StatusLine} active=${rv.active} status=${rv.status} onRetry=${player.retry} />
           <button className="row-link" onClick=${() => go('#/radio/' + mode)} aria-label=${t('radioDetails')}>
-            <span>${t('listeners', { n: count })}</span>
+            <span>${t('radioDetails')}</span>
             <span className="row-arrow" aria-hidden="true">‹</span>
           </button>
         </div>`}
@@ -1914,7 +1913,7 @@ function RadioPage({ mode, player, users }) {
       <${BackButton} to="#/" />
       <div className="top-left">
         <${NameChip} />
-        <${OnlineBadge} count=${modeUsers.length} />
+        <${OnlineBadge} users=${users} />
       </div>
     </div>
     <div className="flags-row"><${CountryFlags} users=${modeUsers} /></div>
@@ -2015,7 +2014,6 @@ function CoursePage({ player, users }) {
   const online = useOnline();
   const sum = progress.summary();
   const contId = progress.continueId();
-  const courseUsers = users.filter(u => u.at === 'course');
   const counts = useCommentCounts();
   const feed = useRecentFeed(100);
   const newBy = {};
@@ -2025,12 +2023,44 @@ function CoursePage({ player, users }) {
   const continueNow = () => { player.playLecture(contId); go('#/lecture/' + contId); };
   const removeAll = () => { if (window.confirm(t('dlRemoveAllConfirm'))) offline.removeAll(); };
 
+  // صف لقاء في القائمة. الأساسيات (COURSE_HEAD) داخل إطار واحد في أول الكورس
+  const coreDone = COURSE_HEAD.filter(id => progress.isDone(id)).length;
+  const lessonRow = (id) => {
+    const pct = progress.percent(id);
+    const done = progress.isDone(id);
+    const n = counts[id] || 0;
+    const playing = player.isPlaying && player.mode === 'lecture' && player.lectureId === id;
+    const isSaved = offline.has('normal', id);
+    const isPartial = !isSaved && offline.state('normal', id).st === 'partial';
+    return html`<li key=${id}>
+      <button id=${'lesson-' + id} className=${'lesson' + (playing ? ' lesson-playing' : '') + (done ? ' lesson-done' : '')}
+          onClick=${() => go('#/lecture/' + id)}>
+        <span className="lesson-body">
+          <span className="lesson-title">${LECTURE_BY_ID[id].title}</span>
+          <span className="lesson-meta">
+            ${fmtTime(LECTURE_BY_ID[id].normal)}
+            ${pct ? html`<span> · ${t('heardLabel')} <${Pct} value=${pct + '%'} /></span>` : ''}
+            ${playing ? html`<span> · ${t('playingHere')}</span>` : ''}
+          </span>
+          ${pct > 0 && !done && html`<${HeardBar} id=${id} />`}
+        </span>
+        ${(done || n > 0 || newBy[id] || notes.has(id) || isSaved || isPartial) && html`<span className="lesson-side">
+          ${done && html`<span className="done-badge" aria-label=${t('lectureDone')}><${Icon} name="check" size=${14} /></span>`}
+          ${isSaved && html`<span className="note-badge" aria-label=${t('dlDone')}><${Icon} name="saved" size=${14} /></span>`}
+          ${isPartial && html`<span className="note-badge dl-partial-badge" aria-label=${t('dlPartialBadge')}><${Icon} name="download" size=${14} /></span>`}
+          ${notes.has(id) && html`<span className="note-badge" aria-label=${t('lectureHasNotes')}><${Icon} name="note" size=${13} /></span>`}
+          ${n > 0 && html`<span className=${'c-badge' + (newBy[id] ? ' new' : '')} aria-label=${t('commentsCount', { n })}><${Icon} name="chat" size=${13} />${n}</span>`}
+        </span>`}
+      </button>
+    </li>`;
+  };
+
   return html`<div className="page course">
     <div className="topbar">
       <${BackButton} to="#/" />
       <div className="top-left">
         <${NameChip} />
-        <${OnlineBadge} count=${courseUsers.length} />
+        <${OnlineBadge} users=${users} />
       </div>
     </div>
 
@@ -2060,36 +2090,14 @@ function CoursePage({ player, users }) {
     <${RecentComments} player=${player} />
 
     <ol className="lessons">
-      ${COURSE_ORDER.map((id) => {
-        const pct = progress.percent(id);
-        const done = progress.isDone(id);
-        const n = counts[id] || 0;
-        const playing = player.isPlaying && player.mode === 'lecture' && player.lectureId === id;
-        const isSaved = offline.has('normal', id);
-        const isPartial = !isSaved && offline.state('normal', id).st === 'partial';
-        return html`<li key=${id}>
-          <button id=${'lesson-' + id} className=${'lesson' + (playing ? ' lesson-playing' : '') + (done ? ' lesson-done' : '')}
-              onClick=${() => go('#/lecture/' + id)}>
-            <span className="lesson-body">
-              <span className="lesson-title">${LECTURE_BY_ID[id].title}</span>
-              <span className="lesson-meta">
-                ${fmtTime(LECTURE_BY_ID[id].normal)}
-                ${pct ? html`<span> · ${t('heardLabel')} <${Pct} value=${pct + '%'} /></span>` : ''}
-                ${playing ? html`<span> · ${t('playingHere')}</span>` : ''}
-              </span>
-              ${pct > 0 && !done && html`<${HeardBar} id=${id} />`}
-            </span>
-            ${(done || n > 0 || newBy[id] || notes.has(id) || isSaved || isPartial) && html`<span className="lesson-side">
-              ${done && progress.doneSkipped(id) > 0 && html`<span className="skip-mark" title=${t('doneSkipped', { p: Math.round(progress.doneSkipped(id) * 100) })} aria-label=${t('doneSkipped', { p: Math.round(progress.doneSkipped(id) * 100) })}><${Icon} name="bolt" size=${11} /></span>`}
-              ${done && html`<span className="done-badge" aria-label=${t('lectureDone')}><${Icon} name="check" size=${14} /></span>`}
-              ${isSaved && html`<span className="note-badge" aria-label=${t('dlDone')}><${Icon} name="saved" size=${14} /></span>`}
-              ${isPartial && html`<span className="note-badge dl-partial-badge" aria-label=${t('dlPartialBadge')}><${Icon} name="download" size=${14} /></span>`}
-              ${notes.has(id) && html`<span className="note-badge" aria-label=${t('lectureHasNotes')}><${Icon} name="note" size=${13} /></span>`}
-              ${n > 0 && html`<span className=${'c-badge' + (newBy[id] ? ' new' : '')} aria-label=${t('commentsCount', { n })}><${Icon} name="chat" size=${13} />${n}</span>`}
-            </span>`}
-          </button>
-        </li>`;
-      })}
+      <li className=${'core-group' + (coreDone === COURSE_HEAD.length ? ' core-complete' : '')}>
+        <div className="core-head">
+          <b>${t('coreTitle')}</b>
+          <span className="hint">${t('doneOf', { done: coreDone, count: COURSE_HEAD.length })}</span>
+        </div>
+        <ol className="lessons core-list">${COURSE_HEAD.map(lessonRow)}</ol>
+      </li>
+      ${COURSE_ORDER.filter(id => !COURSE_HEAD.includes(id)).map(lessonRow)}
     </ol>
   </div>`;
 }
@@ -2523,8 +2531,7 @@ function LecturePage({ id, variant, player }) {
           ${resumeAt != null ? html`<button className="resume-chip" onClick=${() => { player.seekLecture(id, resumeAt, variant); if (!active) player.playLecture(id, variant); }}>
             ${t('resumeFrom')} <bdi dir="ltr">${fmtTime(resumeAt)}</bdi>
           </button>` : !fast && (done || heard > 0) && html`<span className=${'times-heard' + (done ? ' heard-done' : '')}>
-            ${done ? html`<${React.Fragment}><${Icon} name="check" size=${12} /> ${t('lectureDone')}${progress.doneSkipped(id) > 0 && html`<${Popover} label=${t('doneSkipped', { p: Math.round(progress.doneSkipped(id) * 100) })} wrapClass="skip-pop" btnClass="skip-mark"
-                button=${html`<${Icon} name="bolt" size=${11} />`}>${t('doneSkipped', { p: Math.round(progress.doneSkipped(id) * 100) })}<//>`}<//>`
+            ${done ? html`<${React.Fragment}><${Icon} name="check" size=${12} /> ${t('lectureDone')}<//>`
               : html`<${React.Fragment}>${t('heardLabel')} <${Pct} value=${heard + '%'} /><//>`}
           </span>`}
           <span>${fmtTime(duration)}</span>
@@ -3747,23 +3754,36 @@ function InAppHint() {
   </div>`;
 }
 
+// المشغّل الصغير: يبقى ظاهرًا عند الإيقاف المؤقت، فيتحول زره إلى تشغيل يكمل من الموضع نفسه.
+// وعند الإيقاف فقط يظهر × لإخفائه حتى التشغيل التالي
 function MiniPlayer({ player, route }) {
-  if (!player.isPlaying) return null;
+  const [closed, setClosed] = useState(false);
+  useEffect(() => { if (player.isPlaying) setClosed(false); }, [player.isPlaying]);
+  if (closed || !player.mode) return null;
   const isLecture = player.mode === 'lecture';
   const fastCourse = isLecture && player.variant === 'fast';
   if (isLecture && route.page === 'lecture' && route.id === player.lectureId && route.variant === player.variant) return null;
   if (!isLecture && route.page === 'radio' && route.mode === player.mode) return null;
   const id = isLecture ? player.lectureId : (player.live && player.live.track.id);
-  if (!id) return null;
+  if (!id || !LECTURE_BY_ID[id]) return null;
+  const paused = !player.isPlaying;
+  // الراديو الموقوف دون موضع محفوظ لا معنى لإبقائه
+  if (paused && !isLecture && !player.shifted) return null;
   const target = isLecture ? lectureHash(id, player.variant) : '#/radio/' + player.mode;
-  const busy = player.status === 'loading' || player.status === 'next';
-  return html`<div className=${'mini' + (isLecture ? '' : ' mini-radio') + (player.mode === 'fast' ? ' mode-fast' : '') + (fastCourse ? ' variant-fast' : '')}>
+  const busy = !paused && (player.status === 'loading' || player.status === 'next');
+  const toggle = () => {
+    if (!paused) return player.stop();
+    if (isLecture) player.playLecture(id, player.variant);
+    else player.toggleRadio(player.mode);
+  };
+  return html`<div className=${'mini' + (isLecture ? '' : ' mini-radio') + (player.mode === 'fast' ? ' mode-fast' : '') + (fastCourse ? ' variant-fast' : '') + (paused ? ' mini-paused' : '')}>
+    ${paused && html`<button className="mini-x" onClick=${() => setClosed(true)} aria-label=${t('miniClose')}>×</button>`}
     <button className="mini-info" onClick=${() => go(target)}>
       <b>${fastCourse ? t('courseFast') : t(MODE_LABEL[player.mode])}</b>
       <span>${LECTURE_BY_ID[id].title}</span>
     </button>
-    <button className="mini-btn" onClick=${player.stop} aria-label=${t('pause')}>
-      ${busy ? html`<span className="spinner small"></span>` : html`<${Icon} name="pause" size=${18} />`}
+    <button className="mini-btn" onClick=${toggle} aria-label=${t(paused ? 'play' : 'pause')}>
+      ${busy ? html`<span className="spinner small"></span>` : html`<${Icon} name=${paused ? 'play' : 'pause'} size=${18} />`}
     </button>
   </div>`;
 }
