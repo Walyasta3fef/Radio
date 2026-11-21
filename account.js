@@ -351,3 +351,61 @@ const account = (() => {
     create, login, logout, sync, isHidden, setHidden, subscribe, setTitle, ready,
   };
 })();
+
+// =====================
+// شارات المستمعين: /badges/{رقم} = { l: المرتبة، at: وقت آخر ترقية }
+// -1 بدأ، 0 أكمل الأساسيات، 1 إلى 5 أكمل الكورس كله بعدد المرات
+// يقرؤها الجميع ليظهر بجانب الأسماء في التعليقات. لا يكتبها إلا صاحب الرقم، خطوة واحدة في كل مرة،
+// والقواعد تشترط مرور وقت لا يقل عن مدة الاستماع بين كل خطوة وما بعدها، فلا يمكن القفز إلى مرتبة عالية
+// =====================
+const BADGE_WAIT_MS = { '-1': 16200000, 0: 57600000 };   // بعد البدء 4.5 ساعة، وبعد الأساسيات 16 ساعة
+const BADGE_WAIT_NEXT_MS = 72000000;                        // بين مرات الإكمال 20 ساعة
+const badges = (() => {
+  let map = {};
+  const listeners = new Set();
+  try { map = JSON.parse(localStorage.getItem('badgesCache') || '{}') || {}; } catch (e) {}
+  database.ref('/badges').on('value', snap => {
+    map = snap.val() || {};
+    try { localStorage.setItem('badgesCache', JSON.stringify(map)); } catch (e) {}
+    listeners.forEach(fn => fn());
+    publishSoon();
+  }, () => {});
+
+  const levelOf = (n) => {
+    const b = n != null && map[n];
+    return b && typeof b.l === 'number' && b.l >= 0 ? Math.min(5, b.l) : null;
+  };
+
+  // رفع المرتبة المحلية إلى /badges خطوة بخطوة، فقط حين يكون الانتظار المطلوب قد مضى
+  let busy = false;
+  let timer = null;
+  function publishSoon() { clearTimeout(timer); timer = setTimeout(publish, 4000); }
+  async function publish() {
+    const n = account.nick;
+    if (busy || !n) return;
+    const cur = map[n];
+    const want = progress.level();
+    if (cur && (typeof cur.l !== 'number' || cur.l >= want)) return;
+    if (cur) {
+      const wait = cur.l in BADGE_WAIT_MS ? BADGE_WAIT_MS[cur.l] : BADGE_WAIT_NEXT_MS;
+      if (serverNow() - (cur.at || 0) < wait + 60000) return;
+    }
+    busy = true;
+    try {
+      if (!(await account.ready())) return;
+      await withTimeout(account.db.ref('/badges/' + n).set({
+        l: cur ? cur.l + 1 : -1, at: firebase.database.ServerValue.TIMESTAMP,
+      }));
+    } catch (e) { /* يُعاد لاحقًا */ }
+    finally { busy = false; }
+  }
+  progress.subscribe(publishSoon);
+  account.subscribe(publishSoon);
+  setInterval(publish, 10 * 60 * 1000);
+
+  return {
+    levelOf,
+    all: () => map,
+    subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn); },
+  };
+})();

@@ -893,3 +893,23 @@ span.note-time { color: var(--note); font-weight: 700; }
 .slow-net > span { flex: 1; min-width: 160px; line-height: 1.7; }
 .slow-net { position: relative; padding-inline-end: 34px; }
 .slow-net-x { position: absolute; top: 4px; inset-inline-end: 6px; }
+
+/* شارة المرتبة بجانب الاسم */
+.lvl-wrap { display: inline-flex; vertical-align: middle; margin-inline-start: 4px; }
+.lvl-badge {
+  width: 18px; height: 18px; border-radius: 50%; padding: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700; line-height: 1; cursor: pointer;
+}
+.lvl-core { background: var(--course); color: var(--course-ink); }
+.lvl-gold { background: rgba(232, 190, 92, .12); color: #E8BE5C; box-shadow: inset 0 0 0 1.5px #E8BE5C; }
+.lvl-gold.lvl-max { background: linear-gradient(145deg, #F4D27A, #C9962E); color: #3A2A06; box-shadow: 0 0 0 1px rgba(244, 210, 122, .5); }
+.top-left .lvl-wrap { margin: 0; }
+.top-left .lvl-badge { width: 24px; height: 24px; font-size: 13px; }
+/* تهنئة المرتبة الجديدة */
+.modal.congrats { text-align: center; }
+.cg-badge {
+  width: 56px; height: 56px; border-radius: 50%; margin: 4px auto 10px;
+  display: flex; align-items: center; justify-content: center; font-size: 26px; font-weight: 700;
+}
+.cg-badge.lvl-gold { box-shadow: inset 0 0 0 3px #E8BE5C; }

@@ -966,6 +966,7 @@ const ICON_PATHS = {
   pause: html`<g fill="currentColor" stroke="none"><rect x="6" y="4" width="4" height="16" rx="1"></rect><rect x="14" y="4" width="4" height="16" rx="1"></rect></g>`,
   eye: html`<g><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"></path><circle cx="12" cy="12" r="3"></circle></g>`,
   eyeOff: html`<g><path d="M17.94 17.94A10.07 10.07 0 0 1 12 19c-7 0-11-7-11-7a18.45 18.45 0 0 1 5.06-5.94"></path><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 7 11 7a18.5 18.5 0 0 1-2.16 3.19"></path><path d="M1 1l22 22"></path></g>`,
+  leaf: html`<g><path d="M6 18C6 10 11 5.5 19 5c.2 8-4.6 13-12 13z"></path><path d="M6 18c2.6-3.6 5.4-6.2 9-8.4"></path></g>`,
   user: html`<g><circle cx="12" cy="8" r="4"></circle><path d="M4 21c0-4 4-6 8-6s8 2 8 6"></path></g>`,
   check: html`<path d="M5 12l5 5L20 7"></path>`,
   back: html`<path d="M9 6l6 6-6 6"></path>`,
@@ -1034,14 +1035,16 @@ function BackButton({ to }) {
 // الاسم الخاص: يظهر صغيرًا في أعلى كل الصفحات
 function NameChip() {
   useAccountVersion();
+  useProgressVersion();
+  const own = html`<${LevelBadge} level=${progress.level()} />`;
   if (!account.loggedIn) {
-    return html`<button className="chip name-chip-cta" onClick=${() => go('#/account')}>
+    return html`<${React.Fragment}>${own}<button className="chip name-chip-cta" onClick=${() => go('#/account')}>
       <${Icon} name="user" size=${14} />${t('saveProgressShort')}
-    </button>`;
+    </button><//>`;
   }
   const hidden = account.isHidden();
   const name = account.name;
-  return html`<div className="chip name-chip">
+  return html`<${React.Fragment}>${own}<div className="chip name-chip">
     <button className="name-chip-main" onClick=${() => go('#/account')} aria-label=${t('accountTitle')}>
       <span className=${'sync-dot sync-' + account.status}></span>
       <bdi dir="ltr" className="name-value">${hidden ? '•'.repeat(Math.min(8, name.length)) : name}</bdi>
@@ -1050,6 +1053,28 @@ function NameChip() {
       aria-label=${hidden ? t('showName') : t('hideName')} title=${hidden ? t('showName') : t('hideName')}>
       <${Icon} name=${hidden ? 'eye' : 'eyeOff'} size=${15} />
     </button>
+  </div><//>`;
+}
+
+// تهنئة تظهر مرة واحدة عند كل مرتبة جديدة (على كل الأجهزة، لأن آخر ما عُرض يُحفظ مع التقدّم)
+function CongratsModal() {
+  useProgressVersion();
+  const l = progress.level();
+  if (l < 0 || l <= progress.congratsSeen()) return null;
+  const text = l === 0 ? t('congratsCoreText')
+    : t(l >= 5 ? 'congratsMaxText' : 'congratsLevelText', { times: timesText(l), n: l });
+  return html`<div className="modal-back" role="presentation">
+    <div className="modal congrats" role="dialog" aria-modal="true" aria-labelledby="cg-title">
+      <div className=${'cg-badge ' + (l === 0 ? 'lvl-core' : l >= 5 ? 'lvl-gold lvl-max' : 'lvl-gold')}>
+        ${l === 0 ? html`<${Icon} name="leaf" size=${26} />` : html`<bdi>${l}</bdi>`}
+      </div>
+      <p className="intro-title" id="cg-title">${t(l === 0 ? 'congratsCoreTitle' : 'congratsLevelTitle')}</p>
+      <p>${text}</p>
+      ${!account.loggedIn && html`<p className="hint">${t('congratsNeedAccount')}</p>`}
+      <div className="modal-actions">
+        <button className="small-btn" onClick=${() => progress.setCongratsSeen(l)}>${t('introOk')}</button>
+      </div>
+    </div>
   </div>`;
 }
 
@@ -1265,6 +1290,23 @@ function useStaffVersion() {
   return v;
 }
 
+// =====================
+// شارة المرتبة بجانب الاسم: ورقة خضراء لمن أكمل الأساسيات، ودائرة ذهبية برقم مرات إكمال الكورس كله،
+// وتمتلئ ذهبًا عند الخامسة. الضغط عليها يبيّن معناها
+// =====================
+const timesText = (n) => t(n === 1 ? 'timesOne' : n === 2 ? 'timesTwo' : 'timesMany', { n });
+const badgeLabel = (l) => (l === 0 ? t('badgeCore') : t('badgeLevel', { times: timesText(l) }));
+function useBadgesVersion() {
+  const [, setV] = useState(0);
+  useEffect(() => badges.subscribe(() => setV(v => v + 1)), []);
+}
+function LevelBadge({ level }) {
+  if (level == null || level < 0) return null;
+  const cls = 'lvl-badge ' + (level === 0 ? 'lvl-core' : level >= 5 ? 'lvl-gold lvl-max' : 'lvl-gold');
+  const face = level === 0 ? html`<${Icon} name="leaf" size=${11} />` : html`<bdi>${level}</bdi>`;
+  return html`<${Popover} label=${badgeLabel(level)} wrapClass="lvl-wrap" btnClass=${cls} button=${face}>${badgeLabel(level)}<//>`;
+}
+
 // اسم صاحب التعليق: الاسم المميز بعلامة، أو «أخ ...»
 // الاسم الظاهر: اسم المشرف، أو اللقب (افتراضيًا «أخ») ثم الرقم
 // الاسم من جدول الأسماء حسب الرقم، ثم الاسم القديم المكتوب في التعليق إن وُجد
@@ -1273,6 +1315,7 @@ function CommentAuthor({ c, toMe }) {
   const special = c.a && staff.nameOf(c.a);
   return html`<b className=${special ? 'staff-name' : ''}>
     ${special ? html`<span className="staff-check" aria-hidden="true"><${Icon} name="check" size=${11} /></span>` : ''}${authorName(c.n, c.a, c.pf)}
+    ${!special && c.n != null && html`<${LevelBadge} level=${badges.levelOf(c.n)} />`}
     ${toMe ? html`<span className="to-me">${t('repliedToYou')}</span>` : ''}
   </b>`;
 }
@@ -3139,6 +3182,19 @@ function StaffOnline({ users }) {
   </div>`;
 }
 
+// عدد المستمعين في كل مرتبة، من /badges المقروءة للجميع
+function StaffBadges() {
+  const by = { core: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+  Object.keys(badges.all()).forEach(n => {
+    const l = badges.levelOf(n);
+    if (l === 0) by.core++; else if (l >= 1) by[l]++;
+  });
+  return html`<div className="rep-grid">
+    <div><b>${by.core}</b><small>${t('badgeCore')}</small></div>
+    ${[1, 2, 3, 4, 5].map(l => html`<div key=${l}><b>${by[l]}</b><small>${t('staffBadgeLevel', { n: l })}</small></div>`)}
+  </div>`;
+}
+
 // تقرير الاستماع من بيانات الحسابات (للمالك). يُحمَّل بزر، لا تلقائيًا، حتى لا يستهلك التنزيل
 const STAFF_PERIODS = [{ key: '7', days: 7 }, { key: '30', days: 30 }, { key: 'all', days: 0 }];
 function StaffReport() {
@@ -3300,6 +3356,7 @@ function StaffPage({ users }) {
         <${StaffSection} title=${t('reportedPostsTitle')} badge=${reportedCount}><${ReportedPosts} /><//>
         <${StaffSection} title=${t('staffOnlineTitle')} badge=${users.length}><${StaffOnline} users=${users} /><//>
         <${StaffSection} title=${t('staffReportTitle')}><${StaffReport} /><//>
+        <${StaffSection} title=${t('staffBadgesTitle')}><${StaffBadges} /><//>
         <${StaffSection} title=${t('lecAdminTitle')}><${LectureAdmin} /><//>
         <${StaffSection} title=${t('pubAdminTitle')} badge=${Object.keys(published.all()).length}><${PublishedAdmin} /><//>
         <${StaffSection} title=${t('silAdminTitle')} badge=${silences.list().length}><${SilencesAdmin} /><//>
@@ -3827,6 +3884,7 @@ function useTitlesVersion() {
 function App() {
   const route = useRoute();
   useTitlesVersion();
+  useBadgesVersion();
   // مستوى الصوت يُضبط من أزرار الجهاز
   const player = usePlayer(1);
   mentionPlayer = player;
@@ -3889,6 +3947,7 @@ function App() {
     <${InAppHint} />
     <${PageBoundary} key=${location.hash}>${page}<//>
     <${MiniPlayer} player=${player} route=${route} />
+    <${CongratsModal} />
   </div>`;
 }
 

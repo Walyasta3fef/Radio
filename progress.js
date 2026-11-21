@@ -24,7 +24,10 @@ const progress = (() => {
   // الحالة:
   // lectures: لكل لقاء { h: الشرائح المسموعة مشفّرة، c: عددها، p: موضع التوقف، t: وقت آخر تحديث للموضع، d: اكتمل،
   //   fp: موضع التوقف في النسخة السريعة من الكورس، ft: وقت آخر تحديث له،
-  //   z: الشرائح المسموعة لأول مرة و«حذف السكتات» يعمل، ولم تُسمع بعدها بالسرعة العادية (مشفّرة) }
+  //   z: الشرائح المسموعة لأول مرة و«حذف السكتات» يعمل، ولم تُسمع بعدها بالسرعة العادية (مشفّرة)،
+  //   k: عدد مرات إكمال اللقاء، rb و rc: الشرائح المسموعة في المرة الحالية بعد الإكمال الأول وعددها }
+  // lvl: أعلى عدد مرات أُكمل فيه الكورس كله (من 1 إلى 5) ولا ينقص بإضافة لقاء جديد،
+  // core: أكمل الأساسيات (COURSE_HEAD)، cg: آخر مرتبة عُرضت تهنئتها
   // sec: وقت الاستماع القديم قبل التقرير اليومي (لكل جهاز)، days: أيام الاستماع، last: آخر لقاء
   // daily: وقت الاستماع الفعلي لكل جهاز ولكل يوم، مع التكرار:
   //   { جهاز: { يوم: { c: الكورس، n: الراديو العادي، f: الراديو السريع، l: { لقاء: ثوانٍ } } } }
@@ -76,6 +79,11 @@ const progress = (() => {
     return bitsCache[id];
   }
   const zCache = {};
+  const rbCache = {};
+  function rbits(id) {
+    if (!rbCache[id]) rbCache[id] = decode(id, state.lectures[id] && state.lectures[id].rb);
+    return rbCache[id];
+  }
   function zbits(id) {
     if (!zCache[id]) zCache[id] = decode(id, state.lectures[id] && state.lectures[id].z);
     return zCache[id];
@@ -124,8 +132,12 @@ const progress = (() => {
     const b = Math.min(total - 1, Math.floor(to / SLOT_SECONDS));
     let changed = false;
     const z = (how || e.z) ? zbits(id) : null;
+    // بعد الإكمال الأول: كل استماع يُحسب في المرة التالية، فإذا بلغ 95% زاد عدد مرات الإكمال
+    const rb = e.d ? rbits(id) : null;
+    let rbChanged = false;
     for (let i = a; i <= b; i++) {
       const byte = i >> 3, mask = 1 << (i & 7);
+      if (rb && !(rb[byte] & mask)) { rb[byte] |= mask; e.rc = (e.rc || 0) + 1; rbChanged = true; }
       if (!(arr[byte] & mask)) {
         arr[byte] |= mask; e.c++; changed = true;
         if (how) z[byte] |= mask;
@@ -134,8 +146,13 @@ const progress = (() => {
     if (z) e.z = encodeZ(z);
     if (changed) {
       e.h = encode(arr);
-      if (!e.d && e.c / total >= DONE_RATIO) { e.d = 1; e.da = dayKey(); }
+      if (!e.d && e.c / total >= DONE_RATIO) { e.d = 1; e.da = dayKey(); e.k = 1; }
     }
+    if (rbChanged) {
+      if (e.rc / total >= DONE_RATIO) { e.k = Math.min(99, (e.k || 1) + 1); rb.fill(0); e.rc = 0; e.rb = ''; }
+      else e.rb = encode(rb);
+    }
+    if (changed || rbChanged) updateLevels();
     const day = dayKey();
     if (!state.days.includes(day)) state.days.push(day);
     touch();
@@ -270,6 +287,20 @@ const progress = (() => {
   }
 
   const isDone = (id) => !!(state.lectures[id] && state.lectures[id].d);
+  // عدد مرات إكمال اللقاء
+  const rounds = (id) => (isDone(id) ? Math.max(1, state.lectures[id].k || 1) : 0);
+
+  // مرتبة المستمع: -1 لا شيء، 0 أكمل الأساسيات، 1 إلى 5 عدد مرات إكمال الكورس كله.
+  // المرتبة المكتسبة لا تنقص؛ واللقاء الجديد يدخل في حساب المرتبة التالية فقط
+  const MAX_LEVEL = 5;
+  function updateLevels() {
+    const all = Math.min(MAX_LEVEL, Math.min(...COURSE_ORDER.map(rounds)));
+    if (all > (state.lvl || 0)) { state.lvl = all; touch(); }
+    if (!state.core && COURSE_HEAD.every(isDone)) { state.core = 1; touch(); }
+  }
+  const level = () => (state.lvl >= 1 ? state.lvl : state.core ? 0 : -1);
+  const congratsSeen = () => (typeof state.cg === 'number' ? state.cg : -1);
+  function setCongratsSeen(l) { if (l > congratsSeen()) { state.cg = l; touch(); save(); notifyNow(); } }
   // نسبة اللقاء المكتمل التي سُمعت بحذف السكتات فقط، إن بلغت ربعه فأكثر (وإلا 0)
   const SKIPPED_MARK = 0.25;
   function doneSkipped(id) {
@@ -337,12 +368,21 @@ const progress = (() => {
         for (let i = 0; i < zm.length; i++) zm[i] = (zm[i] | ~mine[i]) & (zt[i] | ~theirs[i]) & (mine[i] | theirs[i]) & 255;
         e.z = encodeZ(zm);
       }
+      // المرة الحالية بعد الإكمال: من الجهة الأكثر إكمالًا، وعند التساوي تُجمع الجهتان
+      const rk = r.d ? Math.max(1, r.k || 1) : 0, ek = e.d ? Math.max(1, e.k || 1) : 0;
+      if (rk > ek) { e.k = rk; e.rb = r.rb || ''; e.rc = r.rc || 0; delete rbCache[id]; }
+      else if (rk === ek && rk > 0 && r.rb) {
+        const rm = rbits(id), rt = decode(id, r.rb);
+        for (let i = 0; i < rm.length; i++) rm[i] |= rt[i];
+        e.rc = popcount(rm); e.rb = encode(rm);
+      }
       for (let i = 0; i < mine.length; i++) mine[i] |= theirs[i];
       e.h = encode(mine);
       e.c = popcount(mine);
       e.d = e.d || r.d || (e.c / slotsOf(id) >= DONE_RATIO) ? 1 : 0;
       if (r.da && (!e.da || r.da < e.da)) e.da = r.da;
       if (e.d && !e.da) e.da = dayKey();
+      if (e.d && !e.k) e.k = 1;
       if ((r.t || 0) > (e.t || 0)) { e.p = r.p || 0; e.t = r.t; }
       if ((r.ft || 0) > (e.ft || 0)) { e.fp = r.fp || 0; e.ft = r.ft; }
     });
@@ -363,8 +403,10 @@ const progress = (() => {
     });
     (remote.days || []).forEach(d => { if (!state.days.includes(d)) state.days.push(d); });
     state.legacyDays = Math.max(state.legacyDays || 0, remote.legacyDays || 0);
+    ['lvl', 'core', 'cg'].forEach(k => { if (typeof remote[k] === 'number' && remote[k] > (state[k] == null ? -1 : state[k])) state[k] = remote[k]; });
     if ((remote.lastAt || 0) > (state.lastAt || 0)) { state.last = remote.last; state.lastAt = remote.lastAt; }
     cleanZ();
+    updateLevels();
     touch();
     save();
     notifyNow();
@@ -382,6 +424,7 @@ const progress = (() => {
     state = empty();
     bitsCache = {};
     Object.keys(zCache).forEach(k => delete zCache[k]);
+    Object.keys(rbCache).forEach(k => delete rbCache[k]);
     storage.set(PROGRESS_KEY, '');
     dirty = false;
     rev++;
@@ -406,12 +449,15 @@ const progress = (() => {
     });
   })();
 
+  updateLevels();
+  if (dirty) save();
+
   setInterval(save, 5000);
   window.addEventListener('pagehide', save);
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') save(); });
 
   return {
-    record, addTime, doneSkipped, stats, nextUnheard, seenAt, markSeen, legacySeconds, setPosition, position, setFastPosition, fastPosition, percent, segments, isDone, summary, continueId, hasAny,
+    record, addTime, doneSkipped, rounds, level, congratsSeen, setCongratsSeen, stats, nextUnheard, seenAt, markSeen, legacySeconds, setPosition, position, setFastPosition, fastPosition, percent, segments, isDone, summary, continueId, hasAny,
     merge, exportState, reset, subscribe, save,
     get rev() { return rev; },
   };
