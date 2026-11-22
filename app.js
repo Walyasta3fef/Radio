@@ -970,6 +970,7 @@ const ICON_PATHS = {
   pause: html`<g fill="currentColor" stroke="none"><rect x="6" y="4" width="4" height="16" rx="1"></rect><rect x="14" y="4" width="4" height="16" rx="1"></rect></g>`,
   eye: html`<g><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"></path><circle cx="12" cy="12" r="3"></circle></g>`,
   eyeOff: html`<g><path d="M17.94 17.94A10.07 10.07 0 0 1 12 19c-7 0-11-7-11-7a18.45 18.45 0 0 1 5.06-5.94"></path><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 7 11 7a18.5 18.5 0 0 1-2.16 3.19"></path><path d="M1 1l22 22"></path></g>`,
+  key: html`<g><circle cx="7.5" cy="15.5" r="4.5"></circle><path d="M10.7 12.3L20 3"></path><path d="M16 7l3 3"></path><path d="M14 9l2 2"></path></g>`,
   leaf: html`<g><path d="M6 18C6 10 11 5.5 19 5c.2 8-4.6 13-12 13z"></path><path d="M6 18c2.6-3.6 5.4-6.2 9-8.4"></path></g>`,
   user: html`<g><circle cx="12" cy="8" r="4"></circle><path d="M4 21c0-4 4-6 8-6s8 2 8 6"></path></g>`,
   check: html`<path d="M5 12l5 5L20 7"></path>`,
@@ -1087,6 +1088,7 @@ function CodeReminder({ route }) {
   const [shown, setShown] = useState(false);
   const [typed, setTyped] = useState('');
   const [wrong, setWrong] = useState(false);
+  const [shot, setShot] = useState(false);
   const code = account.loggedIn ? account.name : null;
   // يُعاد الفحص كل دقيقة، فتظهر النافذة لمن يبقي الموقع مفتوحًا أيامًا
   useEffect(() => { const id = setInterval(() => setTick(x => x + 1), 60000); return () => clearInterval(id); }, []);
@@ -1119,8 +1121,10 @@ function CodeReminder({ route }) {
       ${wrong && html`<p className="form-error">${t('codeRemindWrong')}</p>`}
       <div className="modal-actions">
         <button className="small-btn" disabled=${!typed.trim()} onClick=${done}>${t('codeRemindDone')}</button>
+        <button className="link-btn" onClick=${() => setShot(true)}>${t('codeShotOpen')}</button>
       </div>
       <p className="hint">${t('codeRemindWarn')}</p>
+      ${shot && html`<${CodeShot} code=${code} onClose=${() => setShot(false)} />`}
     </div>
   </div>`;
 }
@@ -3710,7 +3714,8 @@ function AccountPage({ returnTo }) {
   useAccountVersion();
   useProgressVersion();
   const [tab, setTab] = useState('login');
-  const [codeExample] = useState(randomCodeExample);   // مثال مختلف في كل زيارة للصفحة
+  const [codeExample] = useState(randomCodeExample);
+  const [shotOpen, setShotOpen] = useState(false);   // مثال مختلف في كل زيارة للصفحة
   const [value, setValue] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
@@ -3781,6 +3786,8 @@ function AccountPage({ returnTo }) {
             aria-label=${hidden ? t('showName') : t('hideName')}><${Icon} name=${hidden ? 'eye' : 'eyeOff'} /></button>
         </div>
         ${warn}
+        <button className="link-btn" onClick=${() => setShotOpen(true)}>${t('codeShotOpen')}</button>
+        ${shotOpen && html`<${CodeShot} code=${account.name} onClose=${() => setShotOpen(false)} />`}
         <p className="acc-line">${t('accountHint')}</p>
         <p className="acc-line">
           <span className=${'sync-dot sync-' + account.status}></span>
@@ -3862,7 +3869,27 @@ function TitleEditor({ value, setValue, msg, onSave }) {
 }
 
 // شاشة «احفظ رمزك» بعد إنشاء رمز جديد: نسخ، وحفظه كصورة، وتأكيد قبل المتابعة
+// =====================
+// شاشة صفراء كاملة للقطة شاشة: لون لا يتكرر في معرض الصور فيسهل إيجادها بين آلاف الصور،
+// وأيقونة مفتاح تُعرف من الصورة المصغّرة. بلا اسم الموقع ولا شعاره ولا أي كلمة عن الكورس،
+// فمن يراها في المعرض لا يعرف أنها لهذا الموقع
+// =====================
+function CodeShot({ code, onClose }) {
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prev; };
+  }, []);
+  return html`<div className="code-shot" role="dialog" aria-modal="true" aria-label=${t('codeShotTitle')}>
+    <span className="code-shot-key"><${Icon} name="key" size=${64} /></span>
+    <p className="code-shot-title">${t('codeShotTitle')}</p>
+    <bdi className="code-shot-code" dir="ltr">${code}</bdi>
+    <button className="code-shot-done" onClick=${onClose}>${t('codeShotDone')}</button>
+  </div>`;
+}
+
 function SaveCodeScreen({ code, onDone }) {
+  const [shot, setShot] = useState(true);   // تظهر مرة تلقائيًا بعد إنشاء الحساب
   const [copied, setCopied] = useState(false);
   const [checked, setChecked] = useState(false);
   const copy = async () => {
@@ -3877,19 +3904,21 @@ function SaveCodeScreen({ code, onDone }) {
     const c = document.createElement('canvas');
     c.width = 1080; c.height = 640;
     const x = c.getContext('2d');
-    x.fillStyle = '#0F1A17'; x.fillRect(0, 0, c.width, c.height);
+    // نفس شكل شاشة اللقطة: أصفر وأسود، بلا اسم الموقع
+    x.fillStyle = '#FFD60A'; x.fillRect(0, 0, c.width, c.height);
     x.direction = 'rtl'; x.textAlign = 'center';
-    x.fillStyle = '#A8C99B'; x.font = 'bold 52px Tajawal, sans-serif';
+    x.fillStyle = '#111111'; x.font = 'bold 52px Tajawal, sans-serif';
     x.fillText(t('codeImageTitle'), c.width / 2, 170);
-    x.direction = 'ltr'; x.fillStyle = '#EEF2EC'; x.font = 'bold 96px monospace';
+    x.direction = 'ltr'; x.font = 'bold 96px monospace';
     x.fillText(code, c.width / 2, 340);
-    x.direction = 'rtl'; x.fillStyle = '#A3B2A9'; x.font = '38px Tajawal, sans-serif';
+    x.direction = 'rtl'; x.fillStyle = '#3A3000'; x.font = '38px Tajawal, sans-serif';
     x.fillText(t('codeImageNote'), c.width / 2, 470);
     const a = document.createElement('a');
     a.href = c.toDataURL('image/png'); a.download = 'code.png';
     document.body.appendChild(a); a.click(); a.remove();
   };
   return html`<div className="panel center save-code">
+    ${shot && html`<${CodeShot} code=${code} onClose=${() => setShot(false)} />`}
     <span className="success-icon"><${Icon} name="check" size=${28} /></span>
     <h1 className="acc-title">${t('saveCodeTitle')}</h1>
     <p className="acc-line">${t('saveCodeHint')}</p>
@@ -3897,6 +3926,7 @@ function SaveCodeScreen({ code, onDone }) {
     <div className="nav">
       <button className="small-btn" onClick=${copy}>${copied ? t('copied') : t('copyCode')}</button>
       <button className="small-btn" onClick=${saveImage}>${t('saveCodeImage')}</button>
+      <button className="small-btn" onClick=${() => setShot(true)}>${t('codeShotOpen')}</button>
     </div>
     <label className="code-check">
       <input type="checkbox" checked=${checked} onChange=${e => setChecked(e.target.checked)} />
