@@ -1084,7 +1084,7 @@ span.note-time { color: var(--note); font-weight: 700; }
   position: absolute; bottom: -4px; inset-inline-end: -4px; width: 17px; height: 17px; border-radius: 50%;
   background: var(--bg); color: var(--lv); display: flex; align-items: center; justify-content: center; box-shadow: 0 0 0 1.5px var(--lv);
 }
-.path-step.later .path-badge { opacity: .35; filter: saturate(.6); }
+.pb-lock { color: var(--muted); box-shadow: 0 0 0 1.5px var(--line-2); }
 .path-step.next { background: var(--surface); border-color: var(--lv); }
 .path-step.next .pb-wrap::before {
   content: ''; position: absolute; inset: -2px; border-radius: 50%; box-shadow: 0 0 0 0 var(--lv); opacity: .55;
@@ -1098,11 +1098,10 @@ span.note-time { color: var(--note); font-weight: 700; }
 .path-step.later .path-text b { color: var(--muted); }
 .path-got { color: var(--lv) !important; }
 .path-close { color: var(--lv) !important; font-weight: 800; font-size: 13.5px !important; }
-.path-lock { display: inline-flex; align-items: center; gap: 5px; }
 .path-bar { display: block; height: 6px; border-radius: 6px; background: rgba(255, 255, 255, .08); overflow: hidden; margin-top: 4px; }
 .path-bar span { display: block; height: 100%; background: var(--lv, var(--course)); border-radius: 6px; transition: width .6s ease; }
 /* كارت «طريقك» في الحساب */
-.path-card { display: flex; align-items: center; gap: 14px; width: 100%; text-align: start; margin: 6px 0 14px; padding: 14px; border-color: var(--lv); color: inherit; font: inherit; cursor: pointer; }
+.path-card { display: flex; align-items: center; gap: 14px; width: 100%; text-align: start; margin: 0 0 14px; padding: 14px; border-color: var(--lv); color: inherit; font: inherit; cursor: pointer; }
 .pc-badge { width: 40px; height: 40px; font-size: 17px; flex-shrink: 0; box-shadow: 0 0 0 2px var(--surface), 0 0 0 3.5px var(--ring); }
 .pc-text { flex: 1; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .pc-text b { font-size: 15px; }

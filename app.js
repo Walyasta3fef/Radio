@@ -2035,6 +2035,7 @@ function PathPage() {
           <span className="pb-wrap">
             <span className=${lvlCls(s.l) + ' path-badge'}>${lvlFace(s.l, 16)}</span>
             ${state === 'got' && html`<span className="pb-check"><${Icon} name="check" size=${10} /></span>`}
+            ${state === 'later' && html`<span className="pb-check pb-lock"><${Icon} name="lock" size=${9} /></span>`}
           </span>
           <div className="path-text">
             <b>${stepTitle(s.l)}</b>
@@ -2044,7 +2045,7 @@ function PathPage() {
               ${close && html`<small className="path-close">${t('pathOnly', { left: lecturesLeft(s.count - s.done) })}</small>`}
               <span className="path-bar" aria-hidden="true"><span style=${{ width: (s.done / s.count * 100) + '%' }}></span></span>
             <//>`}
-            ${state === 'later' && html`<small className="path-lock"><${Icon} name="lock" size=${12} />${s.l === 0 ? t('pathCoreDesc') : s.l >= 5 ? t('pathMaxDesc') : t('pathLevelDesc', { times: timesText(s.l) })}</small>`}
+            ${state === 'later' && html`<small>${s.l === 0 ? t('pathCoreDesc') : s.l >= 5 ? t('pathMaxDesc') : t('pathLevelDesc', { times: timesText(s.l) })}</small>`}
           </div>
         </li>`;
       })}
@@ -3952,9 +3953,9 @@ function AccountPage({ returnTo }) {
     const sum = progress.summary();
     return html`<div className="page account">
       <div className="topbar"></div>
+      <${PathCard} />
       <div className="panel">
         <h1 className="acc-title">${t('accountTitle')}</h1>
-        <${PathCard} />
         <div className="acc-name">
           <bdi dir="ltr">${hidden ? '•'.repeat(Math.min(10, account.name.length)) : account.name}</bdi>
           <button className="eye" onClick=${() => account.setHidden(!hidden)}
