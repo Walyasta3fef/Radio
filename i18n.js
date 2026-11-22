@@ -71,6 +71,8 @@ const STRINGS = {
   dateAt: '{d}، {t}',
   miniClose: 'إخفاء المشغّل',
   coreTitle: 'الأساسيات',
+  continueTitle: 'تابع من حيث توقفت',
+  minutesLeft: 'بقي {n} دقيقة',
   navLabel: 'التنقّل',
   navHome: 'الرئيسية',
   navCourse: 'الكورس',

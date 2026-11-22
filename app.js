@@ -1861,6 +1861,34 @@ function LiveBadge({ behind, onGoLive }) {
 // =====================
 // الصفحة الرئيسية
 // =====================
+// «تابع من حيث توقفت»: آخر لقاء لم يكتمل، والوقت الباقي منه، وزر يكمل من الثانية نفسها.
+// الضغط على الكارت يفتح صفحة اللقاء، وقبل أي استماع يصير «ابدأ الكورس»
+function ContinueCard({ player }) {
+  useProgressVersion();
+  const id = progress.continueId();
+  if (!id) return null;
+  const l = LECTURE_BY_ID[id];
+  const started = progress.hasAny();
+  const dur = l.normal || 0;
+  const pos = Math.min(dur, progress.position(id) || 0);
+  const pct = dur ? Math.round(pos / dur * 100) : 0;
+  const left = Math.max(1, Math.round((dur - pos) / 60));
+  const mine = player.mode === 'lecture' && player.lectureId === id;
+  const active = mine && player.isPlaying;
+  return html`<section className="section">
+    <div className=${'card tint-course continue-card' + (active ? ' card-active' : '')}>
+      <button className="cc-info" onClick=${() => go(lectureHash(id, 'normal'))}>
+        <small>${t(started ? 'continueTitle' : 'startCourse')}</small>
+        <span className="cc-title">${l.title}</span>
+        ${started && pos > 0 && html`<span className="cc-left">${t('minutesLeft', { n: left })}</span>`}
+        ${started && pos > 0 && html`<span className="cc-bar" aria-hidden="true"><span style=${{ width: pct + '%' }}></span></span>`}
+      </button>
+      <${PlayButton} size=${48} active=${active || (mine && player.status === 'loading')} status=${mine ? player.status : null}
+        onClick=${() => (active ? player.stop() : player.playLecture(id))} />
+    </div>
+  </section>`;
+}
+
 function HomePage({ player, users }) {
   const now = useClock();   // الساعة هنا فقط، لا في الموقع كله
   useProgressVersion();
@@ -1893,20 +1921,6 @@ function HomePage({ player, users }) {
   const showNudge = !showIntro && !nudgeOff && !account.loggedIn && progress.stats('0000', '9999').total >= NUDGE_AFTER_SEC;
   const closeNudge = () => { storage.set(NUDGE_KEY, String(Date.now())); setNudgeOff(true); };
 
-  // كارت واحد مفتوح في المرة، ويبدأ مطويًا دائمًا عند دخول الصفحة الرئيسية
-  const [open, setOpenState] = useState('');
-  // عند طي كارت الراديو يعود الاختيار إلى السرعة المشغّلة، فيبقى العنوان والزر صحيحين
-  const setOpen = (v) => {
-    setOpenState(v);
-    if (v !== 'radio' && otherPlaying) setModeState(radioPlaying);
-  };
-  const toggle = (k) => setOpen(open === k ? '' : k);
-
-  // تشغيل الراديو من الكارت المطوي يفتحه في الضغطة نفسها
-  const radioToggle = () => {
-    if (!rv.active) setOpen('radio');
-    player.toggleRadio(mode);
-  };
 
 
 
@@ -1947,40 +1961,28 @@ function HomePage({ player, users }) {
       </div>
     </div>`}
 
+    <${ContinueCard} player=${player} />
+
     <section className="section">
-      <div className=${'card tint-radio' + (mode === 'fast' ? ' mode-fast' : '') + (rv.active ? ' card-active' : '')}>
-        <div className="card-row">
-          <button className="card-toggle" onClick=${() => toggle('radio')} aria-expanded=${open === 'radio'}>
-            <span className="title-icon"><${Icon} name="radio" size=${18} /></span>
-            <span className="card-title">${t('radioSection')}</span>
-            <span className=${'live-mini' + (rv.behind ? ' behind' : '')}><${LiveDot} />${t(MODE_SHORT[mode])}</span>
-            <span className=${'chev' + (open === 'radio' ? ' chev-open' : '')} aria-hidden="true">⌄</span>
-          </button>
-          <${PlayButton} size=${46} active=${rv.active} status=${rv.status} onClick=${radioToggle} />
+      <div className=${'card tint-radio radio-hero' + (mode === 'fast' ? ' mode-fast' : '') + (rv.active ? ' card-active' : '')}>
+        <div className="rh-head">
+          <span className="rh-title"><span className="title-icon"><${Icon} name="radio" size=${18} /></span>${t('radioSection')}</span>
+          <${LiveBadge} behind=${rv.behind} onGoLive=${player.goLive} />
         </div>
-        ${open === 'radio' && html`<div className="card-body">
-          <div className="card-line">
-            <${LiveBadge} behind=${rv.behind} onGoLive=${player.goLive} />
-            <${InfoTip} label=${t('infoLabel')} text=${t(MODE_INFO[mode])} />
-          </div>
-          <div className="seg" role="tablist" aria-label=${t('radioSpeed')}>
+        <button className="rh-now" onClick=${() => go('#/radio/' + mode)} aria-label=${t('radioDetails')}>
+          <small>${t('nowPlayingLabel')}</small>
+          <span className="now-title">${rv.s.track.title}</span>
+        </button>
+        <div className="rh-controls">
+          <${PlayButton} size=${56} active=${rv.active} status=${rv.status} onClick=${() => player.toggleRadio(mode)} />
+          <div className="seg rh-seg" role="tablist" aria-label=${t('radioSpeed')}>
             ${MODES.map(m => html`<button key=${m} role="tab" aria-selected=${mode === m}
                 className=${mode === m ? 'on' : ''} onClick=${() => pickMode(m)}>${t(MODE_SHORT[m])}</button>`)}
           </div>
-          ${otherPlaying
-            ? html`<small className="seg-hint seg-hint-playing">${t('otherModePlaying', { name: t(radioPlaying === 'fast' ? 'fastRadio' : 'normalRadio') })}</small>`
-            : html`<small className="seg-hint seg-hint-mode">${t(mode === 'normal' ? 'normalCountsHint' : 'fastReviewHint')}</small>`}
-          <div className="now">
-            <small>${t('nowPlayingLabel')}</small>
-            <p className="now-title">${rv.s.track.title}</p>
-          </div>
-          <${StatusLine} active=${rv.active} status=${rv.status} onRetry=${player.retry} />
-          <button className="row-link" onClick=${() => go('#/radio/' + mode)} aria-label=${t('radioDetails')}>
-            <span>${t('radioDetails')}</span>
-            <span className="row-arrow" aria-hidden="true">‹</span>
-          </button>
-        </div>`}
-        ${open !== 'radio' && rv.active && STATUS_KEY[rv.status] && html`<${StatusLine} active=${rv.active} status=${rv.status} onRetry=${player.retry} />`}
+          <${InfoTip} label=${t('infoLabel')} text=${t(MODE_INFO[mode])} />
+        </div>
+        ${otherPlaying && html`<small className="seg-hint seg-hint-playing">${t('otherModePlaying', { name: t(radioPlaying === 'fast' ? 'fastRadio' : 'normalRadio') })}</small>`}
+        ${rv.active && STATUS_KEY[rv.status] && html`<${StatusLine} active=${rv.active} status=${rv.status} onRetry=${player.retry} />`}
       </div>
     </section>
 
@@ -3960,15 +3962,30 @@ const tabOf = (route) => (route.page === 'radio' ? 'home'
   : route.page === 'account' ? 'account'
   : route.page === 'home' ? 'home' : null);
 
+// لوحة المفاتيح مفتوحة إذا قصُرت الشاشة المرئية كثيرًا وفيها خانة كتابة مختارة. يُقاس الارتفاع نفسه،
+// لأن إغلاق اللوحة بزر الرجوع في أندرويد يُبقي الخانة مختارة
 function useKeyboardOpen() {
   const [open, setOpen] = useState(false);
   useEffect(() => {
+    const vv = window.visualViewport;
+    let full = Math.max(window.innerHeight, vv ? vv.height : 0);
     const isField = (el) => el && (el.tagName === 'TEXTAREA' || (el.tagName === 'INPUT' && !['checkbox', 'radio', 'range', 'button'].includes(el.type)));
-    const on = (e) => { if (isField(e.target)) setOpen(true); };
-    const off = () => setTimeout(() => setOpen(isField(document.activeElement)), 50);
-    document.addEventListener('focusin', on);
-    document.addEventListener('focusout', off);
-    return () => { document.removeEventListener('focusin', on); document.removeEventListener('focusout', off); };
+    const check = () => {
+      const h = vv ? vv.height : window.innerHeight;
+      if (!isField(document.activeElement)) full = Math.max(full, h, window.innerHeight);
+      setOpen(isField(document.activeElement) && h < full - 150);
+    };
+    const later = () => setTimeout(check, 60);
+    if (vv) vv.addEventListener('resize', check);
+    window.addEventListener('resize', check);
+    document.addEventListener('focusin', later);
+    document.addEventListener('focusout', later);
+    return () => {
+      if (vv) vv.removeEventListener('resize', check);
+      window.removeEventListener('resize', check);
+      document.removeEventListener('focusin', later);
+      document.removeEventListener('focusout', later);
+    };
   }, []);
   return open;
 }

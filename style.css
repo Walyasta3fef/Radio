@@ -1005,3 +1005,22 @@ span.note-time { color: var(--note); font-weight: 700; }
 .nav-dot { position: absolute; top: 3px; inset-inline-end: 13px; width: 8px; height: 8px; border-radius: 50%; background: var(--note); box-shadow: 0 0 0 2px rgba(13, 22, 19, 1); }
 .nav-dot.me { background: var(--radio); }
 @media (min-width: 441px) { .bottom-nav { border-inline: 1px solid var(--line); border-radius: 16px 16px 0 0; } }
+
+/* الرئيسية: تابع من حيث توقفت */
+.continue-card { display: flex; align-items: center; gap: 12px; padding: 14px 16px; }
+.cc-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; text-align: right; }
+.cc-info small { font-size: 12px; color: var(--course); font-weight: 700; }
+.cc-title { font-size: 15px; font-weight: 700; color: var(--text); line-height: 1.6;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.cc-left { font-size: 12px; color: var(--muted); }
+.cc-bar { display: block; height: 4px; border-radius: 4px; background: rgba(255, 255, 255, .08); margin-top: 6px; overflow: hidden; }
+.cc-bar span { display: block; height: 100%; background: var(--course); border-radius: 4px; }
+/* الرئيسية: الراديو مفتوح دائمًا */
+.radio-hero { padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+.rh-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.rh-title { display: inline-flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 700; }
+.rh-now { display: flex; flex-direction: column; gap: 2px; text-align: right; }
+.rh-now small { font-size: 12px; color: var(--muted); }
+.rh-now .now-title { font-size: 15px; line-height: 1.7; }
+.rh-controls { display: flex; align-items: center; gap: 12px; }
+.rh-seg { flex: 1; margin: 0; }
