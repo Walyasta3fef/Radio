@@ -849,29 +849,41 @@ function radioView(player, mode, now) {
 // =====================
 // توفير الاتصالات: للخطة المجانية حد أقصى من الاتصالات المتزامنة بقاعدة البيانات، وكل تبويب مفتوح يشغل اتصالًا
 // التبويب الذي يبقى في الخلفية دون صوت خمس دقائق يُفصل، ويعود فور الرجوع إليه أو بدء الصوت فيه
+// والصفحة الظاهرة المتروكة (لا صوت ولا لمس ولا كتابة ولا تمرير) عشر دقائق تُفصل كذلك، وتعود مع أول لمسة
 // من يستمع والشاشة مقفلة يبقى متصلًا، فهو مستمع فعلي ويُسجَّل وقته
+// الفصل لا يغيّر شيئًا على الشاشة: البيانات المعروضة تبقى، وعند العودة يُجلب ما تغيّر فقط
 // =====================
 const IDLE_DISCONNECT_MS = 5 * 60 * 1000;
+const VISIBLE_IDLE_MS = 10 * 60 * 1000;
 (() => {
   let timer = null;
   let off = false;
-  const playing = () => { const a = document.querySelector('audio'); return !!a && !a.paused; };
-  const wake = () => { clearTimeout(timer); timer = null; if (off) { off = false; database.goOnline(); } };
+  let lastTouch = Date.now();
+  const playing = () => Array.from(document.querySelectorAll('audio')).some(a => !a.paused && !a.ended);
+  const goOn = () => { if (off) { off = false; database.goOnline(); } };
+  const goOff = () => { off = true; database.goOffline(); };
+  const wake = () => { clearTimeout(timer); timer = null; lastTouch = Date.now(); goOn(); };
   const arm = () => { clearTimeout(timer); timer = setTimeout(sleep, IDLE_DISCONNECT_MS); };
   const sleep = () => {
     timer = null;
     if (document.visibilityState !== 'hidden' || off) return;
     if (playing()) return arm();          // ما زال يستمع: يُعاد الفحص لاحقًا
-    off = true;
-    database.goOffline();
+    goOff();
   };
   document.addEventListener('visibilitychange', () => (document.visibilityState === 'hidden' ? arm() : wake()));
   // بدء الصوت من أزرار شاشة القفل والتبويب مفصول
-  document.addEventListener('play', () => { if (off) { off = false; database.goOnline(); } if (document.visibilityState === 'hidden') arm(); }, true);
+  document.addEventListener('play', () => { lastTouch = Date.now(); goOn(); if (document.visibilityState === 'hidden') arm(); }, true);
+  // أي تفاعل مع الصفحة الظاهرة يعيد الاتصال فورًا، قبل أن يصل الضغط إلى الزر نفسه
+  const touched = () => { lastTouch = Date.now(); goOn(); };
+  ['pointerdown', 'touchstart', 'keydown', 'wheel', 'scroll', 'focus'].forEach(ev =>
+    window.addEventListener(ev, touched, { capture: true, passive: true }));
+  window.addEventListener('mousemove', () => { if (off || Date.now() - lastTouch > 5000) touched(); }, { passive: true });
+  setInterval(() => {
+    if (off || document.visibilityState === 'hidden' || playing()) return;
+    if (Date.now() - lastTouch >= VISIBLE_IDLE_MS) goOff();
+  }, 30000);
 })();
 
-// أماكن الاستماع: من يقف في غيرها (الرئيسية، الحساب، المجتمع) لا يُعدّ مستمعًا
-const LISTEN_PLACES = ['normal', 'fast', 'course'];
 
 // السجل المتروك: سجل في /status لم يحذفه الخادم عند انقطاع صاحبه (تبويب جمّده الجهاز، أو انقطاع في لحظة التسجيل).
 // كل زائر متصل يجدّد «آخر ظهور» في /seen كل 10 دقائق، ولا يتابع /seen أحد فلا يُوزَّع التجديد على الزوار.
@@ -908,7 +920,11 @@ function usePresence(at) {
     let disposed = false;
     let swept = false;
     let written = null;   // آخر سجل كُتب فعلًا لهذا الاتصال
+    let playingNow = false;   // p في السجل: هل الصوت شغّال عنده الآن (لا مجرد وقوفه في صفحة استماع)
     const key = 'd' + DEVICE_ID;
+    const isPlaying = () => Array.from(document.querySelectorAll('audio')).some(a => !a.paused && !a.ended);
+    // p يُكتب وحده، فلو رفضته القواعد (قبل نشرها) يبقى التسجيل نفسه سليمًا
+    const writePlaying = (ref) => ref.update({ p: playingNow }).catch(() => {});
     const seenRef = database.ref('/seen/' + key);
     const touchSeen = () => seenRef.set(firebase.database.ServerValue.TIMESTAMP).catch(() => {});
 
@@ -921,7 +937,7 @@ function usePresence(at) {
       ref.onDisconnect().remove()
         .then(() => {
           ref.set({ countryCode: code, at: atRef.current, since: firebase.database.ServerValue.TIMESTAMP })
-            .then(() => { if (myRefHolder.current === ref) written = ref; }).catch(() => {});
+            .then(() => { if (myRefHolder.current === ref) { written = ref; if (playingNow) writePlaying(ref); } }).catch(() => {});
           touchSeen();
           if (!swept) { swept = true; setTimeout(() => sweepStalePresence(key), 3000); }
         })
@@ -940,6 +956,19 @@ function usePresence(at) {
 
     const beat = setInterval(() => { if (connected && myRefHolder.current) touchSeen(); }, SEEN_EVERY_MS);
 
+    // تشغيل وإيقاف الصوت: يُنتظر قليلًا حتى لا يُكتب الإيقاف اللحظي بين لقاء والذي بعده
+    let playTimer = null;
+    const onMedia = () => {
+      clearTimeout(playTimer);
+      playTimer = setTimeout(() => {
+        const now = isPlaying();
+        if (now === playingNow) return;
+        playingNow = now;
+        if (connected && written) writePlaying(written);
+      }, 1500);
+    };
+    ['play', 'pause', 'ended'].forEach(ev => document.addEventListener(ev, onMedia, true));
+
     const statusRef = database.ref('/status');
     const onStatus = statusRef.on('value', snap => {
       const list = [];
@@ -955,6 +984,8 @@ function usePresence(at) {
     return () => {
       disposed = true;
       clearInterval(beat);
+      clearTimeout(playTimer);
+      ['play', 'pause', 'ended'].forEach(ev => document.removeEventListener(ev, onMedia, true));
       connRef.off('value', onConn);
       statusRef.off('value', onStatus);
       if (myRefHolder.current) { myRefHolder.current.remove().catch(() => {}); seenRef.remove().catch(() => {}); }
@@ -3449,15 +3480,16 @@ function StaffOnline({ users }) {
     const m = Math.max(0, Math.round((now - (ts || now)) / 60000));
     return m < 60 ? t('minutesOnly', { m }) : t('hoursMinutes', { h: Math.floor(m / 60), m: m % 60 });
   };
-  const sorted = [...users].sort((a, b) => (a.since || 0) - (b.since || 0));
+  // من يستمع الآن أولًا، ثم الأقدم اتصالًا
+  const sorted = [...users].sort((a, b) => (b.p === true) - (a.p === true) || (a.since || 0) - (b.since || 0));
   return html`<div className="staff-online">
     <div className="rep-grid">
-      <div><b>${users.filter(u => LISTEN_PLACES.includes(u.at)).length}</b><small>${t('staffOnlineListening')}</small></div>
+      <div><b>${users.filter(u => u.p === true).length}</b><small>${t('staffOnlineListening')}</small></div>
       <div><b>${users.length}</b><small>${t('staffOnlineAll')}</small></div>
     </div>
     <ul className="staff-list">
       ${sorted.map((u, i) => html`<li key=${i}>
-        <span><bdi dir="ltr">${u.countryCode || '—'}</bdi> · ${t(PLACE_LABEL[u.at] || 'placeHome')}</span>
+        <span>${u.p === true && html`<span className="playing-mark" title=${t('staffOnlinePlaying')}>▶</span>`}<bdi dir="ltr">${u.countryCode || '—'}</bdi> · ${t(PLACE_LABEL[u.at] || 'placeHome')}</span>
         <span className="hint">${t('staffOnlineSince', { t: ago(u.since) })}</span>
       </li>`)}
     </ul>

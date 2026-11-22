@@ -786,6 +786,7 @@ span.note-time { color: var(--note); font-weight: 700; }
 .staff-report h3 { font-size: 13px; font-weight: 800; color: var(--muted); margin: 16px 0 8px; }
 .staff-report .rep-grid small, .staff-online .rep-grid small { text-align: center; line-height: 1.5; padding: 0 4px; }
 .staff-report .staff-list, .staff-online .staff-list { margin-top: 8px; }
+.staff-online .playing-mark { color: var(--radio); font-size: .8em; margin-inline-end: 6px; }
 .staff-report .src-legend { margin-bottom: 0; }
 .staff-report > .link-btn { display: block; margin: 14px auto 0; }
 .staff-admin h2 { margin-top: 22px; }
