@@ -907,22 +907,54 @@ span.note-time { color: var(--note); font-weight: 700; }
 /* شارة المرتبة بجانب الاسم */
 .lvl-wrap { display: inline-flex; vertical-align: middle; margin-inline-start: 4px; }
 .lvl-badge {
-  width: 18px; height: 18px; border-radius: 50%; padding: 0;
+  width: 18px; height: 18px; border-radius: 50%; padding: 0; border: 0;
   display: inline-flex; align-items: center; justify-content: center;
-  font-size: 11px; font-weight: 700; line-height: 1; cursor: pointer;
+  font-size: 11px; font-weight: 800; line-height: 1; cursor: pointer;
+  position: relative; overflow: hidden; isolation: isolate;
+  color: var(--ink);
+  background: conic-gradient(from 200deg, var(--la), var(--lb), var(--lc), var(--ld), var(--la));
+  box-shadow: 0 0 0 1px var(--ring);
 }
-.lvl-core { background: var(--course); color: var(--course-ink); }
-.lvl-gold { background: rgba(232, 190, 92, .12); color: #E8BE5C; box-shadow: inset 0 0 0 1.5px #E8BE5C; }
-.lvl-gold.lvl-max { background: linear-gradient(145deg, #F4D27A, #C9962E); color: #3A2A06; box-shadow: 0 0 0 1px rgba(244, 210, 122, .5); }
+/* ألوان المراتب: معدن بلون كل مرتبة، يزداد دفئًا حتى الذهبي */
+.lvl-x { --la: #FFFFFF; --lb: #D3DAD5; --lc: #FFFFFF; --ld: #B9C2BC; --ring: #E8EFE9; --ink: #1A2A22; }
+.lvl-0 { --la: #D4EBC8; --lb: #86AD77; --lc: #EAF7E2; --ld: #6E9860; --ring: #A8C99B; --ink: #1C3018; }
+.lvl-1 { --la: #A6EBD5; --lb: #2FAE88; --lc: #D9F7EC; --ld: #1D8F6C; --ring: #5DCAA5; --ink: #04342C; }
+.lvl-2 { --la: #C2DCF7; --lb: #5A97DA; --lc: #E8F2FC; --ld: #3F7CC2; --ring: #85B7EB; --ink: #042C53; }
+.lvl-3 { --la: #D6D2F7; --lb: #8C83E0; --lc: #F1EFFD; --ld: #7068CC; --ring: #AFA9EC; --ink: #26215C; }
+.lvl-4 { --la: #F8CDBB; --lb: #E0754F; --lc: #FDEBE3; --ld: #C65F3B; --ring: #F0997B; --ink: #4A1B0C; }
+.lvl-5 { --la: #FFE58A; --lb: #F5B83D; --lc: #FFF3B8; --ld: #E0A126; --ring: #F5C94D; --ink: #4A3000; }
+/* الذهبي وحده يلمع، وفي كل مكان، بتوقيت مختلف لكل شارة */
+.lvl-5::after {
+  content: ''; position: absolute; inset: 0; z-index: 1; pointer-events: none;
+  background: linear-gradient(110deg, transparent 35%, rgba(255, 255, 255, .8) 50%, transparent 65%);
+  transform: translateX(-130%); animation: lvl-shine 4s ease-in-out infinite; animation-delay: var(--sd, 0s);
+}
+@keyframes lvl-shine { 0%, 62% { transform: translateX(-130%); } 100% { transform: translateX(130%); } }
+.name-gold { color: #FFD166; }
+.gold-text { color: #FFD166 !important; }
+.max-face { display: inline-flex; flex-direction: column; align-items: center; line-height: .9; }
+.max-face svg { width: .5em; height: .5em; margin-bottom: .04em; }
+/* أشعة ذهبية تدور ببطء خلف أعلى مرتبة */
+.max-rays {
+  position: absolute; inset: -30%; border-radius: 50%; z-index: -1;
+  background: repeating-conic-gradient(rgba(255, 209, 102, .18) 0 8deg, transparent 8deg 22deg);
+  -webkit-mask: radial-gradient(circle, #000 40%, transparent 70%); mask: radial-gradient(circle, #000 40%, transparent 70%);
+  animation: rays-spin 30s linear infinite;
+}
+@keyframes rays-spin { to { transform: rotate(360deg); } }
 .top-left .lvl-wrap { margin: 0; }
 .top-left .lvl-badge { width: 24px; height: 24px; font-size: 13px; }
 /* تهنئة المرتبة الجديدة */
 .modal.congrats { text-align: center; }
-.cg-badge {
-  width: 56px; height: 56px; border-radius: 50%; margin: 4px auto 10px;
-  display: flex; align-items: center; justify-content: center; font-size: 26px; font-weight: 700;
-}
-.cg-badge.lvl-gold { box-shadow: inset 0 0 0 3px #E8BE5C; }
+.cg-badge-wrap { position: relative; width: 64px; height: 64px; margin: 6px auto 12px; isolation: isolate; }
+.cg-badge { width: 64px; height: 64px; font-size: 28px; cursor: default; box-shadow: 0 0 0 3px var(--surface), 0 0 0 5px var(--ring); }
+.cg-max .cg-badge-wrap, .cg-max .cg-badge { width: 84px; height: 84px; font-size: 32px; }
+.cg-max .cg-badge-wrap { margin: 18px auto 18px; }
+.cg-max .intro-title { color: #FFD166; }
+.confetti { position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: 1; }
+.confetti i { position: absolute; top: -20px; border-radius: 2px; animation: confetti-fall linear forwards; }
+@keyframes confetti-fall { to { top: 105%; transform: translateX(30px) rotate(540deg); } }
+.cg-max-back .modal { position: relative; z-index: 2; }
 
 /* المتصلون الآن: أعلام الدول بالعدد */
 .online-wrap { display: inline-flex; }
@@ -1025,27 +1057,56 @@ span.note-time { color: var(--note); font-weight: 700; }
 .rh-controls { display: flex; align-items: center; gap: 12px; }
 .rh-seg { flex: 1; margin: 0; }
 
-/* شارتي في الأعلى: زر إلى «طريقك» */
-.own-badge { width: 26px; height: 26px; font-size: 13px; }
-.lvl-none { border: 1.5px dashed var(--line-2); background: transparent; }
 .cc-better { font-size: 12px; color: var(--course); margin-top: 4px; }
 .community-week { display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 13px; color: var(--muted); margin: -4px 0 12px; }
-.path-link { margin: 4px 0 8px; }
 /* «طريقك» */
-.path-list { list-style: none; position: relative; margin-top: 16px; display: flex; flex-direction: column; gap: 4px; }
-.path-step { position: relative; display: flex; align-items: flex-start; gap: 14px; padding: 12px 6px 14px; }
+.own-badge { width: 26px; height: 26px; font-size: 13px; box-shadow: 0 0 0 2px var(--bg), 0 0 0 3px var(--ring); }
+.path-hero { text-align: center; margin: 4px 0 10px; }
+.ph-medal { position: relative; width: 112px; height: 112px; margin: 0 auto; display: flex; align-items: center; justify-content: center; isolation: isolate; }
+.ph-ring { position: absolute; inset: 0; width: 100%; height: 100%; }
+.ph-track { fill: none; stroke: rgba(255, 255, 255, .08); stroke-width: 6; }
+.ph-fill { fill: none; stroke: var(--lv); stroke-width: 6; stroke-linecap: round; transition: stroke-dashoffset .8s ease; }
+.ph-badge { width: 70px; height: 70px; font-size: 28px; cursor: default; box-shadow: 0 0 0 3px var(--bg), 0 0 0 5px var(--ring); }
+.is-max .ph-medal { width: 140px; height: 140px; margin-top: 18px; }
+.is-max .ph-badge { width: 96px; height: 96px; font-size: 38px; }
+.ph-title { font-size: 20px; margin: 14px 0 4px; }
+.ph-sub { font-size: 13px; color: var(--muted); margin: 0; }
+.path-list { list-style: none; margin: 18px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.path-step { position: relative; display: flex; align-items: flex-start; gap: 14px; padding: 12px 10px 14px; border: 1px solid transparent; border-radius: 16px; }
 .path-step:not(:last-child)::after {
-  content: ''; position: absolute; top: 54px; bottom: -8px; inset-inline-start: 23px; width: 2px; background: var(--line-2);
+  content: ''; position: absolute; top: 54px; bottom: -14px; inset-inline-start: 27px; width: 3px; border-radius: 2px;
+  background: repeating-linear-gradient(var(--line-2) 0 5px, transparent 5px 10px);
 }
-.path-step.got:not(:last-child)::after { background: var(--course-line); }
-.path-badge { width: 36px; height: 36px; font-size: 16px; flex-shrink: 0; cursor: default; }
-.path-step.later .path-badge { background: transparent; color: var(--faint); box-shadow: inset 0 0 0 1.5px var(--line-2); }
-.path-step.next .path-badge { box-shadow: 0 0 0 4px rgba(168, 201, 155, .18); }
-.path-text { flex: 1; display: flex; flex-direction: column; gap: 4px; padding-top: 4px; }
+.path-step.link-got::after { background: linear-gradient(var(--lv), var(--lv2)); }
+.pb-wrap { position: relative; flex-shrink: 0; width: 38px; height: 38px; display: flex; align-items: center; justify-content: center; }
+.path-badge { width: 38px; height: 38px; font-size: 16px; cursor: default; box-shadow: 0 0 0 2px var(--bg), 0 0 0 3.5px var(--ring); }
+.pb-check {
+  position: absolute; bottom: -4px; inset-inline-end: -4px; width: 17px; height: 17px; border-radius: 50%;
+  background: var(--bg); color: var(--lv); display: flex; align-items: center; justify-content: center; box-shadow: 0 0 0 1.5px var(--lv);
+}
+.path-step.later .path-badge { opacity: .35; filter: saturate(.6); }
+.path-step.next { background: var(--surface); border-color: var(--lv); }
+.path-step.next .pb-wrap::before {
+  content: ''; position: absolute; inset: -2px; border-radius: 50%; box-shadow: 0 0 0 0 var(--lv); opacity: .55;
+  animation: pb-pulse 2.2s ease-out infinite;
+}
+@keyframes pb-pulse { 0% { box-shadow: 0 0 0 0 var(--lv); opacity: .55; } 100% { box-shadow: 0 0 0 12px var(--lv); opacity: 0; } }
+.path-text { flex: 1; display: flex; flex-direction: column; gap: 4px; padding-top: 6px; min-width: 0; }
 .path-text b { font-size: 15px; }
 .path-text small { font-size: 12.5px; color: var(--muted); }
+.path-step.got .path-text b { color: var(--lv); }
 .path-step.later .path-text b { color: var(--muted); }
-.path-got { display: inline-flex; align-items: center; gap: 4px; color: var(--course) !important; }
-.path-step.next { background: var(--surface); border: 1px solid var(--course-line); border-radius: 16px; }
-.path-bar { display: block; height: 5px; border-radius: 5px; background: rgba(255, 255, 255, .08); overflow: hidden; margin-top: 4px; }
-.path-bar span { display: block; height: 100%; background: var(--course); border-radius: 5px; }
+.path-got { color: var(--lv) !important; }
+.path-close { color: var(--lv) !important; font-weight: 800; font-size: 13.5px !important; }
+.path-lock { display: inline-flex; align-items: center; gap: 5px; }
+.path-bar { display: block; height: 6px; border-radius: 6px; background: rgba(255, 255, 255, .08); overflow: hidden; margin-top: 4px; }
+.path-bar span { display: block; height: 100%; background: var(--lv, var(--course)); border-radius: 6px; transition: width .6s ease; }
+/* كارت «طريقك» في الحساب */
+.path-card { display: flex; align-items: center; gap: 14px; width: 100%; text-align: start; margin: 6px 0 14px; padding: 14px; border-color: var(--lv); color: inherit; font: inherit; cursor: pointer; }
+.pc-badge { width: 40px; height: 40px; font-size: 17px; flex-shrink: 0; box-shadow: 0 0 0 2px var(--surface), 0 0 0 3.5px var(--ring); }
+.pc-text { flex: 1; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.pc-text b { font-size: 15px; }
+.pc-text small { font-size: 12.5px; color: var(--muted); }
+@media (prefers-reduced-motion: reduce) {
+  .lvl-5::after, .max-rays, .path-step.next .pb-wrap::before, .confetti { animation: none; display: none; }
+}

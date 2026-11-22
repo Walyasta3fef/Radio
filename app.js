@@ -164,7 +164,13 @@ const go = (hash) => {
 };
 // زر «رجوع» في الموقع: إن كانت الصفحة المطلوبة خطوة سابقة في السجل رجع إليها،
 // فيعمل زر الرجوع في الجهاز بعدها كما هو متوقع؛ وإلا فتحها
+// زر «رجوع» بلا وجهة محددة: يرجع إلى الصفحة السابقة في هذه الجلسة، وإلا فإلى الرئيسية
+const goPrev = () => {
+  if (NAV.cur > 0 && NAV.hashes[NAV.cur - 1]) { NAV.expect = NAV.hashes[NAV.cur - 1]; history.back(); return; }
+  go('#/');
+};
 const goBack = (to) => {
+  if (!to) return goPrev();
   const target = normHash(to);
   for (let i = NAV.cur - 1; i >= 0; i--) {
     if (NAV.hashes[i] === target) { NAV.expect = target; history.go(i - NAV.cur); return; }
@@ -972,6 +978,7 @@ const ICON_PATHS = {
   eye: html`<g><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"></path><circle cx="12" cy="12" r="3"></circle></g>`,
   eyeOff: html`<g><path d="M17.94 17.94A10.07 10.07 0 0 1 12 19c-7 0-11-7-11-7a18.45 18.45 0 0 1 5.06-5.94"></path><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 7 11 7a18.5 18.5 0 0 1-2.16 3.19"></path><path d="M1 1l22 22"></path></g>`,
   key: html`<g><circle cx="7.5" cy="15.5" r="4.5"></circle><path d="M10.7 12.3L20 3"></path><path d="M16 7l3 3"></path><path d="M14 9l2 2"></path></g>`,
+  crown: html`<path d="M3 8l4.5 4L12 5l4.5 7L21 8l-2 11H5z"></path>`,
   leaf: html`<g><path d="M6 18C6 10 11 5.5 19 5c.2 8-4.6 13-12 13z"></path><path d="M6 18c2.6-3.6 5.4-6.2 9-8.4"></path></g>`,
   user: html`<g><circle cx="12" cy="8" r="4"></circle><path d="M4 21c0-4 4-6 8-6s8 2 8 6"></path></g>`,
   check: html`<path d="M5 12l5 5L20 7"></path>`,
@@ -1058,10 +1065,8 @@ function NameChip() {
   useAccountVersion();
   useProgressVersion();
   const lv = progress.level();
-  const own = html`<button className=${'lvl-badge own-badge ' + (lv < 0 ? 'lvl-none' : lv === 0 ? 'lvl-core' : lv >= 5 ? 'lvl-gold lvl-max' : 'lvl-gold')}
-      onClick=${() => go('#/path')} aria-label=${t('pathTitle')}>
-    ${lv < 0 ? '' : lv === 0 ? html`<${Icon} name="leaf" size=${12} />` : html`<bdi>${lv}</bdi>`}
-  </button>`;
+  const own = html`<button className=${lvlCls(lv) + ' own-badge'}
+      onClick=${() => go('#/path')} aria-label=${t('pathTitle')}>${lvlFace(lv, 12)}</button>`;
   if (!account.loggedIn) {
     return html`<${React.Fragment}>${own}<button className="chip name-chip-cta" onClick=${() => go('#/account')}>
       <${Icon} name="user" size=${14} />${t('saveProgressShort')}
@@ -1136,18 +1141,34 @@ function CodeReminder({ route }) {
 }
 
 // تهنئة تظهر مرة واحدة عند كل مرتبة جديدة (على كل الأجهزة، لأن آخر ما عُرض يُحفظ مع التقدّم)
+// قصاصات ذهبية تتساقط مرة واحدة عند بلوغ أعلى مرتبة، مع اهتزاز خفيف
+function Confetti() {
+  const bits = useMemo(() => Array.from({ length: 36 }, (_, i) => ({
+    i, left: Math.random() * 100, delay: Math.random() * 1.4, dur: 2.4 + Math.random() * 1.8,
+    rot: Math.random() * 360, w: 5 + Math.random() * 5, c: ['#FFE58A', '#F5B83D', '#FFF3B8', '#E0A126'][i % 4]
+  })), []);
+  useEffect(() => { try { navigator.vibrate && navigator.vibrate([40, 60, 40, 60, 120]); } catch (e) {} }, []);
+  return html`<div className="confetti" aria-hidden="true">${bits.map(b => html`<i key=${b.i} style=${{
+    left: b.left + '%', width: b.w + 'px', height: (b.w * 1.6) + 'px', background: b.c,
+    animationDelay: b.delay + 's', animationDuration: b.dur + 's', transform: 'rotate(' + b.rot + 'deg)'
+  }}></i>`)}</div>`;
+}
+
 function CongratsModal() {
   useProgressVersion();
   const l = progress.level();
   if (l < 0 || l <= progress.congratsSeen()) return null;
+  const max = l >= 5;
   const text = l === 0 ? t('congratsCoreText')
-    : t(l >= 5 ? 'congratsMaxText' : 'congratsLevelText', { times: timesText(l), n: l });
-  return html`<div className="modal-back" role="presentation">
-    <div className="modal congrats" role="dialog" aria-modal="true" aria-labelledby="cg-title">
-      <div className=${'cg-badge ' + (l === 0 ? 'lvl-core' : l >= 5 ? 'lvl-gold lvl-max' : 'lvl-gold')}>
-        ${l === 0 ? html`<${Icon} name="leaf" size=${26} />` : html`<bdi>${l}</bdi>`}
+    : t(max ? 'congratsMaxText' : 'congratsLevelText', { times: timesText(l), n: l });
+  return html`<div className=${'modal-back' + (max ? ' cg-max-back' : '')} role="presentation">
+    ${max && html`<${Confetti} />`}
+    <div className=${'modal congrats' + (max ? ' cg-max' : '')} role="dialog" aria-modal="true" aria-labelledby="cg-title">
+      <div className="cg-badge-wrap">
+        ${max && html`<span className="max-rays" aria-hidden="true"></span>`}
+        <div className=${lvlCls(l) + ' cg-badge'}>${max ? html`<${MaxFace} />` : lvlFace(l, 26)}</div>
       </div>
-      <p className="intro-title" id="cg-title">${t(l === 0 ? 'congratsCoreTitle' : 'congratsLevelTitle')}</p>
+      <p className="intro-title" id="cg-title">${t(l === 0 ? 'congratsCoreTitle' : max ? 'congratsMaxTitle' : 'congratsLevelTitle')}</p>
       <p>${text}</p>
       ${!account.loggedIn && html`<p className="hint">${t('congratsNeedAccount')}</p>`}
       <div className="modal-actions">
@@ -1455,11 +1476,21 @@ function useBadgesVersion() {
   const [, setV] = useState(0);
   useEffect(() => badges.subscribe(() => setV(v => v + 1)), []);
 }
+// لكل مرتبة لون معدني خاص يزداد دفئًا كلما ارتفعت، وأعلاها ذهبي يلمع؛ وبلا مرتبة: أبيض
+// -1 بلا مرتبة، 0 الأساسيات، 1..5 عدد مرات إكمال الكورس
+const LVL_COLORS = ['#A8C99B', '#5DCAA5', '#85B7EB', '#AFA9EC', '#F0997B', '#F5C94D'];
+const lvlKey = (l) => (l == null || l < 0 ? 'x' : String(Math.min(5, l)));
+const lvlCls = (l) => 'lvl-badge lvl-' + lvlKey(l);
+const lvlFace = (l, size) => (l == null || l < 0 ? '' : l === 0 ? html`<${Icon} name="leaf" size=${size} />` : html`<bdi>${Math.min(5, l)}</bdi>`);
+function MaxFace() {
+  return html`<span className="max-face"><${Icon} name="crown" size=${14} /><bdi>5</bdi></span>`;
+}
 function LevelBadge({ level }) {
+  // توقيت لمعان مختلف لكل شارة ذهبية، فلا تلمع كلها معًا
+  const sd = useMemo(() => ({ '--sd': (-Math.random() * 4).toFixed(2) + 's' }), []);
   if (level == null || level < 0) return null;
-  const cls = 'lvl-badge ' + (level === 0 ? 'lvl-core' : level >= 5 ? 'lvl-gold lvl-max' : 'lvl-gold');
-  const face = level === 0 ? html`<${Icon} name="leaf" size=${11} />` : html`<bdi>${level}</bdi>`;
-  return html`<${Popover} label=${badgeLabel(level)} wrapClass="lvl-wrap" btnClass=${cls} button=${face}>${badgeLabel(level)}<//>`;
+  return html`<${Popover} label=${badgeLabel(level)} wrapClass="lvl-wrap" btnClass=${lvlCls(level)}
+    btnProps=${level >= 5 ? { style: sd } : null} button=${lvlFace(level, 11)}>${badgeLabel(level)}<//>`;
 }
 
 // اسم صاحب التعليق: الاسم المميز بعلامة، أو «أخ ...»
@@ -1468,7 +1499,8 @@ function LevelBadge({ level }) {
 const authorName = (n, a, pf) => (a && staff.nameOf(a)) || t('nickName', { p: titles.get(n) || pf || t('nickPrefix'), n });
 function CommentAuthor({ c, toMe }) {
   const special = c.a && staff.nameOf(c.a);
-  return html`<b className=${special ? 'staff-name' : ''}>
+  const gold = !special && typeof c.b === 'number' && c.b >= 5;
+  return html`<b className=${special ? 'staff-name' : gold ? 'name-gold' : ''}>
     ${special ? html`<span className="staff-check" aria-hidden="true"><${Icon} name="check" size=${11} /></span>` : ''}${authorName(c.n, c.a, c.pf)}
     ${!special && typeof c.b === 'number' && html`<${LevelBadge} level=${c.b} />`}
     ${toMe ? html`<span className="to-me">${t('repliedToYou')}</span>` : ''}
@@ -1945,8 +1977,8 @@ function LiveBadge({ behind, onGoLive }) {
 // «طريقك»: المراتب كلها على خط واحد، المكتسبة مضيئة، والتالية بتقدّمها وما بقي لها، وما بعدها باهت
 // =====================
 const lecturesLeft = (n) => t(n === 1 ? 'leftOne' : n === 2 ? 'leftTwo' : n <= 10 ? 'leftFew' : 'leftMany', { n });
-function PathPage() {
-  useProgressVersion();
+// حالة الطريق: المراتب الست، والتالية منها، ونسبة التقدّم إليها
+function pathInfo() {
   const level = progress.level();
   const total = COURSE_ORDER.length;
   const steps = [0, 1, 2, 3, 4, 5].map(l => {
@@ -1955,29 +1987,84 @@ function PathPage() {
     const count = l === 0 ? COURSE_HEAD.length : total;
     return { l, done, count, got: level >= l };
   });
-  const nextL = steps.find(s => !s.got);
+  const next = steps.find(s => !s.got) || null;
+  const pct = next ? next.done / next.count : 1;
+  const left = next ? next.count - next.done : 0;
+  return { level, steps, next, pct, left };
+}
+const stepTitle = (l) => (l === 0 ? t('pathCoreTitle') : t('pathLevelTitle', { times: timesText(l) }));
+const cheerOf = (p) => (!p.next ? t('pathDoneTitle') : p.next.done === 0 ? t('pathCheerStart')
+  : p.left <= 3 ? t('pathCheer3') : p.pct >= 0.5 ? t('pathCheer2') : p.pct >= 0.25 ? t('pathCheer1') : t('pathCheer0'));
+
+function PathHero({ p }) {
+  if (!p.next) {
+    return html`<div className="path-hero is-max">
+      <div className="ph-medal"><span className="max-rays" aria-hidden="true"></span>
+        <span className=${lvlCls(5) + ' ph-badge'}><${MaxFace} /></span></div>
+      <h1 className="ph-title gold-text">${t('pathDoneTitle')}</h1>
+      <p className="ph-sub">${t('pathDoneText')}</p>
+    </div>`;
+  }
+  const R = 44, C = 2 * Math.PI * R;
+  return html`<div className="path-hero" style=${{ '--lv': LVL_COLORS[p.next.l] }}>
+    <div className="ph-medal">
+      <svg className="ph-ring" viewBox="0 0 100 100" aria-hidden="true">
+        <circle cx="50" cy="50" r=${R} className="ph-track" />
+        <circle cx="50" cy="50" r=${R} className="ph-fill" strokeDasharray=${C}
+          strokeDashoffset=${C * (1 - p.pct)} transform="rotate(-90 50 50)" />
+      </svg>
+      <span className=${lvlCls(p.level) + ' ph-badge'}>${lvlFace(p.level, 26)}</span>
+    </div>
+    <h1 className="ph-title">${cheerOf(p)}</h1>
+    <p className="ph-sub">${t('pathLeftTo', { left: lecturesLeft(p.left), name: stepTitle(p.next.l) })}</p>
+  </div>`;
+}
+
+function PathPage() {
+  useProgressVersion();
+  const p = pathInfo();
   return html`<div className="page path">
-    <div className="topbar"><${BackButton} to="#/account" /></div>
-    <h1 className="acc-title center-text">${t('pathTitle')}</h1>
+    <div className="topbar"><${BackButton} /></div>
+    <${PathHero} p=${p} />
     <ol className="path-list">
-      ${steps.map(s => {
-        const state = s.got ? 'got' : s === nextL ? 'next' : 'later';
-        const cls = s.l === 0 ? 'lvl-core' : s.l >= 5 ? 'lvl-gold lvl-max' : 'lvl-gold';
-        return html`<li key=${s.l} className=${'path-step ' + state}>
-          <span className=${'lvl-badge path-badge ' + cls}>${s.l === 0 ? html`<${Icon} name="leaf" size=${16} />` : html`<bdi>${s.l}</bdi>`}</span>
+      ${p.steps.map((s, i) => {
+        const state = s.got ? 'got' : s === p.next ? 'next' : 'later';
+        const close = state === 'next' && s.count - s.done <= 3;
+        const style = { '--lv': LVL_COLORS[s.l], '--lv2': LVL_COLORS[Math.min(5, s.l + 1)] };
+        return html`<li key=${s.l} className=${'path-step ' + state + (s.got && p.steps[i + 1] && p.steps[i + 1].got ? ' link-got' : '')} style=${style}>
+          <span className="pb-wrap">
+            <span className=${lvlCls(s.l) + ' path-badge'}>${lvlFace(s.l, 16)}</span>
+            ${state === 'got' && html`<span className="pb-check"><${Icon} name="check" size=${10} /></span>`}
+          </span>
           <div className="path-text">
-            <b>${s.l === 0 ? t('badgeCore') : t('pathLevelTitle', { times: timesText(s.l) })}</b>
-            ${state === 'got' && html`<small className="path-got"><${Icon} name="check" size=${13} />${t('pathGot')}</small>`}
+            <b>${stepTitle(s.l)}</b>
+            ${state === 'got' && html`<small className="path-got">${t('pathGot')}</small>`}
             ${state === 'next' && html`<${React.Fragment}>
-              <small>${t('pathProgress', { done: s.done, count: s.count })} · ${lecturesLeft(s.count - s.done)}</small>
+              <small>${t('pathProgress', { done: s.done, count: s.count })}${close ? '' : ' · ' + lecturesLeft(s.count - s.done)}</small>
+              ${close && html`<small className="path-close">${t('pathOnly', { left: lecturesLeft(s.count - s.done) })}</small>`}
               <span className="path-bar" aria-hidden="true"><span style=${{ width: (s.done / s.count * 100) + '%' }}></span></span>
             <//>`}
-            ${state === 'later' && html`<small>${s.l === 0 ? t('pathCoreDesc') : t('pathLevelDesc', { times: timesText(s.l) })}</small>`}
+            ${state === 'later' && html`<small className="path-lock"><${Icon} name="lock" size=${12} />${s.l === 0 ? t('pathCoreDesc') : s.l >= 5 ? t('pathMaxDesc') : t('pathLevelDesc', { times: timesText(s.l) })}</small>`}
           </div>
         </li>`;
       })}
     </ol>
   </div>`;
+}
+
+// كارت «طريقك» في صفحة الحساب: المرتبة الحالية والتقدّم نحو التالية
+function PathCard() {
+  useProgressVersion();
+  const p = pathInfo();
+  return html`<button className="card path-card" style=${{ '--lv': LVL_COLORS[p.next ? p.next.l : 5] }} onClick=${() => go('#/path')}>
+    <span className=${lvlCls(p.level) + ' pc-badge'}>${lvlFace(p.level, 16)}</span>
+    <span className="pc-text">
+      <b>${t('pathTitle')}</b>
+      <small className=${p.next ? '' : 'gold-text'}>${p.next ? t('pathNextIn', { left: lecturesLeft(p.left) }) : t('pathDoneTitle')}</small>
+      ${p.next && html`<span className="path-bar" aria-hidden="true"><span style=${{ width: (p.pct * 100) + '%' }}></span></span>`}
+    </span>
+    <span className="row-arrow" aria-hidden="true">‹</span>
+  </button>`;
 }
 
 // «تابع من حيث توقفت»: آخر لقاء لم يكتمل، والوقت الباقي منه، وزر يكمل من الثانية نفسها.
@@ -3867,9 +3954,7 @@ function AccountPage({ returnTo }) {
       <div className="topbar"></div>
       <div className="panel">
         <h1 className="acc-title">${t('accountTitle')}</h1>
-        <button className="row-link path-link" onClick=${() => go('#/path')}>
-          <span>${t('pathTitle')}</span><span className="row-arrow" aria-hidden="true">‹</span>
-        </button>
+        <${PathCard} />
         <div className="acc-name">
           <bdi dir="ltr">${hidden ? '•'.repeat(Math.min(10, account.name.length)) : account.name}</bdi>
           <button className="eye" onClick=${() => account.setHidden(!hidden)}
