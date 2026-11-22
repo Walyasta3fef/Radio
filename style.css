@@ -941,3 +941,15 @@ span.note-time { color: var(--note); font-weight: 700; }
 .skel-line.short { width: 55%; }
 @keyframes skel { from { background-position: 100% 0; } to { background-position: -100% 0; } }
 @media (prefers-reduced-motion: reduce) { .skel { animation: none; } }
+
+/* تذكير رمز الدخول */
+.modal.code-remind p { line-height: 1.8; }
+.code-box {
+  display: flex; flex-direction: column; align-items: center; gap: 2px; width: 100%;
+  padding: 12px; border-radius: 12px; border: 1px dashed var(--line-2); background: var(--sunken);
+  font-size: 18px; font-weight: 700; letter-spacing: .5px; color: var(--text);
+}
+.code-box small { font-size: 12px; font-weight: 500; color: var(--muted); letter-spacing: 0; }
+.code-box.open { border-style: solid; border-color: var(--course-line); color: var(--course); }
+.shake { animation: shake .45s; }
+@keyframes shake { 20%, 60% { transform: translateX(-6px); } 40%, 80% { transform: translateX(6px); } }

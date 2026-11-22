@@ -1074,6 +1074,57 @@ function NameChip() {
   </div><//>`;
 }
 
+// =====================
+// تذكير برمز الدخول كل 4 أيام: لا بريد ولا رقم هاتف، فالرمز هو المفتاح الوحيد للحساب.
+// الرمز مخفي حتى يُضغط عليه (خصوصية من حوله)، والنافذة لا تُغلق إلا بكتابته صحيحًا لتثبيته في الذاكرة
+// =====================
+const CODE_REMIND_KEY = 'codeRemindAt';
+const CODE_REMIND_MS = 4 * 86400000;
+function CodeReminder({ route }) {
+  useAccountVersion();
+  useProgressVersion();
+  const [, setTick] = useState(0);
+  const [shown, setShown] = useState(false);
+  const [typed, setTyped] = useState('');
+  const [wrong, setWrong] = useState(false);
+  const code = account.loggedIn ? account.name : null;
+  // يُعاد الفحص كل دقيقة، فتظهر النافذة لمن يبقي الموقع مفتوحًا أيامًا
+  useEffect(() => { const id = setInterval(() => setTick(x => x + 1), 60000); return () => clearInterval(id); }, []);
+  if (!code) return null;
+  const last = Number(storage.get(CODE_REMIND_KEY)) || 0;
+  if (Date.now() - last < CODE_REMIND_MS) return null;
+  // لا تزاحم نوافذ أخرى: رسالة البداية في الرئيسية، والتهنئة، وصفحتا الحساب والإدارة
+  if (route.page === 'account' || route.page === 'staff') return null;
+  if (route.page === 'home' && storage.get(INTRO_NEVER_KEY) !== '1' && storage.get(INTRO_DAY_KEY) !== dayKey()) return null;
+  if (progress.level() > progress.congratsSeen()) return null;
+  const ok = normalizeName(typed) === normalizeName(code);
+  const done = () => {
+    if (!ok) { setWrong(true); setTimeout(() => setWrong(false), 600); return; }
+    storage.set(CODE_REMIND_KEY, String(Date.now()));
+    setTyped(''); setShown(false);
+    setTick(x => x + 1);
+  };
+  return html`<div className="modal-back" role="presentation">
+    <div className="modal code-remind" role="dialog" aria-modal="true" aria-labelledby="cr-title">
+      <p className="intro-title" id="cr-title">${t('codeRemindTitle')}</p>
+      <p>${t('codeRemindKey')}</p>
+      <button className=${'code-box' + (shown ? ' open' : '')} onClick=${() => setShown(v => !v)} aria-label=${t('codeRemindShow')}>
+        ${shown ? html`<bdi dir="ltr">${code}</bdi>` : html`<span>••••••••</span><small>${t('codeRemindShow')}</small>`}
+      </button>
+      <p>${t('codeRemindWhy')}</p>
+      <p>${t('codeRemindType')}</p>
+      <input className=${'name-input' + (wrong ? ' shake' : '')} dir="ltr" value=${typed} autoComplete="off" autoCapitalize="none" spellCheck="false"
+        placeholder=${t('codeRemindPlaceholder')} aria-label=${t('codeRemindPlaceholder')}
+        onInput=${e => setTyped(e.target.value)} onKeyDown=${e => { if (e.key === 'Enter') done(); }} />
+      ${wrong && html`<p className="form-error">${t('codeRemindWrong')}</p>`}
+      <div className="modal-actions">
+        <button className="small-btn" disabled=${!typed.trim()} onClick=${done}>${t('codeRemindDone')}</button>
+      </div>
+      <p className="hint">${t('codeRemindWarn')}</p>
+    </div>
+  </div>`;
+}
+
 // تهنئة تظهر مرة واحدة عند كل مرتبة جديدة (على كل الأجهزة، لأن آخر ما عُرض يُحفظ مع التقدّم)
 function CongratsModal() {
   useProgressVersion();
@@ -4008,6 +4059,7 @@ function App() {
     <${PageBoundary} key=${location.hash}>${page}<//>
     <${MiniPlayer} player=${player} route=${route} />
     <${CongratsModal} />
+    <${CodeReminder} route=${route} />
   </div>`;
 }
 
