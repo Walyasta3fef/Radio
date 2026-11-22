@@ -202,7 +202,8 @@ function buildListenReport(users, fromKey, toKey, allTime) {
     });
     const total = c + n + f + legacy;
     r.c += c; r.n += n; r.f += f; r.legacy += legacy;
-    if (total >= 60) { r.listeners++; r.top.push({ k: u.k, sec: total }); }
+    // الأكثر استماعًا بلا أرقام حسابات: نوع المستمع ومقدار استماعه فقط، حفاظًا على الخصوصية
+    if (total >= 60) { r.listeners++; r.top.push({ anon: !!u.anon, sec: total }); }
   });
   r.total = r.c + r.n + r.f + r.legacy;
   r.lectures = Object.values(lec).filter(e => e.sec > 0 || e.done > 0).sort((a, b) => b.sec - a.sec || b.done - a.done);

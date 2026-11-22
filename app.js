@@ -3383,7 +3383,7 @@ function StaffReport() {
       <h3>${t('staffRepTop')}</h3>
       <ul className="staff-list">
         ${r.top.slice(0, 10).map((u, i) => html`<li key=${i}>
-          <span>${u.k ? html`${t('staffRepNumber')} <bdi dir="ltr">${u.k}</bdi>` : t('staffWhoAnonOne')}</span>
+          <span className="top-who">${u.anon ? html`<span className="who-anon" aria-hidden="true"></span>${t('staffWhoAnonOne')}` : html`<${Icon} name="user" size=${14} />${t('staffWhoMemberOne')}`}</span>
           <span className="hint">${fmtListen(u.sec)}</span>
         </li>`)}
       </ul>

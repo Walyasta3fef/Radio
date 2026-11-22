@@ -953,3 +953,8 @@ span.note-time { color: var(--note); font-weight: 700; }
 .code-box.open { border-style: solid; border-color: var(--course-line); color: var(--course); }
 .shake { animation: shake .45s; }
 @keyframes shake { 20%, 60% { transform: translateX(-6px); } 40%, 80% { transform: translateX(6px); } }
+
+/* الأكثر استماعًا: نوع المستمع فقط، بلا أرقام */
+.top-who { display: inline-flex; align-items: center; gap: 6px; }
+.top-who svg { color: var(--course); }
+.who-anon { width: 12px; height: 12px; border-radius: 50%; border: 1.5px dashed var(--muted); margin: 0 1px; }
