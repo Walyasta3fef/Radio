@@ -3874,7 +3874,57 @@ function TitleEditor({ value, setValue, msg, onSave }) {
 // وأيقونة مفتاح تُعرف من الصورة المصغّرة. بلا اسم الموقع ولا شعاره ولا أي كلمة عن الكورس،
 // فمن يراها في المعرض لا يعرف أنها لهذا الموقع
 // =====================
+// صورة الرمز بنفس شكل الشاشة الصفراء، تُرسم في الصفحة فلا يظهر فيها أي رابط
+async function makeCodeImage(code) {
+  try { await document.fonts.ready; } catch (e) {}
+  const W = 1080, H = 1920;
+  const c = document.createElement('canvas');
+  c.width = W; c.height = H;
+  const x = c.getContext('2d');
+  x.fillStyle = '#FFD60A'; x.fillRect(0, 0, W, H);
+  // المفتاح: نفس رسم الأيقونة مكبّرًا
+  x.save();
+  x.translate(W / 2 - 120, 520); x.scale(10, 10);
+  x.strokeStyle = '#111'; x.lineWidth = 2; x.lineCap = 'round'; x.lineJoin = 'round';
+  x.stroke(new Path2D('M12 15.5a4.5 4.5 0 1 1-9 0a4.5 4.5 0 1 1 9 0z M10.7 12.3L20 3 M16 7l3 3 M14 9l2 2'));
+  x.restore();
+  x.textAlign = 'center'; x.fillStyle = '#111';
+  x.direction = 'rtl'; x.font = '800 60px Tajawal, sans-serif';
+  x.fillText(t('codeImageTitle'), W / 2, 960);
+  // الرمز داخل إطار، يصغر الخط إن طال الرمز
+  x.direction = 'ltr';
+  let size = 120;
+  do { x.font = '800 ' + size + 'px ui-monospace, Menlo, Consolas, monospace'; size -= 4; } while (x.measureText(code).width > W - 220 && size > 40);
+  const tw = x.measureText(code).width;
+  const bw = tw + 120, bh = size + 110, bx = (W - bw) / 2, by = 1080;
+  x.fillStyle = 'rgba(0,0,0,.06)'; x.strokeStyle = '#111'; x.lineWidth = 8;
+  x.beginPath(); x.roundRect(bx, by, bw, bh, 40); x.fill(); x.stroke();
+  x.fillStyle = '#111'; x.textBaseline = 'middle';
+  x.fillText(code, W / 2, by + bh / 2 + 4);
+  x.textBaseline = 'alphabetic';
+  x.direction = 'rtl'; x.fillStyle = '#3A3000'; x.font = '44px Tajawal, sans-serif';
+  x.fillText(t('codeImageNote'), W / 2, by + bh + 140);
+  return new Promise(res => c.toBlob(res, 'image/png'));
+}
+// الآيفون: قائمة المشاركة وفيها «حفظ الصورة» إلى الصور. غيره: تنزيل مباشر يظهر في معرض الصور
+async function saveCodeImage(code) {
+  const blob = await makeCodeImage(code);
+  if (!blob) return false;
+  const file = new File([blob], 'code.png', { type: 'image/png' });
+  if (IS_IOS && navigator.canShare && navigator.canShare({ files: [file] })) {
+    try { await navigator.share({ files: [file] }); return true; } catch (e) { if (e && e.name === 'AbortError') return false; }
+  }
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'code.png';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+  return true;
+}
+
 function CodeShot({ code, onClose }) {
+  const [saved, setSaved] = useState(false);
+  const save = async () => { if (await saveCodeImage(code)) setSaved(true); };
   useEffect(() => {
     const prev = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
@@ -3884,6 +3934,7 @@ function CodeShot({ code, onClose }) {
     <span className="code-shot-key"><${Icon} name="key" size=${64} /></span>
     <p className="code-shot-title">${t('codeShotTitle')}</p>
     <bdi className="code-shot-code" dir="ltr">${code}</bdi>
+    <button className="code-shot-save" onClick=${save}>${saved ? t('codeShotSaved') : t('codeShotSave')}</button>
     <button className="code-shot-done" onClick=${onClose}>${t('codeShotDone')}</button>
   </div>`;
 }
@@ -3900,23 +3951,6 @@ function SaveCodeScreen({ code, onDone }) {
     }
     setCopied(true); setTimeout(() => setCopied(false), 2000);
   };
-  const saveImage = () => {
-    const c = document.createElement('canvas');
-    c.width = 1080; c.height = 640;
-    const x = c.getContext('2d');
-    // نفس شكل شاشة اللقطة: أصفر وأسود، بلا اسم الموقع
-    x.fillStyle = '#FFD60A'; x.fillRect(0, 0, c.width, c.height);
-    x.direction = 'rtl'; x.textAlign = 'center';
-    x.fillStyle = '#111111'; x.font = 'bold 52px Tajawal, sans-serif';
-    x.fillText(t('codeImageTitle'), c.width / 2, 170);
-    x.direction = 'ltr'; x.font = 'bold 96px monospace';
-    x.fillText(code, c.width / 2, 340);
-    x.direction = 'rtl'; x.fillStyle = '#3A3000'; x.font = '38px Tajawal, sans-serif';
-    x.fillText(t('codeImageNote'), c.width / 2, 470);
-    const a = document.createElement('a');
-    a.href = c.toDataURL('image/png'); a.download = 'code.png';
-    document.body.appendChild(a); a.click(); a.remove();
-  };
   return html`<div className="panel center save-code">
     ${shot && html`<${CodeShot} code=${code} onClose=${() => setShot(false)} />`}
     <span className="success-icon"><${Icon} name="check" size=${28} /></span>
@@ -3925,7 +3959,6 @@ function SaveCodeScreen({ code, onDone }) {
     <bdi className="code-big" dir="ltr">${code}</bdi>
     <div className="nav">
       <button className="small-btn" onClick=${copy}>${copied ? t('copied') : t('copyCode')}</button>
-      <button className="small-btn" onClick=${saveImage}>${t('saveCodeImage')}</button>
       <button className="small-btn" onClick=${() => setShot(true)}>${t('codeShotOpen')}</button>
     </div>
     <label className="code-check">
