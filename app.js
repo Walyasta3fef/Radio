@@ -1,4 +1,4 @@
-const { useState, useEffect, useRef, useCallback, useMemo } = React;
+const { useState, useEffect, useRef, useCallback, useMemo, useContext } = React;
 const html = htm.bind(React.createElement);
 
 const MODES = ['normal', 'fast'];
@@ -1020,10 +1020,24 @@ function LiveDot() {
   return html`<span className="live-dot pulse-dot"></span>`;
 }
 
-// عدد كل من يفتح الموقع الآن، والزائر نفسه منهم؛ لا يقل عن 1 لأن صاحب الصفحة متصل
+// علم الدولة من رمزها (SA → 🇸🇦)، والكرة الأرضية لمن لا تُعرف دولته
+const UNKNOWN_FLAG = '\u{1F30D}';
+const flagOf = (code) => (/^[A-Za-z]{2}$/.test(code || '') && code.toUpperCase() !== 'XX'
+  ? String.fromCodePoint(...[...code.toUpperCase()].map(ch => 0x1F1A5 + ch.charCodeAt(0)))
+  : UNKNOWN_FLAG);
+
+// عدد كل من يفتح الموقع الآن، والزائر نفسه منهم؛ لا يقل عن 1 لأن صاحب الصفحة متصل.
+// الضغط عليه يظهر أعلام الدول وعدد كل دولة، من الأكثر إلى الأقل
 function OnlineBadge({ users }) {
   const count = Math.max(1, users.length);
-  return html`<div className="chip" title=${t('onlineNow', { n: count })} aria-label=${t('onlineNow', { n: count })}><${LiveDot} />${count}</div>`;
+  const by = {};
+  users.forEach(u => { const f = flagOf(u.countryCode); by[f] = (by[f] || 0) + 1; });
+  if (!users.length) by[UNKNOWN_FLAG] = 1;
+  const rows = Object.entries(by).sort((a, b) => b[1] - a[1] || (a[0] === UNKNOWN_FLAG) - (b[0] === UNKNOWN_FLAG));
+  return html`<${Popover} label=${t('onlineNow', { n: count })} btnClass="chip online-chip" wrapClass="online-wrap"
+    button=${html`<${LiveDot} />${count}`}>
+    <span className="online-flags">${rows.map(([f, n]) => html`<span className="flag-row" key=${f}><span className="flag">${f}</span><b>${n}</b></span>`)}</span>
+  <//>`;
 }
 
 function BackButton({ to }) {
@@ -1076,26 +1090,6 @@ function CongratsModal() {
       </div>
     </div>
   </div>`;
-}
-
-function CountryFlags({ users }) {
-  const stats = useMemo(() => {
-    const counts = users.reduce((acc, u) => {
-      const c = /^[A-Z]{2}$/.test(u.countryCode || '') ? u.countryCode : 'XX';
-      acc[c] = (acc[c] || 0) + 1;
-      return acc;
-    }, {});
-    return Object.entries(counts).map(([code, count]) => ({ code, count }))
-      .sort((a, b) => b.count - a.count).slice(0, 4);
-  }, [users]);
-  if (!stats.length) return null;
-  return html`<ul className="flags">
-    ${stats.map(({ code, count }) => html`<li key=${code}>
-      <b>${count}</b>
-      ${code === 'XX' ? html`<span>🌐</span>`
-        : html`<img src=${`https://flagcdn.com/w20/${code.toLowerCase()}.png`} width="20" alt=${code} />`}
-    </li>`)}
-  </ul>`;
 }
 
 // العدادات الظاهرة: عدد المشتركين وساعات الاستماع من الجميع
@@ -1938,7 +1932,6 @@ function HomePage({ player, users }) {
 // =====================
 function RadioPage({ mode, player, users }) {
   const now = useClock();
-  const modeUsers = users.filter(u => u.at === mode);
   const rv = radioView(player, mode, now);
   const { s, time } = rv;
   const pct = Math.min(100, (time / s.track.duration) * 100 || 0);
@@ -1959,7 +1952,6 @@ function RadioPage({ mode, player, users }) {
         <${OnlineBadge} users=${users} />
       </div>
     </div>
-    <div className="flags-row"><${CountryFlags} users=${modeUsers} /></div>
     <div className="panel-wrap">
       <div className=${'panel tint-radio' + (mode === 'fast' ? ' mode-fast' : '')}>
         <div className="panel-head">
@@ -3278,10 +3270,16 @@ function StaffReport() {
 }
 
 // قسم مطوي في صفحة المميزين: يُفتح بالضغط على عنوانه، ولا يُحمَّل محتواه قبل فتحه
+const StaffOpenCtx = React.createContext(null);
 function StaffSection({ title, badge, children }) {
-  const [open, setOpen] = useState(false);
-  return html`<section className=${'staff-sec' + (open ? ' open' : '')}>
-    <button className="staff-sec-head" onClick=${() => setOpen(o => !o)} aria-expanded=${open}>
+  const ctx = useContext(StaffOpenCtx);
+  const ref = useRef(null);
+  const open = ctx.open === title;
+  useEffect(() => {
+    if (open && ref.current) requestAnimationFrame(() => ref.current && ref.current.scrollIntoView({ block: 'start', behavior: 'smooth' }));
+  }, [open]);
+  return html`<section ref=${ref} className=${'staff-sec' + (open ? ' open' : '')}>
+    <button className="staff-sec-head" onClick=${() => ctx.setOpen(open ? null : title)} aria-expanded=${open}>
       <span>${title}</span>
       ${badge > 0 && html`<span className="c-count">${badge}</span>`}
       <span className=${'chev' + (open ? ' chev-open' : '')} aria-hidden="true">⌄</span>
@@ -3307,6 +3305,8 @@ function StaffPage({ users }) {
   const [name, setName] = useState('');
   const [mod, setMod] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [openSec, setOpenSec] = useState(null);   // قسم واحد مفتوح في كل مرة
+  const secCtx = useMemo(() => ({ open: openSec, setOpen: setOpenSec }), [openSec]);
 
   const signIn = async () => {
     setBusy(true); setMsg(null);
@@ -3351,7 +3351,7 @@ function StaffPage({ users }) {
             </div>
           </div>`}
 
-      ${staff.isOwner && html`<div className="staff-admin">
+      ${staff.isOwner && html`<${StaffOpenCtx.Provider} value=${secCtx}><div className="staff-admin">
         <${StaffSection} title=${t('feedbackListTitle')} badge=${feedbackCount}><${FeedbackList} /><//>
         <${StaffSection} title=${t('reportedPostsTitle')} badge=${reportedCount}><${ReportedPosts} /><//>
         <${StaffSection} title=${t('staffOnlineTitle')} badge=${users.length}><${StaffOnline} users=${users} /><//>
@@ -3378,7 +3378,7 @@ function StaffPage({ users }) {
           <p className="acc-line">${t('staffCountHint')}</p>
           <button className="small-btn" disabled=${busy} onClick=${countSubs}>${busy ? t('pleaseWait') : t('staffCountBtn')}</button>
         <//>
-      </div>`}
+      </div><//>`}
 
       ${msg && html`<p className="form-error">${msg}</p>`}
       ${staff.user && html`<button className="link-btn muted center-text" onClick=${() => staff.signOut()}>${t('staffSignOut')}</button>`}

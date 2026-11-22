@@ -1,4 +1,6 @@
 /* خط Tajawal محفوظ داخل الموقع، فلا يعرف Google زوار الموقع */
+/* أعلام الدول بخط Twemoji (CC-BY 4.0)، لأن Windows لا يرسمها. لا يُحمَّل إلا عند ظهور علم */
+@font-face { font-family: 'Twemoji Country Flags'; font-display: swap; src: url('fonts/TwemojiCountryFlags.woff2') format('woff2'); unicode-range: U+1F1E6-1F1FF, U+1F3F4, U+E0062-E0063, U+E0065, U+E0067, U+E006C, U+E006E, U+E0073-E0074, U+E0077, U+E007F; }
 @font-face { font-family: 'Tajawal'; font-style: normal; font-weight: 400; font-display: swap; src: url('fonts/tajawal-arabic-400-normal.woff2') format('woff2'); unicode-range: U+0600-06FF,U+0750-077F,U+0870-088E,U+0890-0891,U+0897-08E1,U+08E3-08FF,U+200C-200E,U+2010-2011,U+204F,U+2E41,U+FB50-FDFF,U+FE70-FE74,U+FE76-FEFC,U+102E0-102FB,U+10E60-10E7E,U+10EC2-10EC4,U+10EFC-10EFF,U+1EE00-1EE03,U+1EE05-1EE1F,U+1EE21-1EE22,U+1EE24,U+1EE27,U+1EE29-1EE32,U+1EE34-1EE37,U+1EE39,U+1EE3B,U+1EE42,U+1EE47,U+1EE49,U+1EE4B,U+1EE4D-1EE4F,U+1EE51-1EE52,U+1EE54,U+1EE57,U+1EE59,U+1EE5B,U+1EE5D,U+1EE5F,U+1EE61-1EE62,U+1EE64,U+1EE67-1EE6A,U+1EE6C-1EE72,U+1EE74-1EE77,U+1EE79-1EE7C,U+1EE7E,U+1EE80-1EE89,U+1EE8B-1EE9B,U+1EEA1-1EEA3,U+1EEA5-1EEA9,U+1EEAB-1EEBB,U+1EEF0-1EEF1; }
 @font-face { font-family: 'Tajawal'; font-style: normal; font-weight: 400; font-display: swap; src: url('fonts/tajawal-latin-400-normal.woff2') format('woff2'); unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
 @font-face { font-family: 'Tajawal'; font-style: normal; font-weight: 500; font-display: swap; src: url('fonts/tajawal-arabic-500-normal.woff2') format('woff2'); unicode-range: U+0600-06FF,U+0750-077F,U+0870-088E,U+0890-0891,U+0897-08E1,U+08E3-08FF,U+200C-200E,U+2010-2011,U+204F,U+2E41,U+FB50-FDFF,U+FE70-FE74,U+FE76-FEFC,U+102E0-102FB,U+10E60-10E7E,U+10EC2-10EC4,U+10EFC-10EFF,U+1EE00-1EE03,U+1EE05-1EE1F,U+1EE21-1EE22,U+1EE24,U+1EE27,U+1EE29-1EE32,U+1EE34-1EE37,U+1EE39,U+1EE3B,U+1EE42,U+1EE47,U+1EE49,U+1EE4B,U+1EE4D-1EE4F,U+1EE51-1EE52,U+1EE54,U+1EE57,U+1EE59,U+1EE5B,U+1EE5D,U+1EE5F,U+1EE61-1EE62,U+1EE64,U+1EE67-1EE6A,U+1EE6C-1EE72,U+1EE74-1EE77,U+1EE79-1EE7C,U+1EE7E,U+1EE80-1EE89,U+1EE8B-1EE9B,U+1EEA1-1EEA3,U+1EEA5-1EEA9,U+1EEAB-1EEBB,U+1EEF0-1EEF1; }
@@ -77,7 +79,14 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid 
 /* =====================
    الشريط العلوي
    ===================== */
-.topbar { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 8px; }
+/* الشريط العلوي ثابت أثناء التمرير */
+.topbar {
+  display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 8px;
+  position: sticky; top: 0; z-index: 30;
+  margin-inline: -16px; padding: calc(8px + env(safe-area-inset-top, 0px)) 16px 8px;
+  background: rgba(15, 26, 23, .82);
+  -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+}
 .top-left { display: flex; align-items: center; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
 .chip {
   display: inline-flex; align-items: center; gap: 8px;
@@ -95,14 +104,6 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid 
   padding: 9px 16px 9px 12px; font-size: 14px; font-weight: 700;
 }
 .back:hover { background: #26392F; }
-.flags-row { display: flex; justify-content: flex-end; }
-.flags {
-  list-style: none; display: flex; flex-direction: column; gap: 4px;
-  background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
-  padding: 6px 8px; font-size: 12px;
-}
-.flags li { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.flags img { border-radius: 2px; }
 
 .live-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--live); display: inline-block; }
 .pulse-dot { animation: pulse-dot 1.5s ease-in-out infinite; }
@@ -913,3 +914,11 @@ span.note-time { color: var(--note); font-weight: 700; }
   display: flex; align-items: center; justify-content: center; font-size: 26px; font-weight: 700;
 }
 .cg-badge.lvl-gold { box-shadow: inset 0 0 0 3px #E8BE5C; }
+
+/* المتصلون الآن: أعلام الدول بالعدد */
+.online-wrap { display: inline-flex; }
+.online-chip { cursor: pointer; }
+.online-flags { display: flex; flex-wrap: wrap; gap: 8px 16px; justify-content: center; }
+.flag-row { display: inline-flex; align-items: center; gap: 6px; }
+.flag { font-family: 'Twemoji Country Flags', 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif; font-size: 20px; line-height: 1; }
+.flag-row b { font-size: 14px; }

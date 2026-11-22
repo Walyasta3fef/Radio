@@ -1,0 +1,4 @@
+TwemojiCountryFlags.woff2 — from the "country-flag-emoji-polyfill" package (MIT, TalkJS).
+The flag artwork comes from Twemoji (https://github.com/twitter/twemoji),
+Copyright Twitter, Inc and other contributors, licensed under CC-BY 4.0:
+https://creativecommons.org/licenses/by/4.0/
