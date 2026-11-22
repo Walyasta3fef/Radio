@@ -202,7 +202,8 @@ const commentsApi = {
         try { const v = (await ref.child('ts').once('value')).val(); if (typeof v === 'number') ts = v; } catch (e) {}
         const recent = { l: lid, c: parent ? parent.id : ref.key, i: ref.key, t: text.slice(0, 200), ts };
         ['n', 'a', 'r', 'ra', 's', 'b'].forEach(k => { if (item[k] != null) recent[k] = item[k]; });
-        db.ref('/recent').push(recent).catch(() => {});
+        // مفتاح النسخة هو مفتاح التعليق نفسه: نسخة واحدة لكل تعليق، والقواعد تتحقق أنها تطابقه
+        db.ref('/recent/' + ref.key).set(recent).catch(() => {});
         database.ref('/counts/' + lid).transaction(v => (v || 0) + 1).catch(() => {});
       }
       logEvent(parent ? 'reply_added' : 'comment_added');
@@ -240,7 +241,8 @@ const commentsApi = {
       (await this.recentKeys(lid, ids)).forEach(k => { patch['recent/' + k] = null; });
       await withTimeout(db.ref().update(patch));
       reactions.clearHearts(lid, ids);
-      if (LECTURE_BY_ID[lid]) database.ref('/counts/' + lid).transaction(v => Math.max(0, (v || 0) - ids.length)).catch(() => {});
+      // إنقاص العدّاد باتصال صاحب التعليق، فالقواعد لا تسمح بالإنقاص لزائر بلا حساب
+      if (LECTURE_BY_ID[lid]) db.ref('/counts/' + lid).transaction(v => Math.max(0, (v || 0) - ids.length)).catch(() => {});
       logEvent('comment_deleted_own');
       return { ok: true };
     } catch (e) {
@@ -334,13 +336,35 @@ const reactions = (() => {
     return () => ref.off('value', h);
   };
   const mine = () => account.uid;
+  // البلاغات لا يقرؤها إلا المشرفون؛ وغيرهم يرى بلاغاته هو فقط، محفوظة على جهازه
+  const REPORTED_KEY = 'reportedIds';
+  const reportSubs = new Set();
+  const localReports = () => {
+    const me = mine();
+    const tree = {};
+    if (me) (storage.getJSON(REPORTED_KEY) || []).forEach(id => { tree[id] = { [me]: true }; });
+    return tree;
+  };
+  const rememberReport = (cid) => {
+    const ids = (storage.getJSON(REPORTED_KEY) || []).filter(id => id !== cid);
+    ids.push(cid);
+    storage.setJSON(REPORTED_KEY, ids.slice(-300));
+    const tree = localReports();
+    reportSubs.forEach(fn => fn(tree));
+  };
   return {
     mine,
     count: (node) => Object.keys(node || {}).length,
     watchHearts: (cb) => watch('/hearts', cb),
     // قلوب تعليقات لقاء واحد فقط: /lhearts/{اللقاء}/{التعليق}/{المستخدم}
     watchLectureHearts: (lid, cb) => watch('/lhearts/' + lid, cb),
-    watchReports: (cb) => watch('/reports', cb),
+    watchReports: (cb) => {
+      const useLocal = () => { cb(localReports()); reportSubs.add(cb); };
+      if (!staff.isMod) { useLocal(); return () => reportSubs.delete(cb); }
+      const ref = database.ref('/reports');
+      const h = ref.on('value', snap => cb(snap.val() || {}), useLocal);
+      return () => { ref.off('value', h); reportSubs.delete(cb); };
+    },
     async setHeart(cid, on, lid) {
       if (!(await account.ready())) return false;
       const ref = account.db.ref((lid && lid !== GENERAL_ID ? '/lhearts/' + lid + '/' : '/hearts/') + cid + '/' + mine());
@@ -352,7 +376,7 @@ const reactions = (() => {
     async report(cid, lid) {
       if (!(await account.ready())) return false;
       const value = !lid || lid === GENERAL_ID ? true : lid;
-      try { await withTimeout(account.db.ref('/reports/' + cid + '/' + mine()).set(value)); return true; }
+      try { await withTimeout(account.db.ref('/reports/' + cid + '/' + mine()).set(value)); rememberReport(cid); return true; }
       catch (e) { errLog.add('report: ' + (e && (e.code || e.message))); return false; }
     },
     // للمشرف: إلغاء البلاغات وإظهار المنشور

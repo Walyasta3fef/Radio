@@ -188,18 +188,30 @@ const account = (() => {
     try { await withTimeout(ownerRef(n).set(acc.uid)); return true; }
     catch (e) { errLog.add('nick set ' + n + ': ' + (e && (e.code || e.message))); return ownsNick(n); }
   }
-  // حجز الرقم التالي بالترتيب. العدّاد يزيد بعملية transaction، فلا يأخذ حسابان الرقم نفسه
-  // ولو سجّلا في اللحظة نفسها؛ وإن وُجد الرقم محجوزًا لأي سبب يُؤخذ الذي بعده
+  // حجز الرقم التالي بالترتيب في عملية واحدة: زيادة العدّاد، وتسجيل الرقم باسم الحساب، وحفظه في بيانات الحساب.
+  // القواعد لا تقبل الحجز إلا للرقم التالي مباشرة، ولحساب حقيقي ليس له رقم بعد، فلا يحجز أحد أرقامًا مقدمًا.
+  // إن سبقنا حساب آخر إلى الرقم نفسه تُرفض العملية كلها ونعيد بالرقم الذي بعده؛
+  // وإن كان الرقم محجوزًا من قبل (أرقام قديمة) يُتخطى العدّاد وحده ثم نعيد
   async function claimNick() {
-    const seqRef = acctDbNow().ref('/stats/seq');
+    const db = acctDbNow();
+    const uid = acc && acc.uid;
+    if (!uid) return null;
     for (let i = 0; i < 25; i++) {
-      let n = null;
+      let cur;
+      try { cur = (await withTimeout(db.ref('/stats/seq').once('value'))).val(); }
+      catch (e) { errLog.add('nick seq: ' + (e && (e.code || e.message))); return null; }
+      const n = Number.isInteger(cur) ? cur + 1 : NICK_FIRST;
       try {
-        const res = await withTimeout(seqRef.transaction(v => (typeof v === 'number' ? v + 1 : NICK_FIRST)));
-        if (res.committed) n = res.snapshot.val();
-      } catch (e) { errLog.add('nick seq: ' + (e && (e.code || e.message))); }
-      if (!Number.isInteger(n)) return null;
-      if (await takeNick(n)) return n;
+        await withTimeout(db.ref().update({
+          'stats/seq': n,
+          ['owners/' + n]: uid,
+          ['users/' + uid + '/k']: n,
+        }));
+        return n;
+      } catch (e) {
+        errLog.add('nick claim ' + n + ': ' + (e && (e.code || e.message)));
+        try { await withTimeout(db.ref('/stats/seq').set(n)); } catch (e2) {}
+      }
     }
     return null;
   }
@@ -250,7 +262,6 @@ const account = (() => {
     acc.nick = n;
     acc.nv = true;
     storage.setJSON(ACCOUNT_KEY, acc);
-    writeNick(n);
     pushedRev = -1;
     notify();
   }
