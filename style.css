@@ -918,7 +918,26 @@ span.note-time { color: var(--note); font-weight: 700; }
 /* المتصلون الآن: أعلام الدول بالعدد */
 .online-wrap { display: inline-flex; }
 .online-chip { cursor: pointer; }
-.online-flags { display: flex; flex-wrap: wrap; gap: 8px 16px; justify-content: center; }
-.flag-row { display: inline-flex; align-items: center; gap: 6px; }
+.online-flags { display: flex; flex-direction: column; gap: 8px; }
+.flag-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .flag { font-family: 'Twemoji Country Flags', 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif; font-size: 20px; line-height: 1; }
 .flag-row b { font-size: 14px; }
+
+/* التعليق الطويل مطويّ على 5 أسطر */
+.c-text.clamped { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 5; overflow: hidden; }
+.more-btn { font-size: 13px; font-weight: 700; color: var(--course); padding: 2px 0 4px; }
+/* نبضة القلب */
+.heart-btn.pop svg { animation: heart-pop .45s cubic-bezier(.2, .9, .3, 1.4); }
+@keyframes heart-pop { 0% { transform: scale(1); } 35% { transform: scale(1.45); } 100% { transform: scale(1); } }
+@media (prefers-reduced-motion: reduce) { .heart-btn.pop svg { animation: none; } }
+/* هيكل التحميل */
+.skel-list { list-style: none; display: flex; flex-direction: column; gap: 10px; margin: 6px 0; }
+.skel-item { display: flex; flex-direction: column; gap: 8px; padding: 12px; border: 1px solid var(--line); border-radius: 14px; }
+.skel { display: block; height: 10px; border-radius: 6px;
+  background: linear-gradient(90deg, rgba(255,255,255,.05) 25%, rgba(255,255,255,.12) 50%, rgba(255,255,255,.05) 75%);
+  background-size: 200% 100%; animation: skel 1.3s ease-in-out infinite; }
+.skel-name { width: 30%; height: 12px; }
+.skel-line { width: 90%; }
+.skel-line.short { width: 55%; }
+@keyframes skel { from { background-position: 100% 0; } to { background-position: -100% 0; } }
+@media (prefers-reduced-motion: reduce) { .skel { animation: none; } }

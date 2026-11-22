@@ -812,6 +812,10 @@ function setMediaMeta(id, course) {
     const label = t(course ? 'mediaCourse' : 'mediaArtist');
     navigator.mediaSession.metadata = new MediaMetadata({
       title: id ? shortTitle(id) : label, artist: label, album: '',
+      artwork: [
+        { src: 'icon-192-v2.png', sizes: '192x192', type: 'image/png' },
+        { src: 'icon-512-v2.png', sizes: '512x512', type: 'image/png' },
+      ],
     });
   } catch (e) {}
 }
@@ -1034,7 +1038,7 @@ function OnlineBadge({ users }) {
   users.forEach(u => { const f = flagOf(u.countryCode); by[f] = (by[f] || 0) + 1; });
   if (!users.length) by[UNKNOWN_FLAG] = 1;
   const rows = Object.entries(by).sort((a, b) => b[1] - a[1] || (a[0] === UNKNOWN_FLAG) - (b[0] === UNKNOWN_FLAG));
-  return html`<${Popover} label=${t('onlineNow', { n: count })} btnClass="chip online-chip" wrapClass="online-wrap"
+  return html`<${Popover} label=${t('onlineNow', { n: count })} btnClass="chip online-chip" wrapClass="online-wrap" popWidth=${96}
     button=${html`<${LiveDot} />${count}`}>
     <span className="online-flags">${rows.map(([f, n]) => html`<span className="flag-row" key=${f}><span className="flag">${f}</span><b>${n}</b></span>`)}</span>
   <//>`;
@@ -1157,7 +1161,7 @@ function FacebookLink() {
 // نافذة صغيرة تظهر عند الضغط على زر، بدل أن يشغل محتواها مساحة في الصفحة
 // يُحسب مكانها لتبقى دائمًا داخل الشاشة، وتُغلق بالضغط خارجها أو بالتمرير
 // keepOpen: الضغط داخلها لا يغلقها (لمحتوى فيه أزرار تتغير حالتها)
-function Popover({ label, btnClass, wrapClass, button, children, keepOpen, btnProps }) {
+function Popover({ label, btnClass, wrapClass, button, children, keepOpen, btnProps, popWidth }) {
   const [pos, setPos] = useState(null);
   const btnRef = useRef(null);
   const popRef = useRef(null);
@@ -1179,7 +1183,7 @@ function Popover({ label, btnClass, wrapClass, button, children, keepOpen, btnPr
     if (pos) return setPos(null);
     const r = btnRef.current.getBoundingClientRect();
     const vw = window.innerWidth;
-    const w = Math.min(260, vw - 32);
+    const w = Math.min(popWidth || 260, vw - 32);
     const left = Math.max(16, Math.min(vw - 16 - w, r.left + r.width / 2 - w / 2));
     setPos({ top: r.bottom + 8, left, width: w });
   };
@@ -1235,10 +1239,19 @@ function SeekBar({ id, value, duration, marks, noteMarks, plain, onInput, onComm
 // =====================
 // التعليقات
 // =====================
+// قائمة فارغة مميزة تعني «لم يصل شيء بعد»، فيظهر هيكل التحميل بدل «لا توجد تعليقات»
+const LOADING_LIST = Object.freeze([]);
+function Skeleton({ rows = 3 }) {
+  return html`<ul className="skel-list" aria-busy="true" aria-label=${t('statusLoading')}>
+    ${Array.from({ length: rows }, (_, i) => html`<li key=${i} className="skel-item">
+      <span className="skel skel-name"></span><span className="skel skel-line"></span><span className="skel skel-line short"></span>
+    </li>`)}
+  </ul>`;
+}
 function useComments(lid) {
-  const [list, setList] = useState([]);
+  const [list, setList] = useState(() => (lid ? LOADING_LIST : []));
   useEffect(() => {
-    setList([]);
+    setList(lid ? LOADING_LIST : []);
     if (!lid) return;
     return commentsApi.subscribe(lid, setList);
   }, [lid]);
@@ -1247,7 +1260,7 @@ function useComments(lid) {
 
 // أحدث التعليقات من كل اللقاءات، لمعرفة الجديد منها
 function useRecentFeed(limit) {
-  const [list, setList] = useState([]);
+  const [list, setList] = useState(LOADING_LIST);
   useEffect(() => commentsApi.subscribeRecent(limit, setList), [limit]);
   return list;
 }
@@ -1258,17 +1271,29 @@ function useCommentCounts() {
   return counts;
 }
 
+// وقت التعليق كما في التطبيقات الكبيرة: «الآن»، «منذ 5 دقائق»، «منذ 3 ساعات» في اليوم نفسه،
+// ثم «أمس 9:15 م»، ثم «12 نوفمبر، 9:15 م»، ومن سنة سابقة «12 نوفمبر 2025»
 const relTime = (() => {
+  const mk = (opts) => { try { return new Intl.DateTimeFormat('ar-u-nu-latn', opts); } catch (e) { return null; } };
   let rtf = null;
-  try { rtf = new Intl.RelativeTimeFormat('ar', { numeric: 'auto' }); } catch (e) {}
+  try { rtf = new Intl.RelativeTimeFormat('ar-u-nu-latn', { numeric: 'auto' }); } catch (e) {}
+  const fTime = mk({ hour: 'numeric', minute: '2-digit' });
+  const fDay = mk({ day: 'numeric', month: 'long' });
+  const fYear = mk({ day: 'numeric', month: 'long', year: 'numeric' });
+  const startOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
   return (ts) => {
-    if (!rtf || !ts) return '';
-    const diff = (ts - Date.now()) / 1000;
-    const steps = [[60, 'second', 1], [3600, 'minute', 60], [86400, 'hour', 3600], [2592000, 'day', 86400], [31536000, 'month', 2592000], [Infinity, 'year', 31536000]];
-    for (const [lim, unit, div] of steps) {
-      if (Math.abs(diff) < lim) return rtf.format(Math.round(diff / div), unit);
+    if (!ts || !fTime) return '';
+    const now = new Date(serverNow());
+    const diff = Math.max(0, now.getTime() - ts);
+    const d = new Date(ts);
+    if (diff < 60000) return t('justNow');
+    const today = startOfDay(now);
+    if (ts >= today && rtf) {
+      return diff < 3600000 ? rtf.format(-Math.floor(diff / 60000), 'minute') : rtf.format(-Math.floor(diff / 3600000), 'hour');
     }
-    return '';
+    if (ts >= today - 86400000) return t('yesterdayAt', { t: fTime.format(d) });
+    if (d.getFullYear() === now.getFullYear()) return t('dateAt', { d: fDay.format(d), t: fTime.format(d) });
+    return fYear.format(d);
   };
 })();
 
@@ -1324,11 +1349,23 @@ function openMention(lid, sec) {
   go('#/lecture/' + lid);
 }
 
-function CommentText({ text, maxSec, onTime, replyTo }) {
+// النص الطويل (أكثر من 5 أسطر) يُطوى ويظهر تحته «عرض المزيد»
+function CommentText({ text, maxSec, onTime, replyTo, clamp = true }) {
   const parts = splitRich(text, maxSec);
+  const ref = useRef(null);
+  const [long, setLong] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!clamp || expanded || !el) return;
+    const check = () => setLong(el.scrollHeight > el.clientHeight + 2);
+    check();
+    const id = setTimeout(check, 300);   // بعد تحميل الخط
+    return () => clearTimeout(id);
+  }, [text, clamp, expanded]);
   return html`<${React.Fragment}>
     ${replyTo && html`<div className="c-reply-to">${t('replyTo')} <bdi>${replyTo}</bdi></div>`}
-    <p className="c-text">
+    <p ref=${ref} className=${'c-text' + (clamp && !expanded ? ' clamped' : '')}>
       ${parts.map((p, i) => p.lid
         ? html`<button key=${i} className="time-chip mention-chip" onClick=${(e) => { e.stopPropagation(); openMention(p.lid, p.time); }}
             aria-label=${t('openMention', { t: p.text })}><${Icon} name="play" size=${10} /><span>${p.text}</span></button>`
@@ -1337,6 +1374,7 @@ function CommentText({ text, maxSec, onTime, replyTo }) {
             aria-label=${t('jumpTo', { t: p.text })}>${p.text}</button>`
         : html`<span key=${i}>${p.text}</span>`)}
     </p>
+    ${clamp && long && !expanded && html`<button className="more-btn" onClick=${(e) => { e.stopPropagation(); setExpanded(true); }}>${t('showMore')}</button>`}
   <//>`;
 }
 
@@ -1671,7 +1709,7 @@ function CommentsBox({ lid, list, getTime, onTime, startOpen, title }) {
         <button className=${sort === 'time' ? 'on' : ''} onClick=${() => setSort('time')}>${t('sortByTime')}</button>
       </div>`}
 
-      ${list.length === 0 && html`<p className="hint center-text">${t('noComments')}</p>`}
+      ${list === LOADING_LIST ? html`<${Skeleton} />` : list.length === 0 && html`<p className="hint center-text">${t('noComments')}</p>`}
       <ul className="c-list">${tops.map(c => item(c, c, false))}</ul>
     </div>`}
   </section>`;
@@ -1712,7 +1750,7 @@ function RecentComments({ player }) {
       <span className=${'chev' + (open ? ' chev-open' : '')} aria-hidden="true">⌄</span>
     </button>
     ${open && html`<div className="c-body">
-      ${list.length === 0 && html`<p className="hint center-text">${t('noComments')}</p>`}
+      ${list === LOADING_LIST ? html`<${Skeleton} />` : list.length === 0 && html`<p className="hint center-text">${t('noComments')}</p>`}
       <ul className="c-list">
         ${list.map(c => {
           const isNew = newIds && newIds.has(c.id);
@@ -2276,7 +2314,7 @@ function NotesBox({ id, getTime, onTime, readOnly }) {
                 : readOnly ? html`<span className="note-time" dir="ltr">${fmtTime(n.s)}</span>`
                 : html`<button className="note-time time-chip" dir="ltr" onClick=${() => onTime(Math.max(0, n.s - NOTE_JUMP_BACK))}
                     aria-label=${t('jumpTo', { t: fmtTime(n.s) })}>${fmtTime(n.s)}</button>`}
-              <div className="note-text"><${CommentText} text=${n.x} maxSec=${readOnly ? 0 : maxSec} onTime=${onTime} /></div>
+              <div className="note-text"><${CommentText} clamp=${false} text=${n.x} maxSec=${readOnly ? 0 : maxSec} onTime=${onTime} /></div>
               ${!readOnly && html`<button className="note-edit-btn" onClick=${() => setEdit({ id: n.id })} aria-label=${t('notesEdit')}>
                 <${Icon} name="note" size=${15} />
               </button>`}
@@ -2622,8 +2660,18 @@ function useReactionTree(watchFn) {
   return tree;
 }
 
+// القلب ينبض عند الضغط ويهتز الهاتف اهتزازة خفيفة
 function HeartButton({ count, mine, onToggle, small }) {
-  return html`<button className=${'heart-btn' + (mine ? ' on' : '') + (small ? ' small' : '')} onClick=${onToggle}
+  const [pop, setPop] = useState(false);
+  const press = () => {
+    if (!mine) {
+      setPop(true);
+      setTimeout(() => setPop(false), 450);
+      try { if (navigator.vibrate) navigator.vibrate(12); } catch (e) {}
+    }
+    onToggle();
+  };
+  return html`<button className=${'heart-btn' + (mine ? ' on' : '') + (small ? ' small' : '') + (pop ? ' pop' : '')} onClick=${press}
     aria-pressed=${mine} aria-label=${mine ? t('unheart') : t('heart')}>
     <${Icon} name=${mine ? 'heartFill' : 'heart'} size=${small ? 15 : 18} />
     ${count > 0 && html`<span>${count}</span>`}
@@ -2772,7 +2820,7 @@ function CommunityPage({ focus }) {
     </div>`}
 
     ${notice && html`<p className="toast toast-float" role="status">${notice}</p>`}
-    ${shown.length === 0 && html`<p className="hint center-text">${t('noPosts')}</p>`}
+    ${list === LOADING_LIST ? html`<${Skeleton} rows=${4} />` : shown.length === 0 && html`<p className="hint center-text">${t('noPosts')}</p>`}
     <div className="post-list">${shown.map(postItem)}</div>
   </div>`;
 }
