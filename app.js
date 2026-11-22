@@ -975,6 +975,7 @@ const ICON_PATHS = {
   user: html`<g><circle cx="12" cy="8" r="4"></circle><path d="M4 21c0-4 4-6 8-6s8 2 8 6"></path></g>`,
   check: html`<path d="M5 12l5 5L20 7"></path>`,
   back: html`<path d="M9 6l6 6-6 6"></path>`,
+  home: html`<g><path d="M4 10.5L12 4l8 6.5V20a1 1 0 0 1-1 1h-4.5v-6h-5v6H5a1 1 0 0 1-1-1z"></path></g>`,
   book: html`<g><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"></path><path d="M4 19V5"></path><path d="M9 7h6"></path></g>`,
   radio: html`<g><circle cx="12" cy="12" r="2"></circle><path d="M8.5 8.5a5 5 0 0 0 0 7"></path><path d="M15.5 8.5a5 5 0 0 1 0 7"></path><path d="M5.6 5.6a9 9 0 0 0 0 12.8"></path><path d="M18.4 5.6a9 9 0 0 1 0 12.8"></path></g>`,
   chart: html`<g><path d="M4 20V10"></path><path d="M10 20V4"></path><path d="M16 20v-7"></path><path d="M22 20H2"></path></g>`,
@@ -1863,10 +1864,6 @@ function LiveBadge({ behind, onGoLive }) {
 function HomePage({ player, users }) {
   const now = useClock();   // الساعة هنا فقط، لا في الموقع كله
   useProgressVersion();
-  const sum = progress.summary();
-  const contId = progress.continueId();
-  const started = progress.hasAny();
-
   const [mode, setModeState] = useState(() => {
     if (player.mode === 'normal' || player.mode === 'fast') return player.mode;
     return storage.get(RADIO_MODE_KEY) === 'fast' ? 'fast' : 'normal';
@@ -1911,16 +1908,6 @@ function HomePage({ player, users }) {
     player.toggleRadio(mode);
   };
 
-  // علامات التعليقات الجديدة
-  const feed = useRecentFeed(100);
-  const general = useComments(GENERAL_ID);
-  const lectureNew = feed.filter(c => isNewComment(c, c.l)).length;
-  const repliesToMe = feed.filter(c => isReplyToMe(c, c.l)).length;
-  const generalNew = general.filter(c => isNewComment(c, GENERAL_ID)).length;
-  const generalToMe = general.filter(c => isReplyToMe(c, GENERAL_ID)).length;
-
-  // الكارت يضيء أثناء الاستماع إلى لقاء
-  const courseActive = player.isPlaying && player.mode === 'lecture';
 
 
 
@@ -1961,20 +1948,6 @@ function HomePage({ player, users }) {
     </div>`}
 
     <section className="section">
-      <button className=${'card tint-course card-link' + (courseActive ? ' card-active' : '')} onClick=${() => go('#/course')}>
-        <div className="card-row">
-          <span className="card-toggle">
-            <span className="title-icon"><${Icon} name="book" size=${18} /></span>
-            <span className="card-title">${t('course')}${lectureNew > 0 && html`<span className="new-dot" aria-label=${t('newComments')}></span>`}</span>
-            ${repliesToMe > 0 && html`<span className="to-me">${t('repliedToYou')}</span>`}
-            <span className="pct"><${Pct} value=${sum.percent} /></span>
-            <span className="row-arrow" aria-hidden="true">‹</span>
-          </span>
-        </div>
-      </button>
-    </section>
-
-    <section className="section">
       <div className=${'card tint-radio' + (mode === 'fast' ? ' mode-fast' : '') + (rv.active ? ' card-active' : '')}>
         <div className="card-row">
           <button className="card-toggle" onClick=${() => toggle('radio')} aria-expanded=${open === 'radio'}>
@@ -2009,19 +1982,6 @@ function HomePage({ player, users }) {
         </div>`}
         ${open !== 'radio' && rv.active && STATUS_KEY[rv.status] && html`<${StatusLine} active=${rv.active} status=${rv.status} onRetry=${player.retry} />`}
       </div>
-    </section>
-
-    <section className="section">
-      <button className="card tint-community card-link" onClick=${() => go('#/general')}>
-        <div className="card-row">
-          <span className="card-toggle">
-            <span className="title-icon"><${Icon} name="chat" size=${18} /></span>
-            <span className="card-title">${t('community')}${generalNew > 0 && html`<span className="new-dot" aria-label=${t('newComments')}></span>`}</span>
-            ${generalToMe > 0 && html`<span className="to-me">${t('repliedToYou')}</span>`}
-            <span className="row-arrow" aria-hidden="true">‹</span>
-          </span>
-        </div>
-      </button>
     </section>
 
     <footer className="foot">
@@ -2197,7 +2157,7 @@ function CoursePage({ player, users }) {
 
   return html`<div className="page course">
     <div className="topbar">
-      <${BackButton} to="#/" />
+      <span></span>
       <div className="top-left">
         <${NameChip} />
         <${OnlineBadge} users=${users} />
@@ -2232,9 +2192,11 @@ function CoursePage({ player, users }) {
     <ol className="lessons">
       <li className=${'core-group' + (coreDone === COURSE_HEAD.length ? ' core-complete' : '')}>
         <div className="core-head">
+          <span className="core-leaf"><${Icon} name="leaf" size=${15} /></span>
           <b>${t('coreTitle')}</b>
-          <span className="hint">${t('doneOf', { done: coreDone, count: COURSE_HEAD.length })}</span>
+          <span className="core-count">${t('doneOf', { done: coreDone, count: COURSE_HEAD.length })}</span>
         </div>
+        <div className="core-bar" aria-hidden="true"><span style=${{ width: (coreDone / COURSE_HEAD.length * 100) + '%' }}></span></div>
         <ol className="lessons core-list">${COURSE_HEAD.map(lessonRow)}</ol>
       </li>
       ${COURSE_ORDER.filter(id => !COURSE_HEAD.includes(id)).map(lessonRow)}
@@ -2852,7 +2814,7 @@ function CommunityPage({ focus }) {
 
   return html`<div className="page community">
     <div className="topbar">
-      <${BackButton} to="#/" />
+      <span></span>
       <div className="top-left"><${NameChip} /></div>
     </div>
     <h1 className="acc-title center-text">${t('community')}</h1>
@@ -3777,7 +3739,7 @@ function AccountPage({ returnTo }) {
     const hidden = account.isHidden();
     const sum = progress.summary();
     return html`<div className="page account">
-      <div className="topbar"><${BackButton} to=${returnTo} /></div>
+      <div className="topbar"></div>
       <div className="panel">
         <h1 className="acc-title">${t('accountTitle')}</h1>
         <div className="acc-name">
@@ -3817,7 +3779,7 @@ function AccountPage({ returnTo }) {
   }
 
   return html`<div className="page account">
-    <div className="topbar"><${BackButton} to=${returnTo} /></div>
+    <div className="topbar"></div>
     <div className="panel">
       <h1 className="acc-title">${t('accountTitle')}</h1>
       <p className="acc-line">${t('accountIntro')}</p>
@@ -3980,6 +3942,67 @@ function InAppHint() {
   </div>`;
 }
 
+// =====================
+// شريط التنقّل السفلي: أربع خانات ثابتة كما في تطبيقات الهاتف. الخانة المفتوحة بلون الكورس
+// وخلفها كبسولة خفيفة، والضغط عليها وهي مفتوحة يعيد الصفحة إلى أولها. يختفي مع لوحة المفاتيح
+// وفي صفحة الإدارة. نقطة صغيرة على الكورس والمجتمع عند وجود تعليقات جديدة أو رد عليك
+// =====================
+const NAV_TABS = [
+  { key: 'home', hash: '#/', icon: 'home', label: 'navHome' },
+  { key: 'course', hash: '#/course', icon: 'book', label: 'navCourse' },
+  { key: 'general', hash: '#/general', icon: 'chat', label: 'navCommunity' },
+  { key: 'account', hash: '#/account', icon: 'user', label: 'navAccount' },
+];
+const NAV_HIDDEN = ['staff'];
+const tabOf = (route) => (route.page === 'radio' ? 'home'
+  : ['course', 'lecture', 'report'].includes(route.page) ? 'course'
+  : route.page === 'general' ? 'general'
+  : route.page === 'account' ? 'account'
+  : route.page === 'home' ? 'home' : null);
+
+function useKeyboardOpen() {
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    const isField = (el) => el && (el.tagName === 'TEXTAREA' || (el.tagName === 'INPUT' && !['checkbox', 'radio', 'range', 'button'].includes(el.type)));
+    const on = (e) => { if (isField(e.target)) setOpen(true); };
+    const off = () => setTimeout(() => setOpen(isField(document.activeElement)), 50);
+    document.addEventListener('focusin', on);
+    document.addEventListener('focusout', off);
+    return () => { document.removeEventListener('focusin', on); document.removeEventListener('focusout', off); };
+  }, []);
+  return open;
+}
+
+function BottomNav({ route }) {
+  const feed = useRecentFeed(100);
+  const general = useComments(GENERAL_ID);
+  const kb = useKeyboardOpen();
+  if (NAV_HIDDEN.includes(route.page) || kb) return null;
+  const current = tabOf(route);
+  const dot = {
+    course: feed.some(c => isReplyToMe(c, c.l)) ? 'me' : feed.some(c => isNewComment(c, c.l)) ? 'new' : null,
+    general: general.some(c => isReplyToMe(c, GENERAL_ID)) ? 'me' : general.some(c => isNewComment(c, GENERAL_ID)) ? 'new' : null,
+  };
+  const press = (tab) => {
+    if (normHash(location.hash) === tab.hash) { window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
+    go(tab.hash);
+  };
+  return html`<nav className="bottom-nav" aria-label=${t('navLabel')}>
+    ${NAV_TABS.map(tab => {
+      const on = current === tab.key;
+      return html`<button key=${tab.key} className=${'nav-item' + (on ? ' on' : '')} onClick=${() => press(tab)}
+          aria-current=${on ? 'page' : undefined}>
+        <span className="nav-pill">
+          <${Icon} name=${tab.icon} size=${22} />
+          ${dot[tab.key] && html`<span className=${'nav-dot' + (dot[tab.key] === 'me' ? ' me' : '')}
+            aria-label=${t(dot[tab.key] === 'me' ? 'repliedToYou' : 'newComments')}></span>`}
+        </span>
+        <span className="nav-label">${t(tab.label)}</span>
+      </button>`;
+    })}
+  </nav>`;
+}
+
 // المشغّل الصغير: يبقى ظاهرًا عند الإيقاف المؤقت، فيتحول زره إلى تشغيل يكمل من الموضع نفسه.
 // وعند الإيقاف فقط يظهر × لإخفائه حتى التشغيل التالي
 function MiniPlayer({ player, route }) {
@@ -4116,6 +4139,7 @@ function App() {
     <${InAppHint} />
     <${PageBoundary} key=${location.hash}>${page}<//>
     <${MiniPlayer} player=${player} route=${route} />
+    <${BottomNav} route=${route} />
     <${CongratsModal} />
     <${CodeReminder} route=${route} />
   </div>`;
