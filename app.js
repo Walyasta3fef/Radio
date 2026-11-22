@@ -1309,7 +1309,7 @@ function CommentAuthor({ c, toMe }) {
   const special = c.a && staff.nameOf(c.a);
   return html`<b className=${special ? 'staff-name' : ''}>
     ${special ? html`<span className="staff-check" aria-hidden="true"><${Icon} name="check" size=${11} /></span>` : ''}${authorName(c.n, c.a, c.pf)}
-    ${!special && c.n != null && html`<${LevelBadge} level=${badges.levelOf(c.n)} />`}
+    ${!special && typeof c.b === 'number' && html`<${LevelBadge} level=${c.b} />`}
     ${toMe ? html`<span className="to-me">${t('repliedToYou')}</span>` : ''}
   </b>`;
 }
@@ -1582,6 +1582,17 @@ function CommentsBox({ lid, list, getTime, onTime, startOpen, title }) {
   const [editing, setEditing] = useState(null);
   const [notice, setNotice] = useState(null);
   const flash = (msg) => { setNotice(msg); setTimeout(() => setNotice(null), 3500); };
+  // القلوب: قلوب هذا اللقاء فقط، ولا يظهر من ضغطها
+  const [hearts, setHearts] = useState({});
+  useEffect(() => reactions.watchLectureHearts(lid, setHearts), [lid]);
+  const me = reactions.mine();
+  const myHeart = (id) => !!(me && hearts[id] && hearts[id][me]);
+  const toggleHeart = async (id) => {
+    if (!account.loggedIn) return go('#/account');
+    if (!navigator.onLine) return flash(t('needOnline'));
+    const ok = await reactions.setHeart(id, !myHeart(id), lid);
+    if (ok === false) flash(t('saveFailed'));
+  };
   // خانة الكتابة مطوية خلف زر «اكتب تعليقًا» حتى تظهر التعليقات مباشرة
   const [composing, setComposing] = useState(false);
 
@@ -1617,6 +1628,7 @@ function CommentsBox({ lid, list, getTime, onTime, startOpen, title }) {
       ? html`<${CommentEdit} lid=${lid} c=${c} onDone=${() => setEditing(null)} />`
       : html`<${CommentText} text=${c.t} maxSec=${maxSec} onTime=${onTime} replyTo=${isReply && (c.r || c.ra) ? authorName(c.r, c.ra, c.rp) : null} />`}
     <div className="c-foot">
+      <${HeartButton} small count=${reactions.count(hearts[c.id])} mine=${myHeart(c.id)} onToggle=${() => toggleHeart(c.id)} />
       ${replyButton(top, c)}
       ${!isReply && (replies[c.id] || []).length > 0 && html`<button onClick=${() => setExpanded(x => ({ ...x, [c.id]: !x[c.id] }))}>
         ${expanded[c.id] ? t('hideReplies') : t('showReplies', { n: replies[c.id].length })}

@@ -165,7 +165,12 @@ const commentsApi = {
     const TS = firebase.database.ServerValue.TIMESTAMP;
     const item = { t: text, ts: TS };
     if (staff.isStaff) item.a = staff.uid;
-    else item.n = account.nick;
+    else {
+      item.n = account.nick;
+      // مرتبة الكاتب لحظة الكتابة (المنشورة في /badges)، فلا تتغير على التعليق إن ترقّى بعده
+      const b = badges.levelOf(account.nick);
+      if (b != null) item.b = b;
+    }
     const s = firstTime(text, maxSecOf(lid));
     if (s != null) item.s = s;
     if (parent) {
@@ -178,19 +183,25 @@ const commentsApi = {
       const db = staff.isStaff ? database : account.db;
       if (!staff.isStaff && !(await account.ready())) return { error: 'saveFailed' };
       const ref = db.ref('/comments/' + lid).push();
-      if (staff.isStaff) await withTimeout(ref.set(item));
-      else await withTimeout(db.ref().update({
+      const write = () => (staff.isStaff ? withTimeout(ref.set(item)) : withTimeout(db.ref().update({
         ['comments/' + lid + '/' + ref.key]: item,
         // ختم آخر تعليق: القواعد ترفض تعليقًا جديدًا قبل مرور 30 ثانية
         ['rate/' + account.uid]: firebase.database.ServerValue.TIMESTAMP,
-      }));
+      })));
+      try { await write(); }
+      catch (e) {
+        // إن رُفضت المرتبة (تغيّرت لحظة الكتابة، أو قبل نشر القواعد) يُكتب التعليق بدونها
+        if (item.b == null) throw e;
+        delete item.b;
+        await write();
+      }
       storage.set(COMMENT_LAST_KEY, String(Date.now()));
       if (LECTURE_BY_ID[lid]) {
         // نسخة مختصرة لقسم أحدث التعليقات بنفس وقت التعليق، وزيادة عدّاد اللقاء
         let ts = Date.now();
         try { const v = (await ref.child('ts').once('value')).val(); if (typeof v === 'number') ts = v; } catch (e) {}
         const recent = { l: lid, c: parent ? parent.id : ref.key, i: ref.key, t: text.slice(0, 200), ts };
-        ['n', 'a', 'r', 'ra', 's'].forEach(k => { if (item[k] != null) recent[k] = item[k]; });
+        ['n', 'a', 'r', 'ra', 's', 'b'].forEach(k => { if (item[k] != null) recent[k] = item[k]; });
         db.ref('/recent').push(recent).catch(() => {});
         database.ref('/counts/' + lid).transaction(v => (v || 0) + 1).catch(() => {});
       }
@@ -228,6 +239,7 @@ const commentsApi = {
       ids.forEach(id => { patch['comments/' + lid + '/' + id] = null; });
       (await this.recentKeys(lid, ids)).forEach(k => { patch['recent/' + k] = null; });
       await withTimeout(db.ref().update(patch));
+      reactions.clearHearts(lid, ids);
       if (LECTURE_BY_ID[lid]) database.ref('/counts/' + lid).transaction(v => Math.max(0, (v || 0) - ids.length)).catch(() => {});
       logEvent('comment_deleted_own');
       return { ok: true };
@@ -271,6 +283,7 @@ const commentsApi = {
       await Promise.all(ids.map(id => this.ref(lid).child(id).remove()));
       // المجتمع: حذف قلوب المنشور وبلاغاته معه
       if (lid === GENERAL_ID) ids.forEach(id => { reactions.clear(id); });
+      else reactions.clearHearts(lid, ids);
       if (LECTURE_BY_ID[lid]) {
         await Promise.all(ids.map(async id => {
           const snap = await database.ref('/recent').orderByChild('i').equalTo(id).once('value');
@@ -325,10 +338,12 @@ const reactions = (() => {
     mine,
     count: (node) => Object.keys(node || {}).length,
     watchHearts: (cb) => watch('/hearts', cb),
+    // قلوب تعليقات لقاء واحد فقط: /lhearts/{اللقاء}/{التعليق}/{المستخدم}
+    watchLectureHearts: (lid, cb) => watch('/lhearts/' + lid, cb),
     watchReports: (cb) => watch('/reports', cb),
-    async setHeart(cid, on) {
+    async setHeart(cid, on, lid) {
       if (!(await account.ready())) return false;
-      const ref = account.db.ref('/hearts/' + cid + '/' + mine());
+      const ref = account.db.ref((lid && lid !== GENERAL_ID ? '/lhearts/' + lid + '/' : '/hearts/') + cid + '/' + mine());
       try { await withTimeout(on ? ref.set(true) : ref.remove()); return true; }
       catch (e) { errLog.add('heart: ' + (e && (e.code || e.message))); return false; }
     },
@@ -342,6 +357,12 @@ const reactions = (() => {
     },
     // للمشرف: إلغاء البلاغات وإظهار المنشور
     clearReports(cid) { return database.ref('/reports/' + cid).remove().catch(() => {}); },
+    // قلوب التعليقات المحذوفة: لا تُترك مخزنة بلا فائدة
+    clearHearts(lid, ids) {
+      ids.forEach(id => {
+        database.ref((lid === GENERAL_ID ? '/hearts/' : '/lhearts/' + lid + '/') + id).remove().catch(() => {});
+      });
+    },
     clear(cid) {
       database.ref('/hearts/' + cid).remove().catch(() => {});
       database.ref('/reports/' + cid).remove().catch(() => {});
