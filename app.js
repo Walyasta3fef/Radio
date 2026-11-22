@@ -1938,7 +1938,6 @@ function HomePage({ player, users }) {
         <p className="intro-title" id="intro-title">${t('introTitle')}</p>
         <ul>
           <li>${t('courseInfo')}</li>
-          <li>${t('intro2')}</li>
           ${!account.loggedIn && html`<li>${t('intro3')}</li>`}
           <li>${t('introPrivacy')}</li>
         </ul>
@@ -3711,6 +3710,7 @@ function AccountPage({ returnTo }) {
   useAccountVersion();
   useProgressVersion();
   const [tab, setTab] = useState('login');
+  const [codeExample] = useState(randomCodeExample);   // مثال مختلف في كل زيارة للصفحة
   const [value, setValue] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
@@ -3824,7 +3824,7 @@ function AccountPage({ returnTo }) {
 
       <form onSubmit=${submit}>
         <input className="name-input" dir="ltr" lang="en" value=${value} autoComplete="off" autoCapitalize="none"
-          autoCorrect="off" spellCheck="false" placeholder=${tab === 'new' ? t('namePlaceholderNew') : t('namePlaceholderLogin')}
+          autoCorrect="off" spellCheck="false" placeholder=${tab === 'new' ? t('namePlaceholderNew', { ex: codeExample }) : t('namePlaceholderLogin')}
           onInput=${e => setValue(e.target.value)} aria-label=${t('accountTitle')} />
         ${tab === 'new' && /[\u0600-\u06FF]/.test(value.replace(/[٠-٩۰-۹]/g, '')) && html`<p className="form-error">${t('nameLatinOnly')}</p>`}
         ${tab === 'new' && html`<div className="name-tools"><span className="hint">${t('nameRules')}</span></div>`}

@@ -22,7 +22,15 @@ function normalizeName(raw) {
 }
 
 // يعيد مفتاح رسالة الخطأ، أو null إذا كان الاسم صالحًا
+// أمثلة قوية تظهر في خانة الرمز الجديد، يتغير المثال كل مرة حتى لا ينسخ الجميع مثالًا واحدًا،
+// ولا يُقبل أي منها رمزًا
+const CODE_EXAMPLES = ['moon37garden', 'blue58castle', 'rain4window9', 'cedar61lantern', 'stone83river',
+  'olive2harbor7', 'night46candle', 'amber9forest3', 'cloud72bridge', 'pearl5desert8', 'maple38ocean',
+  'tiger6valley2', 'silver47pine', 'falcon3meadow', 'coral85tower', 'ivory7canyon4', 'lemon62sailor',
+  'quiet9harbor5', 'crimson48dune', 'winter3orchard'];
+const randomCodeExample = () => CODE_EXAMPLES[Math.floor(Math.random() * CODE_EXAMPLES.length)];
 function validateName(name) {
+  if (CODE_EXAMPLES.includes(name)) return 'nameIsExample';
   if (/[^a-z0-9]/.test(name)) return 'nameLatinOnly';
   if (name.length < NAME_MIN) return 'nameTooShort';
   if (!/\p{L}/u.test(name) || !/\p{N}/u.test(name)) return 'nameNeedsMix';
