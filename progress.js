@@ -418,6 +418,17 @@ const progress = (() => {
   }
 
   function exportState() { return JSON.stringify(state); }
+  // ملخص التقدّم لمتابعة من يستمع بلا حساب: الأيام والمكتمل والمرتبة فقط، بلا خرائط الشرائح الثقيلة
+  function exportSummary() {
+    const lectures = {};
+    Object.entries(state.lectures || {}).forEach(([id, e]) => {
+      if (!e) return;
+      const x = {};
+      ['d', 'da', 'k', 'c'].forEach(k => { if (e[k] != null) x[k] = e[k]; });
+      if (Object.keys(x).length) lectures[id] = x;
+    });
+    return JSON.stringify({ daily: state.daily || {}, sec: state.sec || {}, lectures, lvl: state.lvl || 0, core: state.core || 0 });
+  }
 
   // مسح التقدّم من هذا المتصفح فقط (عند الخروج)، ويبقى محفوظًا في الحساب
   function reset() {
@@ -458,7 +469,7 @@ const progress = (() => {
 
   return {
     record, addTime, doneSkipped, rounds, level, congratsSeen, setCongratsSeen, stats, nextUnheard, seenAt, markSeen, legacySeconds, setPosition, position, setFastPosition, fastPosition, percent, segments, isDone, summary, continueId, hasAny,
-    merge, exportState, reset, subscribe, save,
+    merge, exportState, exportSummary, reset, subscribe, save,
     get rev() { return rev; },
   };
 })();

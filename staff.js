@@ -78,7 +78,21 @@ const staff = (() => {
       snap.forEach(ch => {
         const v = ch.val();
         if (!v || typeof v.d !== 'string') return;
-        try { out.push({ k: v.k || null, u: v.u || 0, d: JSON.parse(v.d) }); } catch (e) {}
+        try { out.push({ k: v.k || null, u: v.u || 0, an: v.an || null, d: JSON.parse(v.d) }); } catch (e) {}
+      });
+      return { ok: true, users: out };
+    } catch (e) { return { error: 'staffReportFailed' }; }
+  }
+
+  // للمالك فقط: ملخصات من يستمع بلا حساب (/anon). من صار له حساب بعدها يُعلَّم، فلا يُحسب مرتين
+  async function loadAnon(linked) {
+    try {
+      const snap = await withTimeout(database.ref('/anon').once('value'), 30000);
+      const out = [];
+      snap.forEach(ch => {
+        const v = ch.val();
+        if (!v || typeof v.d !== 'string' || (linked && linked.has(ch.key))) return;
+        try { out.push({ k: null, anon: true, u: v.u || 0, d: JSON.parse(v.d) }); } catch (e) {}
       });
       return { ok: true, users: out };
     } catch (e) { return { error: 'staffReportFailed' }; }
@@ -150,7 +164,7 @@ const staff = (() => {
     get list() { return list; },
     nameOf: (uid) => (list[uid] && list[uid].name) || null,
     names: () => Object.values(list).map(s => s && s.name).filter(Boolean),
-    signIn, signOut, add, remove, countSubscribers, loadUsers, saveLecture, removeLecture, savePublished, removePublished, saveSilences, removeSilences, loadSilenceNames,
+    signIn, signOut, add, remove, countSubscribers, loadUsers, loadAnon, saveLecture, removeLecture, savePublished, removePublished, saveSilences, removeSilences, loadSilenceNames,
     subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn); },
   };
 })();

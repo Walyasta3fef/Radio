@@ -200,7 +200,15 @@ const account = (() => {
   // التأكد من رقم الحساب: رقمه المحفوظ، وإلا حجز رقم جديد
   // رقم الحساب يُحجز مرة واحدة فقط عند إنشائه، ثم لا يتغير أبدًا
   // nv: تأكدنا مرة أن الرقم مسجّل باسم هذا الحساب في /owners. إن فشل التأكد يبقى الرقم كما هو ويُسجَّل السبب
+  // الرقم الخفي الذي تابع هذا الجهاز قبل الحساب (إن وُجد)، يُحفظ مع الحساب مرة
+  function linkAnon(remote) {
+    const an = typeof anonTrack !== 'undefined' ? anonTrack.uid() : null;
+    if (!an || (remote && remote.an === an)) return;
+    userRef(acc.uid).child('an').set(an).catch(() => {});
+  }
+
   async function ensureNick(remote) {
+    linkAnon(remote);
     if (!acc || !acc.uid) return;
     // الرقم في قاعدة البيانات يُقدَّم على المحفوظ في الجهاز إن كان مسجّلًا باسم هذا الحساب
     // (أُعيد ترقيم الحسابات مرة)، حتى لا يكتب الجهاز رقمه القديم فوق الجديد
@@ -427,4 +435,39 @@ const badges = (() => {
     all: () => map,
     subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn); },
   };
+})();
+
+// =====================
+// متابعة من يستمع بلا حساب: بعد 5 دقائق استماع يُنشأ له رقم خفي (Firebase Anonymous Auth)
+// دون أن يرى شيئًا، ويُرفع ملخص تقدّمه إلى /anon/{الرقم} كل 10 دقائق. لا يقرؤه غير المالك.
+// يبدو له أنه بلا حساب ولا يستطيع التعليق. تطبيق منفصل حتى لا يتعارض مع الحسابات ودخول المشرفين،
+// واتصاله يُفتح لحظة الرفع فقط ثم يُغلق
+// =====================
+const anonTrack = (() => {
+  const MIN_SEC = 300;
+  const EVERY_MS = 10 * 60 * 1000;
+  let app, auth, db;
+  try { app = firebase.initializeApp(firebaseConfig, 'anon'); auth = app.auth(); db = app.database(); db.goOffline(); }
+  catch (e) { return { uid: () => null }; }
+  let lastRev = -1;
+  let busy = false;
+  async function send() {
+    if (busy || account.loggedIn || !navigator.onLine || progress.rev === lastRev) return;
+    if (progress.stats('0000', '9999').total < MIN_SEC) return;
+    busy = true;
+    try {
+      if (!auth.currentUser) await withTimeout(auth.signInAnonymously());
+      const rev = progress.rev;
+      db.goOnline();
+      await withTimeout(db.ref('/anon/' + auth.currentUser.uid).set({
+        d: progress.exportSummary(), u: firebase.database.ServerValue.TIMESTAMP,
+      }));
+      lastRev = rev;
+    } catch (e) { errLog.add('anon: ' + (e && (e.code || e.message))); }
+    finally { try { db.goOffline(); } catch (e) {} busy = false; }
+  }
+  setTimeout(send, 30000);
+  setInterval(send, EVERY_MS);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') send(); });
+  return { uid: () => (auth.currentUser ? auth.currentUser.uid : null) };
 })();

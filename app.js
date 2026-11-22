@@ -1940,6 +1940,7 @@ function HomePage({ player, users }) {
           <li>${t('courseInfo')}</li>
           <li>${t('intro2')}</li>
           ${!account.loggedIn && html`<li>${t('intro3')}</li>`}
+          <li>${t('introPrivacy')}</li>
         </ul>
         <div className="modal-actions">
           <button className="small-btn" onClick=${() => closeIntro(false)}>${t('introOk')}</button>
@@ -3302,6 +3303,8 @@ function StaffBadges() {
 const STAFF_PERIODS = [{ key: '7', days: 7 }, { key: '30', days: 30 }, { key: 'all', days: 0 }];
 function StaffReport() {
   const [users, setUsers] = useState(null);
+  const [anon, setAnon] = useState([]);
+  const [who, setWho] = useState('all');   // all | members | anon
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const [period, setPeriod] = useState('30');
@@ -3310,9 +3313,11 @@ function StaffReport() {
   const load = async () => {
     setBusy(true); setError(null);
     const r = await staff.loadUsers();
+    if (r.error) { setBusy(false); return setError(r.error); }
+    const a = await staff.loadAnon(new Set(r.users.map(u => u.an).filter(Boolean)));
     setBusy(false);
-    if (r.error) return setError(r.error);
     setUsers(r.users);
+    setAnon(a.users || []);
     try { setSiteSec((await database.ref('/stats/listen_seconds').once('value')).val() || 0); } catch (e) {}
   };
 
@@ -3326,9 +3331,16 @@ function StaffReport() {
 
   const p = STAFF_PERIODS.find(x => x.key === period);
   const today = new Date();
-  const r = withRadio(buildListenReport(users, p.days ? dayKey(addDays(today, -(p.days - 1))) : '00000000', dayKey(today), !p.days));
+  const group = who === 'members' ? users : who === 'anon' ? anon : users.concat(anon);
+  const r = withRadio(buildListenReport(group, p.days ? dayKey(addDays(today, -(p.days - 1))) : '00000000', dayKey(today), !p.days));
   const srcTotal = r.c + r.r;
+  const coreDone = group.filter(u => u.d && u.d.core).length;
+  const fullDone = group.filter(u => u.d && u.d.lvl >= 1).length;
   return html`<div className="staff-report">
+    <div className="seg seg-3" role="tablist">
+      ${[['all', 'staffWhoAll', users.length + anon.length], ['members', 'staffWhoMembers', users.length], ['anon', 'staffWhoAnon', anon.length]].map(([k, l, n]) =>
+        html`<button key=${k} role="tab" aria-selected=${who === k} className=${who === k ? 'on' : ''} onClick=${() => setWho(k)}>${t(l)} <bdi>${n}</bdi></button>`)}
+    </div>
     <div className="seg seg-3" role="tablist">
       ${STAFF_PERIODS.map(x => html`<button key=${x.key} role="tab" aria-selected=${period === x.key}
         className=${period === x.key ? 'on' : ''} onClick=${() => setPeriod(x.key)}>${t('staffPeriod' + x.key)}</button>`)}
@@ -3339,6 +3351,8 @@ function StaffReport() {
       <div><b>${r.total > 0 ? fmtListen(r.total) : '—'}</b><small>${t('staffRepTotal')}</small></div>
       <div><b>${r.listeners ? fmtListen(r.total / r.listeners) : '—'}</b><small>${t('staffRepAverage')}</small></div>
       <div><b>${siteSec != null ? fmtHours(siteSec) : '—'}</b><small>${t('staffRepSite')}</small></div>
+      <div><b>${coreDone}</b><small>${t('badgeCore')}</small></div>
+      <div><b>${fullDone}</b><small>${t('staffRepFullDone')}</small></div>
     </div>
 
     ${srcTotal > 0 && html`<${React.Fragment}>
@@ -3369,7 +3383,7 @@ function StaffReport() {
       <h3>${t('staffRepTop')}</h3>
       <ul className="staff-list">
         ${r.top.slice(0, 10).map((u, i) => html`<li key=${i}>
-          <span>${t('staffRepNumber')} <bdi dir="ltr">${u.k || '—'}</bdi></span>
+          <span>${u.k ? html`${t('staffRepNumber')} <bdi dir="ltr">${u.k}</bdi>` : t('staffWhoAnonOne')}</span>
           <span className="hint">${fmtListen(u.sec)}</span>
         </li>`)}
       </ul>
