@@ -970,7 +970,7 @@ span.note-time { color: var(--note); font-weight: 700; }
 .code-shot-code {
   font-family: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace; font-size: clamp(28px, 9vw, 44px);
   font-weight: 800; letter-spacing: 1px; word-break: break-all;
-  background: rgba(0, 0, 0, .06); border: 3px solid #111; border-radius: 16px; padding: 14px 20px; max-width: 100%;
+  max-width: 100%;
 }
 .code-shot-save { margin-top: 8px; background: #111; color: #FFD60A; font-weight: 800; font-size: 17px; padding: 14px 44px; border-radius: 999px; }
 .code-shot-done { font-weight: 800; font-size: 15px; color: #111; padding: 8px 24px; text-decoration: underline; }

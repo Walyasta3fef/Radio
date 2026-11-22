@@ -3871,10 +3871,10 @@ function TitleEditor({ value, setValue, msg, onSave }) {
 // شاشة «احفظ رمزك» بعد إنشاء رمز جديد: نسخ، وحفظه كصورة، وتأكيد قبل المتابعة
 // =====================
 // شاشة صفراء كاملة للقطة شاشة: لون لا يتكرر في معرض الصور فيسهل إيجادها بين آلاف الصور،
-// وأيقونة مفتاح تُعرف من الصورة المصغّرة. بلا اسم الموقع ولا شعاره ولا أي كلمة عن الكورس،
+// والرمز وحده بلا أي كلام. بلا اسم الموقع ولا شعاره ولا أي كلمة عن الكورس،
 // فمن يراها في المعرض لا يعرف أنها لهذا الموقع
 // =====================
-// صورة الرمز بنفس شكل الشاشة الصفراء، تُرسم في الصفحة فلا يظهر فيها أي رابط
+// صورة الرمز: صفراء والرمز وحده، تُرسم في الصفحة فلا يظهر فيها أي رابط
 async function makeCodeImage(code) {
   try { await document.fonts.ready; } catch (e) {}
   const W = 1080, H = 1920;
@@ -3882,28 +3882,11 @@ async function makeCodeImage(code) {
   c.width = W; c.height = H;
   const x = c.getContext('2d');
   x.fillStyle = '#FFD60A'; x.fillRect(0, 0, W, H);
-  // المفتاح: نفس رسم الأيقونة مكبّرًا
-  x.save();
-  x.translate(W / 2 - 120, 520); x.scale(10, 10);
-  x.strokeStyle = '#111'; x.lineWidth = 2; x.lineCap = 'round'; x.lineJoin = 'round';
-  x.stroke(new Path2D('M12 15.5a4.5 4.5 0 1 1-9 0a4.5 4.5 0 1 1 9 0z M10.7 12.3L20 3 M16 7l3 3 M14 9l2 2'));
-  x.restore();
-  x.textAlign = 'center'; x.fillStyle = '#111';
-  x.direction = 'rtl'; x.font = '800 60px Tajawal, sans-serif';
-  x.fillText(t('codeImageTitle'), W / 2, 960);
-  // الرمز داخل إطار، يصغر الخط إن طال الرمز
-  x.direction = 'ltr';
-  let size = 120;
-  do { x.font = '800 ' + size + 'px ui-monospace, Menlo, Consolas, monospace'; size -= 4; } while (x.measureText(code).width > W - 220 && size > 40);
-  const tw = x.measureText(code).width;
-  const bw = tw + 120, bh = size + 110, bx = (W - bw) / 2, by = 1080;
-  x.fillStyle = 'rgba(0,0,0,.06)'; x.strokeStyle = '#111'; x.lineWidth = 8;
-  x.beginPath(); x.roundRect(bx, by, bw, bh, 40); x.fill(); x.stroke();
-  x.fillStyle = '#111'; x.textBaseline = 'middle';
-  x.fillText(code, W / 2, by + bh / 2 + 4);
-  x.textBaseline = 'alphabetic';
-  x.direction = 'rtl'; x.fillStyle = '#3A3000'; x.font = '44px Tajawal, sans-serif';
-  x.fillText(t('codeImageNote'), W / 2, by + bh + 140);
+  // الرمز وحده في المنتصف، يصغر الخط إن طال الرمز
+  x.direction = 'ltr'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillStyle = '#111';
+  let size = 130;
+  do { x.font = '800 ' + size + 'px ui-monospace, Menlo, Consolas, monospace'; size -= 4; } while (x.measureText(code).width > W - 160 && size > 40);
+  x.fillText(code, W / 2, H / 2);
   return new Promise(res => c.toBlob(res, 'image/png'));
 }
 // الآيفون: قائمة المشاركة وفيها «حفظ الصورة» إلى الصور. غيره: تنزيل مباشر يظهر في معرض الصور
@@ -3931,8 +3914,6 @@ function CodeShot({ code, onClose }) {
     return () => { document.body.style.overflow = prev; };
   }, []);
   return html`<div className="code-shot" role="dialog" aria-modal="true" aria-label=${t('codeShotTitle')}>
-    <span className="code-shot-key"><${Icon} name="key" size=${64} /></span>
-    <p className="code-shot-title">${t('codeShotTitle')}</p>
     <bdi className="code-shot-code" dir="ltr">${code}</bdi>
     <button className="code-shot-save" onClick=${save}>${saved ? t('codeShotSaved') : t('codeShotSave')}</button>
     <button className="code-shot-done" onClick=${onClose}>${t('codeShotDone')}</button>
