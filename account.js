@@ -207,6 +207,14 @@ const account = (() => {
     userRef(acc.uid).child('an').set(an).catch(() => {});
   }
 
+  async function renumOf(n) {
+    if (!Number.isInteger(n)) return null;
+    try {
+      const v = (await withTimeout(acctDbNow().ref('/renum/' + n).once('value'))).val();
+      return Number.isInteger(v) ? v : null;
+    } catch (e) { return null; }
+  }
+
   async function ensureNick(remote) {
     linkAnon(remote);
     if (!acc || !acc.uid) return;
@@ -215,6 +223,10 @@ const account = (() => {
     const remoteK = remote && Number.isInteger(remote.k) ? remote.k : null;
     let known = acc.nick || remoteK;
     if (remoteK && remoteK !== acc.nick && await ownsNick(remoteK)) { known = remoteK; acc.nv = true; }
+    // أُعيد ترقيم الحسابات القديمة مرة: /renum/{الرقم القديم} = الرقم الجديد. يُؤخذ الجديد حتى لو كتب جهاز
+    // بنسخة قديمة من الموقع رقمه القديم فوقه، والقواعد تمنع حجز الأرقام القديمة من جديد
+    const renumbered = (await renumOf(acc.nick)) || (await renumOf(remoteK));
+    if (renumbered && renumbered !== known && await ownsNick(renumbered)) { known = renumbered; acc.nv = true; }
     if (known) {
       if (acc.nick !== known) { acc.nick = known; storage.setJSON(ACCOUNT_KEY, acc); pushedRev = -1; notify(); }
       if (remoteK !== known && remote !== null) writeNick(known);
