@@ -7,8 +7,8 @@ const ACCOUNT_KEY = 'afaf_account_v1';
 const NAME_SHOWN_KEY = 'afaf_code_shown_day';   // الرمز مخفي افتراضيًا لأنه كلمة مرور
 const NAME_MIN = 8;
 const PUSH_EVERY_MS = 30000;
-const NICK_MIN = 1000;   // الأرقام الجديدة من 4 خانات (الأرقام القديمة الأصغر تبقى كما هي)
-const NICK_MAX = 9999;
+// أرقام الحسابات بالترتيب: /stats/seq آخر رقم أُعطي، وأول رقم جديد 16 (الحسابات الخمسة عشر الأولى رُقّمت يدويًا)
+const NICK_FIRST = 16;
 const TITLE_MAX = 15;
 
 // توحيد الكتابة: إزالة المسافات، وتحويل الأرقام العربية، وعدم التفريق بين الحروف الكبيرة والصغيرة
@@ -82,13 +82,21 @@ const authError = (e) => ((e && e.code) === 'auth/too-many-requests' ? 'tooManyT
 // تُعرض كل التعليقات بالاسم الحالي لصاحب الرقم، فتغييره يغيّر القديم والجديد معًا
 // لا يكتب اسم رقمٍ إلا صاحبه (القواعد تتحقق من /owners)
 // =====================
+// الأرقام المتتالية (1، 2، 3...) قد يعيدها Firebase مصفوفةً لا كائنًا، فتُحوَّل إلى كائن بمفاتيحها
+const asObject = (v) => {
+  if (!v) return {};
+  if (!Array.isArray(v)) return v;
+  const o = {};
+  v.forEach((x, i) => { if (x != null) o[i] = x; });
+  return o;
+};
 const titles = (() => {
   let map = {};
   let version = 0;
   const listeners = new Set();
   try { map = JSON.parse(localStorage.getItem('titlesCache') || '{}') || {}; } catch (e) {}
   database.ref('/titles').on('value', snap => {
-    map = snap.val() || {};
+    map = asObject(snap.val());
     version++;
     try { localStorage.setItem('titlesCache', JSON.stringify(map)); } catch (e) {}
     listeners.forEach(fn => fn());
@@ -113,12 +121,10 @@ const account = (() => {
 
   // بيانات الحساب في /users/{uid}: لا يقرؤها ولا يكتبها إلا صاحبها
   const userRef = (uid) => acctDbNow().ref('/users/' + uid);
-  // k: رقم الاسم المعروض في التعليقات (أخ 4821)، ثابت للحساب على كل الأجهزة
-  const payload = () => {
-    const p = { d: progress.exportState(), u: firebase.database.ServerValue.TIMESTAMP };
-    if (acc && acc.nick) p.k = acc.nick;
-    return p;
-  };
+  // k: رقم الاسم المعروض في التعليقات (أخ 12)، ثابت للحساب على كل الأجهزة.
+  // لا يُرسل مع كل حفظ، بل يُكتب وحده عند حجزه أو تغيّره (writeNick)، فلا يكتب جهاز رقمًا قديمًا فوق الجديد
+  const payload = () => ({ d: progress.exportState(), u: firebase.database.ServerValue.TIMESTAMP });
+  const writeNick = (n) => userRef(acc.uid).child('k').set(n).catch(e => errLog.add('nick write: ' + (e && (e.code || e.message))));
 
   // الاتصال بالحساب: دخول أو إنشاء
   async function connect(name, mode) {
@@ -174,10 +180,17 @@ const account = (() => {
     try { await withTimeout(ownerRef(n).set(acc.uid)); return true; }
     catch (e) { errLog.add('nick set ' + n + ': ' + (e && (e.code || e.message))); return ownsNick(n); }
   }
-  // حجز رقم عشوائي غير مستخدم
+  // حجز الرقم التالي بالترتيب. العدّاد يزيد بعملية transaction، فلا يأخذ حسابان الرقم نفسه
+  // ولو سجّلا في اللحظة نفسها؛ وإن وُجد الرقم محجوزًا لأي سبب يُؤخذ الذي بعده
   async function claimNick() {
+    const seqRef = acctDbNow().ref('/stats/seq');
     for (let i = 0; i < 25; i++) {
-      const n = NICK_MIN + Math.floor(Math.random() * (NICK_MAX - NICK_MIN + 1));
+      let n = null;
+      try {
+        const res = await withTimeout(seqRef.transaction(v => (typeof v === 'number' ? v + 1 : NICK_FIRST)));
+        if (res.committed) n = res.snapshot.val();
+      } catch (e) { errLog.add('nick seq: ' + (e && (e.code || e.message))); }
+      if (!Number.isInteger(n)) return null;
       if (await takeNick(n)) return n;
     }
     return null;
@@ -189,9 +202,14 @@ const account = (() => {
   // nv: تأكدنا مرة أن الرقم مسجّل باسم هذا الحساب في /owners. إن فشل التأكد يبقى الرقم كما هو ويُسجَّل السبب
   async function ensureNick(remote) {
     if (!acc || !acc.uid) return;
-    const known = acc.nick || (remote && Number.isInteger(remote.k) ? remote.k : null);
+    // الرقم في قاعدة البيانات يُقدَّم على المحفوظ في الجهاز إن كان مسجّلًا باسم هذا الحساب
+    // (أُعيد ترقيم الحسابات مرة)، حتى لا يكتب الجهاز رقمه القديم فوق الجديد
+    const remoteK = remote && Number.isInteger(remote.k) ? remote.k : null;
+    let known = acc.nick || remoteK;
+    if (remoteK && remoteK !== acc.nick && await ownsNick(remoteK)) { known = remoteK; acc.nv = true; }
     if (known) {
       if (acc.nick !== known) { acc.nick = known; storage.setJSON(ACCOUNT_KEY, acc); pushedRev = -1; notify(); }
+      if (remoteK !== known && remote !== null) writeNick(known);
       if (!acc.nv) {
         if (await takeNick(known)) { acc.nv = true; storage.setJSON(ACCOUNT_KEY, acc); }
         else errLog.add('nick check failed: ' + known);
@@ -204,6 +222,7 @@ const account = (() => {
     acc.nick = n;
     acc.nv = true;
     storage.setJSON(ACCOUNT_KEY, acc);
+    writeNick(n);
     pushedRev = -1;
     notify();
   }
@@ -232,7 +251,7 @@ const account = (() => {
       const p = payload();
       const e = (await notes.encrypt(acc.name)) || remoteNotes;
       if (e) { p.e = e; remoteNotes = e; }
-      await withTimeout(userRef(acc.uid).set(p));
+      await withTimeout(userRef(acc.uid).update(p));
       pushedRev = rev;
       pushedNotesRev = nrev;
       lastSync = Date.now();
@@ -365,7 +384,7 @@ const badges = (() => {
   const listeners = new Set();
   try { map = JSON.parse(localStorage.getItem('badgesCache') || '{}') || {}; } catch (e) {}
   database.ref('/badges').on('value', snap => {
-    map = snap.val() || {};
+    map = asObject(snap.val());
     try { localStorage.setItem('badgesCache', JSON.stringify(map)); } catch (e) {}
     listeners.forEach(fn => fn());
     publishSoon();
