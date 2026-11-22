@@ -47,6 +47,7 @@ function parseRoute() {
   if (h === '#/general' || h === '#/community') return { page: 'general' };
   if (h.startsWith('#/community?c=')) return { page: 'general', focus: h.slice('#/community?c='.length) };
   if (h === '#/staff') return { page: 'staff' };
+  if (h === '#/path') return { page: 'path' };
   if (h === '#/feedback') return { page: 'feedback' };
   m = /^#\/lecture\/(\w+)$/.exec(h);
   if (m && LECTURE_BY_ID[m[1]]) return { page: 'lecture', id: m[1], variant: 'normal' };
@@ -1056,7 +1057,11 @@ function BackButton({ to }) {
 function NameChip() {
   useAccountVersion();
   useProgressVersion();
-  const own = html`<${LevelBadge} level=${progress.level()} />`;
+  const lv = progress.level();
+  const own = html`<button className=${'lvl-badge own-badge ' + (lv < 0 ? 'lvl-none' : lv === 0 ? 'lvl-core' : lv >= 5 ? 'lvl-gold lvl-max' : 'lvl-gold')}
+      onClick=${() => go('#/path')} aria-label=${t('pathTitle')}>
+    ${lv < 0 ? '' : lv === 0 ? html`<${Icon} name="leaf" size=${12} />` : html`<bdi>${lv}</bdi>`}
+  </button>`;
   if (!account.loggedIn) {
     return html`<${React.Fragment}>${own}<button className="chip name-chip-cta" onClick=${() => go('#/account')}>
       <${Icon} name="user" size=${14} />${t('saveProgressShort')}
@@ -1199,11 +1204,86 @@ const listenStats = (() => {
     pending -= sec;
     database.ref('/stats/listen_seconds').set(firebase.database.ServerValue.increment(sec))
       .catch(() => { pending += sec; });
+    database.ref('/wk/' + weekKey() + '/s').set(firebase.database.ServerValue.increment(sec)).catch(() => {});
   };
   setInterval(flush, 60000);
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flush(); });
   return { add(sec) { if (sec > 0) pending += sec; } };
 })();
+
+// =====================
+// الأسبوع (يبدأ السبت): لكل مستمع شريحة استماع، وتُعدّ في /wk/{الأسبوع}/h بلا أي هوية، فيعرف كل جهاز
+// نسبته بين المستمعين من 7 أرقام فقط. و/wk/{الأسبوع}/s ساعات المجتمع كله هذا الأسبوع
+// =====================
+const weekKey = (d = new Date()) => {
+  const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  x.setDate(x.getDate() - ((x.getDay() + 1) % 7));
+  return dayKey(x);
+};
+const WEEK_BUCKETS = [60, 900, 1800, 3600, 7200, 14400, 28800];   // بداية كل شريحة بالثواني
+const bucketOf = (sec) => WEEK_BUCKETS.reduce((k, v, i) => (sec >= v ? i : k), -1);
+const weekly = (() => {
+  const KEY = 'weekBucket';
+  const listeners = new Set();
+  let hist = null;
+  const notify = () => listeners.forEach(fn => fn());
+  const mySec = () => progress.stats(weekKey(), dayKey()).total;
+  let busy = false;
+  async function sync() {
+    if (busy || !navigator.onLine) return;
+    const wk = weekKey();
+    const b = bucketOf(mySec());
+    let st = storage.getJSON(KEY);
+    if (!st || st.wk !== wk) st = { wk, b: -1 };
+    if (b < 0 || b === st.b) return;
+    busy = true;
+    const base = database.ref('/wk/' + wk + '/h/');
+    try {
+      await withTimeout(base.child('b' + b).transaction(v => (v || 0) + 1));
+      if (st.b >= 0) base.child('b' + st.b).transaction(v => (v > 0 ? v - 1 : undefined)).catch(() => {});
+      storage.setJSON(KEY, { wk, b });
+      load();
+    } catch (e) {}
+    finally { busy = false; }
+  }
+  async function load() {
+    try {
+      hist = (await withTimeout(database.ref('/wk/' + weekKey() + '/h').once('value'))).val() || {};
+      notify();
+    } catch (e) {}
+  }
+  // نسبة من استمع أقل منك هذا الأسبوع؛ تظهر فقط إن كانت 50% فأكثر وفي الأسبوع 5 مستمعين على الأقل
+  function better() {
+    const b = bucketOf(mySec());
+    if (!hist || b < 0) return null;
+    const counts = WEEK_BUCKETS.map((_, i) => Math.max(0, Number(hist['b' + i]) || 0));
+    const total = counts.reduce((a, c) => a + c, 0);
+    if (total < 5) return null;
+    const below = counts.slice(0, b).reduce((a, c) => a + c, 0);
+    const pct = Math.floor(below / total * 10) * 10;
+    return pct >= 50 ? pct : null;
+  }
+  let timer = null;
+  progress.subscribe(() => { clearTimeout(timer); timer = setTimeout(sync, 30000); });
+  setTimeout(() => { sync(); load(); }, 5000);
+  setInterval(load, 10 * 60 * 1000);
+  return { better, subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn); } };
+})();
+function useWeeklyVersion() {
+  const [, setV] = useState(0);
+  useEffect(() => weekly.subscribe(() => setV(v => v + 1)), []);
+}
+// ساعات المجتمع هذا الأسبوع
+function CommunityWeek() {
+  const [sec, setSec] = useState(null);
+  useEffect(() => {
+    const ref = database.ref('/wk/' + weekKey() + '/s');
+    const cb = ref.on('value', snap => setSec(snap.val() || 0), () => {});
+    return () => ref.off('value', cb);
+  }, []);
+  if (!sec || sec < 3600) return null;
+  return html`<p className="community-week"><${Icon} name="chat" size=${14} />${t('communityWeek', { n: fmtCount(sec / 3600) })}</p>`;
+}
 
 function FacebookLink() {
   return html`<a className="icon-btn" href="https://www.facebook.com/groups/1594701261071238"
@@ -1861,10 +1941,51 @@ function LiveBadge({ behind, onGoLive }) {
 // =====================
 // الصفحة الرئيسية
 // =====================
+// =====================
+// «طريقك»: المراتب كلها على خط واحد، المكتسبة مضيئة، والتالية بتقدّمها وما بقي لها، وما بعدها باهت
+// =====================
+const lecturesLeft = (n) => t(n === 1 ? 'leftOne' : n === 2 ? 'leftTwo' : n <= 10 ? 'leftFew' : 'leftMany', { n });
+function PathPage() {
+  useProgressVersion();
+  const level = progress.level();
+  const total = COURSE_ORDER.length;
+  const steps = [0, 1, 2, 3, 4, 5].map(l => {
+    const done = l === 0 ? COURSE_HEAD.filter(id => progress.isDone(id)).length
+      : COURSE_ORDER.filter(id => progress.rounds(id) >= l).length;
+    const count = l === 0 ? COURSE_HEAD.length : total;
+    return { l, done, count, got: level >= l };
+  });
+  const nextL = steps.find(s => !s.got);
+  return html`<div className="page path">
+    <div className="topbar"><${BackButton} to="#/account" /></div>
+    <h1 className="acc-title center-text">${t('pathTitle')}</h1>
+    <ol className="path-list">
+      ${steps.map(s => {
+        const state = s.got ? 'got' : s === nextL ? 'next' : 'later';
+        const cls = s.l === 0 ? 'lvl-core' : s.l >= 5 ? 'lvl-gold lvl-max' : 'lvl-gold';
+        return html`<li key=${s.l} className=${'path-step ' + state}>
+          <span className=${'lvl-badge path-badge ' + cls}>${s.l === 0 ? html`<${Icon} name="leaf" size=${16} />` : html`<bdi>${s.l}</bdi>`}</span>
+          <div className="path-text">
+            <b>${s.l === 0 ? t('badgeCore') : t('pathLevelTitle', { times: timesText(s.l) })}</b>
+            ${state === 'got' && html`<small className="path-got"><${Icon} name="check" size=${13} />${t('pathGot')}</small>`}
+            ${state === 'next' && html`<${React.Fragment}>
+              <small>${t('pathProgress', { done: s.done, count: s.count })} · ${lecturesLeft(s.count - s.done)}</small>
+              <span className="path-bar" aria-hidden="true"><span style=${{ width: (s.done / s.count * 100) + '%' }}></span></span>
+            <//>`}
+            ${state === 'later' && html`<small>${s.l === 0 ? t('pathCoreDesc') : t('pathLevelDesc', { times: timesText(s.l) })}</small>`}
+          </div>
+        </li>`;
+      })}
+    </ol>
+  </div>`;
+}
+
 // «تابع من حيث توقفت»: آخر لقاء لم يكتمل، والوقت الباقي منه، وزر يكمل من الثانية نفسها.
 // الضغط على الكارت يفتح صفحة اللقاء، وقبل أي استماع يصير «ابدأ الكورس»
 function ContinueCard({ player }) {
   useProgressVersion();
+  useWeeklyVersion();
+  const better = weekly.better();
   const id = progress.continueId();
   if (!id) return null;
   const l = LECTURE_BY_ID[id];
@@ -1882,6 +2003,7 @@ function ContinueCard({ player }) {
         <span className="cc-title">${l.title}</span>
         ${started && pos > 0 && html`<span className="cc-left">${t('minutesLeft', { n: left })}</span>`}
         ${started && pos > 0 && html`<span className="cc-bar" aria-hidden="true"><span style=${{ width: pct + '%' }}></span></span>`}
+        ${better != null && html`<span className="cc-better">${t('weekBetter', { p: better })}</span>`}
       </button>
       <${PlayButton} size=${48} active=${active || (mine && player.status === 'loading')} status=${mine ? player.status : null}
         onClick=${() => (active ? player.stop() : player.playLecture(id))} />
@@ -2820,6 +2942,7 @@ function CommunityPage({ focus }) {
       <div className="top-left"><${NameChip} /></div>
     </div>
     <h1 className="acc-title center-text">${t('community')}</h1>
+    <${CommunityWeek} />
 
     <div className="composer">
       ${!canWrite
@@ -3744,6 +3867,9 @@ function AccountPage({ returnTo }) {
       <div className="topbar"></div>
       <div className="panel">
         <h1 className="acc-title">${t('accountTitle')}</h1>
+        <button className="row-link path-link" onClick=${() => go('#/path')}>
+          <span>${t('pathTitle')}</span><span className="row-arrow" aria-hidden="true">‹</span>
+        </button>
         <div className="acc-name">
           <bdi dir="ltr">${hidden ? '•'.repeat(Math.min(10, account.name.length)) : account.name}</bdi>
           <button className="eye" onClick=${() => account.setHidden(!hidden)}
@@ -3959,7 +4085,7 @@ const NAV_HIDDEN = ['staff'];
 const tabOf = (route) => (route.page === 'radio' ? 'home'
   : ['course', 'lecture', 'report'].includes(route.page) ? 'course'
   : route.page === 'general' ? 'general'
-  : route.page === 'account' ? 'account'
+  : ['account', 'path'].includes(route.page) ? 'account'
   : route.page === 'home' ? 'home' : null);
 
 // لوحة المفاتيح مفتوحة إذا قصُرت الشاشة المرئية كثيرًا وفيها خانة كتابة مختارة. يُقاس الارتفاع نفسه،
@@ -4123,6 +4249,7 @@ function App() {
       : route.page === 'general' ? t('community')
       : route.page === 'staff' ? t('staffTitle')
       : route.page === 'feedback' ? t('feedbackTitle')
+      : route.page === 'path' ? t('pathTitle')
       : route.page === 'lecture' ? shortTitle(route.id)
       : IS_STANDALONE ? t('appShortName') : t('appName');
   }, [route]);
@@ -4142,6 +4269,8 @@ function App() {
     page = html`<${StaffPage} users=${users} />`;
   } else if (route.page === 'feedback') {
     page = html`<${FeedbackPage} />`;
+  } else if (route.page === 'path') {
+    page = html`<${PathPage} />`;
   } else if (route.page === 'lecture') {
     // عنوان النسخة السريعة للقاء لم يكتمل بعد يفتح النسخة العادية
     const v = route.variant === 'fast' && !progress.isDone(route.id) ? 'normal' : route.variant;

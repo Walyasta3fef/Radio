@@ -1024,3 +1024,28 @@ span.note-time { color: var(--note); font-weight: 700; }
 .rh-now .now-title { font-size: 15px; line-height: 1.7; }
 .rh-controls { display: flex; align-items: center; gap: 12px; }
 .rh-seg { flex: 1; margin: 0; }
+
+/* شارتي في الأعلى: زر إلى «طريقك» */
+.own-badge { width: 26px; height: 26px; font-size: 13px; }
+.lvl-none { border: 1.5px dashed var(--line-2); background: transparent; }
+.cc-better { font-size: 12px; color: var(--course); margin-top: 4px; }
+.community-week { display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 13px; color: var(--muted); margin: -4px 0 12px; }
+.path-link { margin: 4px 0 8px; }
+/* «طريقك» */
+.path-list { list-style: none; position: relative; margin-top: 16px; display: flex; flex-direction: column; gap: 4px; }
+.path-step { position: relative; display: flex; align-items: flex-start; gap: 14px; padding: 12px 6px 14px; }
+.path-step:not(:last-child)::after {
+  content: ''; position: absolute; top: 54px; bottom: -8px; inset-inline-start: 23px; width: 2px; background: var(--line-2);
+}
+.path-step.got:not(:last-child)::after { background: var(--course-line); }
+.path-badge { width: 36px; height: 36px; font-size: 16px; flex-shrink: 0; cursor: default; }
+.path-step.later .path-badge { background: transparent; color: var(--faint); box-shadow: inset 0 0 0 1.5px var(--line-2); }
+.path-step.next .path-badge { box-shadow: 0 0 0 4px rgba(168, 201, 155, .18); }
+.path-text { flex: 1; display: flex; flex-direction: column; gap: 4px; padding-top: 4px; }
+.path-text b { font-size: 15px; }
+.path-text small { font-size: 12.5px; color: var(--muted); }
+.path-step.later .path-text b { color: var(--muted); }
+.path-got { display: inline-flex; align-items: center; gap: 4px; color: var(--course) !important; }
+.path-step.next { background: var(--surface); border: 1px solid var(--course-line); border-radius: 16px; }
+.path-bar { display: block; height: 5px; border-radius: 5px; background: rgba(255, 255, 255, .08); overflow: hidden; margin-top: 4px; }
+.path-bar span { display: block; height: 100%; background: var(--course); border-radius: 5px; }
