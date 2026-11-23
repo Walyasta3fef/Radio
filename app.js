@@ -1528,7 +1528,8 @@ function MaxFace() {
 const lapName = (n) => t('lapName', { o: t('ordinals').split('|')[n - 1] || String(n) });
 // «تابع»: اللقاء المكتمل يُكمَل من أول جزء لم يُسمع في جولته الحالية، وغيره من موضع التوقف
 function playContinue(player, id) {
-  if (progress.isDone(id)) {
+  // من توقف في وسط لقاء يكمل من موضعه؛ ومن أنهاه يبدأ من أول جزء لم يسمعه في سماعه الحالي
+  if (progress.isDone(id) && !progress.midListen(id)) {
     const at = progress.roundResume(id);
     const mine = player.mode === 'lecture' && player.lectureId === id && player.variant === 'normal';
     if (mine) player.seekLecture(id, at); else progress.setPosition(id, at);
@@ -2144,13 +2145,16 @@ function ContinueCard({ player }) {
   useProgressVersion();
   useWeeklyVersion();
   const better = weekly.better();
-  const id = progress.continueId();
+  // لقاء الكورس الذي في المشغّل يبقى في البطاقة ما دام يُسمع أو توقف في وسطه، ولو تجاوز 95%
+  const cur = player.mode === 'lecture' && player.variant === 'normal' && COURSE_ORDER.includes(player.lectureId)
+    && (player.isPlaying || player.status === 'loading' || progress.midListen(player.lectureId)) ? player.lectureId : null;
+  const id = cur || progress.continueId();
   if (!id) return null;
   const l = LECTURE_BY_ID[id];
   const started = progress.hasAny();
   const dur = l.normal || 0;
   // بعد إكمال الكورس: التقدّم والوقت الباقي من جولة اللقاء الحالية
-  const lap = progress.isDone(id) ? progress.lap() : null;
+  const lap = progress.isDone(id) && !progress.midListen(id) ? progress.lap() : null;
   const rp = lap ? progress.roundPct(id) : 0;
   const pos = lap ? Math.round(dur * rp / 100) : Math.min(dur, progress.position(id) || 0);
   const pct = lap ? rp : dur ? Math.round(pos / dur * 100) : 0;
@@ -2160,7 +2164,7 @@ function ContinueCard({ player }) {
   return html`<section className="section">
     <div className=${'card tint-course continue-card' + (active ? ' card-active' : '')}>
       <button className="cc-info" onClick=${() => go(lectureHash(id, 'normal'))}>
-        <small>${lap ? t('lapContinue', { lap: lapName(lap.n) }) : t(started ? 'continueTitle' : 'startCourse')}</small>
+        <small>${active ? t('playingHere') : lap ? t('lapContinue', { lap: lapName(lap.n) }) : t(started ? 'continueTitle' : 'startCourse')}</small>
         <span className="cc-title">${l.title}</span>
         ${started && pos > 0 && html`<span className="cc-left">${t('minutesLeft', { n: left })}</span>`}
         ${started && pos > 0 && html`<span className="cc-bar" aria-hidden="true"><span style=${{ width: pct + '%' }}></span></span>`}

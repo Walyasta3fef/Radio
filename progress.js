@@ -132,12 +132,13 @@ const progress = (() => {
     const b = Math.min(total - 1, Math.floor(to / SLOT_SECONDS));
     let changed = false;
     const z = (how || e.z) ? zbits(id) : null;
-    // بعد الإكمال الأول: كل استماع يُحسب في المرة التالية، فإذا بلغ 95% زاد عدد مرات الإكمال
+    // بعد الإكمال الأول: الاستماع يُحسب في المرة التالية، فإذا بلغ 95% زاد عدد مرات الإكمال.
+    // والجزء الذي لم يُسمع قط يكمّل السماع الأول ولا يُعدّ في التالي (فآخر اللقاء لا يبدأ سماعًا ثانيًا)
     const rb = e.d ? rbits(id) : null;
     let rbChanged = false;
     for (let i = a; i <= b; i++) {
       const byte = i >> 3, mask = 1 << (i & 7);
-      if (rb && !(rb[byte] & mask)) { rb[byte] |= mask; e.rc = (e.rc || 0) + 1; rbChanged = true; }
+      if (rb && (arr[byte] & mask) && !(rb[byte] & mask)) { rb[byte] |= mask; e.rc = (e.rc || 0) + 1; rbChanged = true; }
       if (!(arr[byte] & mask)) {
         arr[byte] |= mask; e.c++; changed = true;
         if (how) z[byte] |= mask;
@@ -400,9 +401,17 @@ const progress = (() => {
 
   // اللقاء الذي يكمل منه في الكورس: آخر لقاء فتحه من الكورس ولم يكتمل،
   // وإلا أول لقاء غير مكتمل بالترتيب. الاستماع من الراديو لا يغيّره
+  // لقاء توقف المستمع في وسطه ولم يصل إلى آخره (آخر دقيقة)، ولو حُسب مكتملًا عند 95%
+  function midListen(id) {
+    const l = LECTURE_BY_ID[id];
+    if (!l) return false;
+    const p = position(id);
+    return p > 0 && p < l.normal - 60;
+  }
+
   // وبعد إكمال الكورس: آخر لقاء فتحه ولم يكمله في الجولة الحالية، وإلا أول لقاء بالترتيب لم يكمله فيها
   function continueId() {
-    if (state.last && LECTURE_BY_ID[state.last] && !isDone(state.last)) return state.last;
+    if (state.last && LECTURE_BY_ID[state.last] && (!isDone(state.last) || midListen(state.last))) return state.last;
     const first = COURSE_ORDER.find(id => !isDone(id));
     if (first) return first;
     const L = lap();
@@ -535,7 +544,7 @@ const progress = (() => {
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') save(); });
 
   return {
-    record, addTime, doneSkipped, rounds, level, roundPct, roundSegments, roundResume, lap, congratsSeen, setCongratsSeen, stats, nextUnheard, seenAt, markSeen, legacySeconds, setPosition, position, setFastPosition, fastPosition, percent, segments, isDone, summary, continueId, hasAny,
+    record, addTime, doneSkipped, rounds, level, roundPct, roundSegments, roundResume, lap, midListen, congratsSeen, setCongratsSeen, stats, nextUnheard, seenAt, markSeen, legacySeconds, setPosition, position, setFastPosition, fastPosition, percent, segments, isDone, summary, continueId, hasAny,
     merge, exportState, exportSummary, reset, subscribe, save,
     get rev() { return rev; },
   };
