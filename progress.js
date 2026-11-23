@@ -32,11 +32,12 @@ const progress = (() => {
   // daily: وقت الاستماع الفعلي لكل جهاز ولكل يوم، مع التكرار:
   //   { جهاز: { يوم: { c: الكورس، n: الراديو العادي، f: الراديو السريع، l: { لقاء: ثوانٍ } } } }
   // other: تقدّم لقاءات لا يعرفها هذا الجهاز بعد (لقاء جديد لم تصله قائمته)، يُحفظ كما هو حتى لا يضيع عند الرفع
-  const empty = () => ({ v: 2, lectures: {}, sec: {}, days: [], legacyDays: 0, last: null, lastAt: 0, daily: {}, seen: {}, other: {} });
+  // tz: مشاهدة مواد «تزكية»: { معرّف: { p: الموضع بالثواني، d: المدة، w: 1 إذا اكتملت، t: آخر تحديث } }
+  const empty = () => ({ v: 2, lectures: {}, sec: {}, days: [], legacyDays: 0, last: null, lastAt: 0, daily: {}, seen: {}, other: {}, tz: {} });
 
   function migrate(s) {
     if (!s) return empty();
-    if (s.v === 2) { if (!s.daily) s.daily = {}; if (!s.seen) s.seen = {}; if (!s.other) s.other = {}; return s; }
+    if (s.v === 2) { if (!s.daily) s.daily = {}; if (!s.seen) s.seen = {}; if (!s.other) s.other = {}; if (!s.tz) s.tz = {}; return s; }
     if (s.v === 1) {
       const n = empty();
       n.lectures = s.lectures || {};
@@ -205,6 +206,23 @@ const progress = (() => {
     touch();
     notifyNow();
   }
+
+  // =====================
+  // تزكية: موضع المشاهدة وإكمالها (90% فأكثر تُعدّ مشاهدة)
+  // =====================
+  const TZ_DONE = 0.9;
+  const tzInfo = (id) => (state.tz && state.tz[id]) || null;
+  function tzSave(id, pos, dur) {
+    if (!id || !(pos >= 0)) return;
+    const e = state.tz[id] || (state.tz[id] = {});
+    e.p = Math.round(pos);
+    if (dur > 0) e.d = Math.round(dur);
+    if (e.d && pos / e.d >= TZ_DONE) e.w = 1;
+    e.t = Date.now();
+    touch();
+    notifySoon();
+  }
+  const tzWatched = (id) => !!(state.tz && state.tz[id] && state.tz[id].w);
 
   // وقت الاستماع القديم المسجّل قبل إضافة التقرير اليومي
   const legacySeconds = () => Object.values(state.sec || {}).reduce((s, x) => s + x, 0);
@@ -468,6 +486,14 @@ const progress = (() => {
     Object.entries(remote.seen || {}).forEach(([lid, ts]) => {
       if (typeof ts === 'number' && ts > seenAt(lid)) state.seen[lid] = ts;
     });
+    // تزكية: المكتملة تبقى مكتملة، والموضع من الجهة الأحدث
+    Object.entries(remote.tz || {}).forEach(([id, r]) => {
+      if (!r || typeof r !== 'object') return;
+      const e = state.tz[id] || (state.tz[id] = {});
+      if (r.w) e.w = 1;
+      if (r.d > 0 && !(e.d > 0)) e.d = r.d;
+      if ((r.t || 0) > (e.t || 0)) { e.p = r.p || 0; e.t = r.t; if (r.d > 0) e.d = r.d; }
+    });
     // وقت الاستماع اليومي: لكل جهاز ويوم نأخذ النسخة الأكبر، فلا يتكرر شيء
     Object.entries(remote.daily || {}).forEach(([dev, days]) => {
       const mine = state.daily[dev] || (state.daily[dev] = {});
@@ -544,6 +570,7 @@ const progress = (() => {
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') save(); });
 
   return {
+    tzInfo, tzSave, tzWatched,
     record, addTime, doneSkipped, rounds, level, roundPct, roundSegments, roundResume, lap, midListen, congratsSeen, setCongratsSeen, stats, nextUnheard, seenAt, markSeen, legacySeconds, setPosition, position, setFastPosition, fastPosition, percent, segments, isDone, summary, continueId, hasAny,
     merge, exportState, exportSummary, reset, subscribe, save,
     get rev() { return rev; },
