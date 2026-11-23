@@ -35,7 +35,6 @@ const tazkiya = (() => {
     }
     return null;
   }
-  const thumb = (it) => (it.s === 'yt' && it.v ? 'https://i.ytimg.com/vi/' + it.v + '/hqdefault.jpg' : it.th || null);
 
   // العنوان والصورة من الموقع نفسه (oEmbed). إن تعذّر يكتب المستخدم العنوان بنفسه
   async function meta(p) {
@@ -138,7 +137,7 @@ const tazkiya = (() => {
   }
 
   return {
-    parse, thumb, meta, suggest, setHeart, watchQueue, approve, reject, remove, add,
+    parse, meta, suggest, setHeart, watchQueue, approve, reject, remove, add,
     get items() { start(); return items; },
     heartCount: (id) => Object.keys(hearts[id] || {}).length,
     myHeart: (id) => !!(account.uid && hearts[id] && hearts[id][account.uid]),

@@ -78,8 +78,9 @@ function parseRoute() {
   if (h === '#/path') return { page: 'path' };
   if (h === '#/feedback') return { page: 'feedback' };
   if (h === '#/tz') return { page: 'tz' };
+  // صفحة المشاهدة المنفصلة أُلغيت: روابطها القديمة تفتح القائمة على الكارت نفسه
   m = /^#\/tz\/v\/([\w-]+)$/.exec(h);
-  if (m) return { page: 'tzv', id: m[1] };
+  if (m) return { page: 'tz', open: m[1] };
   m = /^#\/tz\/(n|a)\/([\w-]+)$/.exec(h);
   if (m) return { page: 'tzp', who: m[1], key: m[2] };
   m = /^#\/lecture\/(\w+)$/.exec(h);
@@ -4290,7 +4291,7 @@ function InAppHint() {
 // وفي صفحة الإدارة. نقطة صغيرة على الكورس والمجتمع عند وجود تعليقات جديدة أو رد عليك
 // =====================
 // =====================
-// تزكية
+// تزكية: كروت نصية بشكل منشورات المجتمع، تُفتح وتعمل في مكانها، وكارت واحد مفتوح في كل مرة
 // =====================
 const TZ_SORT_KEY = 'tzSort';
 const TZ_INTRO_NEVER_KEY = 'tzIntroNever';
@@ -4308,7 +4309,6 @@ function useTzVersion() {
 // صاحب الاختيار: اسمه كما يظهر في التعليقات (اللقب ورقمه)، أو اسم المشرف
 const tzWhoName = (it) => authorName(it.n, it.a);
 const tzWhoHash = (it) => (it.a ? '#/tz/a/' + it.a : '#/tz/n/' + it.n);
-// لون ثابت لكل شخص، هادئ يناسب الألوان الداكنة
 // الأرقام المتقاربة تأخذ ألوانًا متباعدة (زاوية ذهبية)
 const tzHue = (it) => { const s = String(it.a || it.n || ''); let h = 0; for (const ch of s) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return Math.round(h * 137.508) % 360; };
 // الدائرة: أول حرف من اللقب الذي اختاره صاحبه، وإلا رقمه (فاللقب الافتراضي «أخ» واحد للجميع)
@@ -4317,10 +4317,8 @@ function TzAvatar({ it, big }) {
   const txt = own ? own.trim().charAt(0) : String(it.n || '؟');
   return html`<span className=${'tz-avatar' + (big ? ' big' : '') + (own ? '' : ' num')} style=${{ '--h': tzHue(it) }} aria-hidden="true">${txt}</span>`;
 }
-// صورة لا تُحمَّل تُخفى، فيظهر التدرّج اللوني بدل علامة الصورة المكسورة
-const hideBroken = (e) => { e.currentTarget.style.display = 'none'; };
 const fmtDur = (sec) => {
-  sec = Math.round(sec || 0);
+  sec = Math.max(0, Math.round(sec || 0));
   const h = Math.floor(sec / 3600), m = Math.floor(sec % 3600 / 60), s = sec % 60;
   return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(s).padStart(2, '0');
 };
@@ -4339,32 +4337,224 @@ function TzWho({ it }) {
     <${TzAvatar} it=${it} /><span>${t('tzBy', { name: tzWhoName(it) })}</span>
   </button>`;
 }
+const TzSrc = ({ s }) => html`<span className=${'tz-src tz-src-' + s}>${t(s === 'yt' ? 'tzYoutube' : 'tzSoundcloud')}</span>`;
 
-function TzCard({ it, flash, index = 0 }) {
+// تحميل مكتبتي التشغيل عند الحاجة فقط
+const loadScriptOnce = (() => {
+  const cache = {};
+  return (src) => {
+    if (!cache[src]) cache[src] = new Promise(res => {
+      const s = document.createElement('script');
+      s.src = src; s.async = true;
+      s.onload = () => res(true);
+      s.onerror = () => { delete cache[src]; res(false); };
+      document.head.appendChild(s);
+    });
+    return cache[src];
+  };
+})();
+function loadYT() {
+  if (window.YT && window.YT.Player) return Promise.resolve(true);
+  return new Promise(res => {
+    const prev = window.onYouTubeIframeAPIReady;
+    window.onYouTubeIframeAPIReady = () => { if (prev) prev(); res(true); };
+    loadScriptOnce('https://www.youtube.com/iframe_api').then(ok => { if (!ok) res(false); });
+    setTimeout(() => res(!!(window.YT && window.YT.Player)), 15000);
+  });
+}
+const loadSC = () => (window.SC && window.SC.Widget ? Promise.resolve(true) : loadScriptOnce('https://w.soundcloud.com/player/api.js'));
+
+// المشغّل داخل الكارت المفتوح: يحفظ الموضع، ويوقف صوت الموقع إذا بدأ، ويتوقف إذا بدأ صوت الموقع.
+// يوتيوب: الفيديو نفسه ظاهر (شرط يوتيوب). ساوند كلاود: أزرار الموقع، وتحتها شريط ساوند كلاود الرسمي الرفيع
+function TzEmbed({ it, player, onEnded }) {
+  const boxRef = useRef(null);
+  const live = useRef({ player, onEnded });
+  live.current = { player, onEnded };
+  const ctl = useRef(null);
+  const [failed, setFailed] = useState(null);   // null | 'load' | 'blocked'
+  const [sc, setSc] = useState({ playing: false, pos: 0, dur: 0, ready: false, tap: false });
+  const [drag, setDrag] = useState(null);
+  useEffect(() => {
+    let alive = true, yt = null, w = null, poll = null, lastSave = 0, tapTimer = null;
+    const info = progress.tzInfo(it.id);
+    const resume = info && !info.w && info.p > 10 && (!info.d || info.p < info.d - 15) ? info.p - 3 : 0;
+    const save = (pos, dur, force) => {
+      const now = Date.now();
+      if (!force && now - lastSave < 5000) return;
+      lastSave = now;
+      progress.tzSave(it.id, pos, dur);
+    };
+    const stopSite = () => { const pl = live.current.player; if (pl.isPlaying) pl.stop(); };
+    const onSiteAudio = (e) => {
+      if (!(e.target instanceof HTMLMediaElement)) return;
+      try { if (yt && yt.pauseVideo) yt.pauseVideo(); if (w) w.pause(); } catch (err) {}
+    };
+    document.addEventListener('play', onSiteAudio, true);
+
+    if (it.s === 'yt') {
+      loadYT().then(ok => {
+        if (!alive) return;
+        if (!ok) return setFailed('load');
+        const el = document.createElement('div');
+        boxRef.current.appendChild(el);
+        yt = new window.YT.Player(el, {
+          host: 'https://www.youtube-nocookie.com',
+          videoId: it.v, width: '100%', height: '100%',
+          playerVars: { playsinline: 1, rel: 0, start: Math.floor(resume), autoplay: 1 },
+          events: {
+            onStateChange: (e) => {
+              const S = window.YT.PlayerState;
+              if (e.data === S.PLAYING) {
+                stopSite();
+                clearInterval(poll);
+                poll = setInterval(() => { try { save(yt.getCurrentTime(), yt.getDuration()); } catch (err) {} }, 1000);
+              } else {
+                clearInterval(poll);
+                try { save(yt.getCurrentTime(), yt.getDuration(), true); } catch (err) {}
+                if (e.data === S.ENDED) live.current.onEnded();
+              }
+            },
+            // 101 و150: صاحب المقطع منع تشغيله خارج يوتيوب
+            onError: (e) => { if (alive) setFailed(e.data === 101 || e.data === 150 ? 'blocked' : 'load'); },
+          },
+        });
+      });
+    } else {
+      loadSC().then(ok => {
+        if (!alive) return;
+        if (!ok || !window.SC || !window.SC.Widget) return setFailed('load');
+        const f = document.createElement('iframe');
+        f.allow = 'autoplay';
+        f.title = it.t;
+        f.scrolling = 'no';
+        f.src = 'https://w.soundcloud.com/player/?url=' + encodeURIComponent(it.u)
+          + '&auto_play=true&visual=false&show_artwork=false&hide_related=true&show_comments=false&show_reposts=false&show_teaser=false&show_user=false&download=false&sharing=false&buying=false&color=%239cd3c4';
+        boxRef.current.appendChild(f);
+        w = window.SC.Widget(f);
+        const E = window.SC.Widget.Events;
+        let dur = 0;
+        ctl.current = {
+          toggle: () => w.toggle(),
+          seek: (sec) => { w.seekTo(sec * 1000); setSc(s => Object.assign({}, s, { pos: sec })); },
+        };
+        w.bind(E.READY, () => {
+          w.getDuration(d => { dur = d / 1000; setSc(s => Object.assign({}, s, { dur, ready: true })); });
+          if (resume > 0) w.seekTo(resume * 1000);
+          w.play();
+          // بعض المتصفحات (iPhone) لا تسمح بالتشغيل من أزرارنا قبل أول لمسة داخل شريط ساوند كلاود
+          tapTimer = setTimeout(() => w.isPaused(p => { if (alive && p) setSc(s => Object.assign({}, s, { tap: true })); }), 2500);
+        });
+        w.bind(E.PLAY, () => { stopSite(); setSc(s => Object.assign({}, s, { playing: true, tap: false })); });
+        w.bind(E.PAUSE, (e) => { setSc(s => Object.assign({}, s, { playing: false })); save(e.currentPosition / 1000, dur, true); });
+        w.bind(E.PLAY_PROGRESS, (e) => {
+          const pos = e.currentPosition / 1000;
+          const d = dur || (e.relativePosition > 0 ? pos / e.relativePosition : 0);
+          setSc(s => Object.assign({}, s, { pos, dur: s.dur || d }));
+          save(pos, d);
+        });
+        w.bind(E.FINISH, () => { setSc(s => Object.assign({}, s, { playing: false })); save(dur, dur, true); live.current.onEnded(); });
+        w.bind(E.ERROR, () => alive && setFailed('load'));
+      });
+    }
+    return () => {
+      alive = false;
+      clearInterval(poll);
+      clearTimeout(tapTimer);
+      ctl.current = null;
+      document.removeEventListener('play', onSiteAudio, true);
+      try { if (yt) { save(yt.getCurrentTime(), yt.getDuration(), true); yt.destroy(); } } catch (err) {}
+      try { if (w) { w.pause(); ['ready', 'play', 'playProgress', 'pause', 'finish', 'error'].forEach(ev => w.unbind(ev)); } } catch (err) {}
+      if (boxRef.current) boxRef.current.innerHTML = '';
+    };
+  }, [it.id]);
+
+  const fail = failed && html`<div className="tz-embed-fail">
+    <p>${t(failed === 'blocked' ? 'tzBlocked' : 'tzLoadFail')}</p>
+    <a className="small-btn" href=${it.u} target="_blank" rel="noopener noreferrer">${t(it.s === 'yt' ? 'tzOpenYoutube' : 'tzOpenSoundcloud')}</a>
+  </div>`;
+  if (it.s === 'yt') {
+    return html`<div className="tz-video" onClick=${e => e.stopPropagation()}><div ref=${boxRef} className="tz-embed-box"></div>${fail}</div>`;
+  }
+  const pos = drag != null ? drag : sc.pos;
+  const pct = sc.dur ? Math.min(100, pos / sc.dur * 100) : 0;
+  return html`<div className="tz-audio" onClick=${e => e.stopPropagation()}>
+    ${fail || html`<div className="tz-ctl">
+      <button className="tz-pbtn" disabled=${!sc.ready} onClick=${() => { haptic(); ctl.current && ctl.current.toggle(); }}
+          aria-label=${t(sc.playing ? 'pause' : 'play')}>
+        ${!sc.ready ? html`<span className="spinner small"></span>`
+          : html`<span key=${sc.playing ? 'pa' : 'pl'} className="ico-swap"><${Icon} name=${sc.playing ? 'pause' : 'play'} size=${18} /></span>`}
+      </button>
+      <div className="tz-bar">
+        <div className="tz-bar-track"><span style=${{ width: pct + '%' }}></span></div>
+        <span className="tz-bar-thumb" style=${{ insetInlineStart: pct + '%' }}></span>
+        <input type="range" min="0" max=${Math.max(1, Math.floor(sc.dur))} step="1" value=${Math.floor(pos)} disabled=${!sc.ready}
+          aria-label=${t('seek')}
+          onInput=${e => setDrag(parseFloat(e.target.value))}
+          onChange=${e => { const v = parseFloat(e.target.value); setDrag(null); ctl.current && ctl.current.seek(v); }} />
+      </div>
+      <span className="tz-time"><bdi dir="ltr">${fmtDur(pos)} / ${sc.dur ? fmtDur(sc.dur) : '--:--'}</bdi></span>
+    </div>`}
+    ${sc.tap && !failed && html`<p className="tz-tap">${t('tzTapStrip')}</p>`}
+    <div ref=${boxRef} className="tz-strip"></div>
+  </div>`;
+}
+
+function TzCard({ it, open, onToggle, player, onEnded, flash, nextIn, onCancelNext, nextTitle }) {
+  const ref = useRef(null);
   const info = progress.tzInfo(it.id);
   const watched = progress.tzWatched(it.id);
   const pct = info && info.d && !watched ? Math.min(100, info.p / info.d * 100) : 0;
-  const img = tazkiya.thumb(it);
-  return html`<article className="tz-card" style=${{ '--i': Math.min(index, 8) }}>
-    <button className="tz-open" onClick=${() => go('#/tz/v/' + it.id)} aria-label=${it.t}>
-      <span className=${'tz-thumb' + (img ? '' : ' no-img')}>
-        ${img && html`<img src=${img} alt="" loading="lazy" referrerpolicy="no-referrer" onError=${hideBroken} />`}
-        <span className=${'tz-src tz-src-' + it.s}>${t(it.s === 'yt' ? 'tzYoutube' : 'tzSoundcloud')}</span>
-        ${info && info.d && html`<span className="tz-dur"><bdi dir="ltr">${fmtDur(info.d)}</bdi></span>`}
-        ${watched && html`<span className="tz-watched"><${Icon} name="check" size=${12} />${t('tzWatched')}</span>`}
-        ${pct > 0 && html`<span className="tz-prog"><span style=${{ width: pct + '%' }}></span></span>`}
-        <span className="tz-play" aria-hidden="true"><${Icon} name="play" size=${20} /></span>
-      </span>
+  // الكارت الذي يُفتح يُنزل إليه بلطف حتى يظهر كاملًا
+  useEffect(() => {
+    if (open && ref.current) setTimeout(() => ref.current && ref.current.scrollIntoView({ block: 'nearest', behavior: REDUCED_MOTION ? 'auto' : 'smooth' }), 60);
+  }, [open]);
+  return html`<article ref=${ref} id=${'tz-' + it.id} className=${'tz-card' + (open ? ' open' : '')}>
+    <div className="c-meta tz-meta"><${TzWho} it=${it} /><span>${relTime(it.ts)}</span></div>
+    <button className="tz-head-btn" onClick=${onToggle} aria-expanded=${open}>
+      <span className=${'tz-pico' + (open ? ' on' : '')} aria-hidden="true">${open
+        ? html`<span key="x" className="ico-swap tz-x">×</span>`
+        : html`<span key="p" className="ico-swap"><${Icon} name="play" size=${14} /></span>`}</span>
       <span className="tz-title">${it.t}</span>
     </button>
+    ${open && html`<div className="tz-body"><${TzEmbed} it=${it} player=${player} onEnded=${onEnded} /></div>`}
+    ${nextIn != null && html`<div className="tz-next">
+      <span>${t('tzNextIn', { n: nextIn })}</span><b>${nextTitle}</b>
+      <button className="link-btn muted" onClick=${onCancelNext}>${t('cancel')}</button>
+    </div>`}
     <div className="tz-foot">
-      <${TzWho} it=${it} />
+      <span className="tz-foot-info">
+        <${TzSrc} s=${it.s} />
+        ${info && info.d ? html`<bdi dir="ltr" className="tz-dur">${fmtDur(info.d)}</bdi>` : null}
+        ${watched && html`<span className="tz-watched"><${Icon} name="check" size=${12} />${t('tzWatched')}</span>`}
+        ${open && html`<a className="tz-ext" href=${it.u} target="_blank" rel="noopener noreferrer" aria-label=${t(it.s === 'yt' ? 'tzOpenYoutube' : 'tzOpenSoundcloud')}><${Icon} name="external" size=${14} /></a>`}
+      </span>
       <${HeartButton} small count=${tazkiya.heartCount(it.id)} mine=${tazkiya.myHeart(it.id)} onToggle=${() => tzToggleHeart(it.id, flash)} />
     </div>
+    ${pct > 0 && !open && html`<span className="tz-prog" aria-hidden="true"><span style=${{ width: pct + '%' }}></span></span>`}
   </article>`;
 }
 
-// نافذة الاقتراح: الصق الرابط، فيُجلب العنوان والصورة تلقائيًا
+// قائمة الكروت: كارت واحد مفتوح، وعند انتهاء المادة يُفتح التالي بعد عدّ تنازلي يمكن إلغاؤه
+function TzList({ list, player, flash, initialOpen }) {
+  const [openId, setOpenId] = useState(initialOpen || null);
+  const [count, setCount] = useState(null);   // { from, n }
+  const next = count && list[list.findIndex(x => x.id === count.from) + 1];
+  useEffect(() => {
+    if (!count) return;
+    if (!next) { setCount(null); return; }
+    if (count.n <= 0) { setCount(null); setOpenId(next.id); return; }
+    const tm = setTimeout(() => setCount(c => (c ? { from: c.from, n: c.n - 1 } : null)), 1000);
+    return () => clearTimeout(tm);
+  }, [count]);
+  return html`<div className="tz-list">${list.map(it => html`<${TzCard} key=${it.id} it=${it} player=${player} flash=${flash}
+    open=${openId === it.id}
+    onToggle=${() => { setCount(null); setOpenId(id => (id === it.id ? null : it.id)); }}
+    onEnded=${() => setCount({ from: it.id, n: TZ_NEXT_SEC })}
+    nextIn=${count && count.from === it.id && next ? count.n : null} nextTitle=${next ? next.t : ''}
+    onCancelNext=${() => setCount(null)} />`)}</div>`;
+}
+
+// نافذة الاقتراح: الصق الرابط، فيُجلب العنوان تلقائيًا
 function TzSuggest({ onClose, owner }) {
   const [link, setLink] = useState('');
   const [title, setTitle] = useState('');
@@ -4387,7 +4577,6 @@ function TzSuggest({ onClose, owner }) {
     });
     return () => { alive = false; };
   }, [parsed && parsed.u]);
-  const preview = parsed && (parsed.s === 'yt' ? tazkiya.thumb(parsed) : th);
   const submit = async (e) => {
     e.preventDefault();
     if (!parsed || dup || !title.trim()) return;
@@ -4411,14 +4600,13 @@ function TzSuggest({ onClose, owner }) {
         <p className="intro-title" id="tz-sug-title">${t(owner ? 'tzAddTitle' : 'tzSuggestTitle')}</p>
         <input className="name-input" dir="ltr" inputMode="url" autoFocus placeholder=${t('tzLinkPh')} value=${link}
           onInput=${e => { setLink(e.target.value); setMsg(null); }} aria-label=${t('tzLinkPh')} />
+        <p className="tz-prefer">${t('tzPreferSc')}</p>
         ${link.trim() && !parsed && html`<p className="form-error">${t('tzBadLink')}</p>`}
         ${dup && html`<p className="form-error">${t('tzDuplicate')}</p>`}
+        ${parsed && parsed.s === 'yt' && !dup && !owner && html`<p className="tz-yt-note">${t('tzYtNote')}</p>`}
         ${parsed && !dup && html`<div className="tz-preview">
-          <span className=${'tz-thumb small' + (preview ? '' : ' no-img')}>
-            ${preview && html`<img src=${preview} alt="" referrerpolicy="no-referrer" onError=${hideBroken} />`}
-            ${fetching && html`<span className="spinner small light"></span>`}
-          </span>
-          <input className="name-input" placeholder=${t('tzTitlePh')} maxLength=${TZ_TITLE_MAX} value=${title}
+          <${TzSrc} s=${parsed.s} />
+          <input className="name-input" placeholder=${fetching ? t('pleaseWait') : t('tzTitlePh')} maxLength=${TZ_TITLE_MAX} value=${title}
             onInput=${e => setTitle(e.target.value)} aria-label=${t('tzTitlePh')} />
         </div>`}
         ${msg && html`<p className="form-error">${msg}</p>`}
@@ -4454,16 +4642,20 @@ function useFlash() {
   return [notice, flash];
 }
 
-function TzPage() {
+function TzPage({ player, open }) {
   useTzVersion();
   const [sort, setSortState] = useState(() => (storage.get(TZ_SORT_KEY) === 'new' ? 'new' : 'top'));
   const setSort = (s) => { storage.set(TZ_SORT_KEY, s); setSortState(s); };
-  const [introOff, setIntroOff] = useState(() => storage.get(TZ_INTRO_NEVER_KEY) === '1' || storage.get(TZ_INTRO_DAY_KEY) === dayKey());
+  const [introOff, setIntroOff] = useState(() => !!open || storage.get(TZ_INTRO_NEVER_KEY) === '1' || storage.get(TZ_INTRO_DAY_KEY) === dayKey());
   const closeIntro = (never) => { storage.set(never ? TZ_INTRO_NEVER_KEY : TZ_INTRO_DAY_KEY, never ? '1' : dayKey()); setIntroOff(true); };
   const [suggesting, setSuggesting] = useState(false);
   const [notice, flash] = useFlash();
   const items = tazkiya.items;
-  const list = items ? tzSorted(items, sort) : null;
+  // ترتيب القائمة يثبت أثناء الاستماع؛ يُحسب عند فتح الصفحة وعند تغيير الترتيب أو وصول مواد جديدة، لا مع كل إعجاب
+  const ids = (items || []).map(x => x.id).join(',');
+  const order = useMemo(() => (items ? tzSorted(items, sort).map(x => x.id) : null), [ids, sort, !!items]);
+  const byId = Object.fromEntries((items || []).map(x => [x.id, x]));
+  const list = order ? order.map(id => byId[id]).filter(Boolean) : null;
   const watched = (items || []).filter(x => progress.tzWatched(x.id)).length;
   const openSuggest = () => { if (!account.loggedIn) return go('#/account'); setSuggesting(true); };
   return html`<div className="page tz">
@@ -4486,14 +4678,14 @@ function TzPage() {
           <p>${t('tzEmpty')}</p>
           <button className="small-btn" onClick=${openSuggest}>${t('tzSuggest')}</button>
         </div>`
-      : html`<div className="tz-list">${list.map((it, i) => html`<${TzCard} key=${it.id} it=${it} flash=${flash} index=${i} />`)}</div>`}
+      : html`<${TzList} key=${sort} list=${list} player=${player} flash=${flash} initialOpen=${open} />`}
     ${!introOff && html`<${TzIntro} onClose=${closeIntro} />`}
     ${suggesting && html`<${TzSuggest} onClose=${() => setSuggesting(false)} />`}
   </div>`;
 }
 
-// صفحة صاحب الاختيارات
-function TzPersonPage({ who, keyId }) {
+// صفحة صاحب الاختيارات: الكروت نفسها، وتعمل في مكانها
+function TzPersonPage({ who, keyId, player }) {
   useTzVersion();
   const [notice, flash] = useFlash();
   const items = tazkiya.items;
@@ -4509,177 +4701,7 @@ function TzPersonPage({ who, keyId }) {
       ${items && html`<p className="tz-sub">${t('tzCount', { n: mine.length })}${watched > 0 ? ' · ' + t('tzWatchedN', { n: watched }) : ''}</p>`}
     </header>
     ${notice && html`<p className="form-error">${notice}</p>`}
-    ${!items ? html`<${Skeleton} rows=${2} />`
-      : html`<div className="tz-list">${mine.map((it, i) => html`<${TzCard} key=${it.id} it=${it} flash=${flash} index=${i} />`)}</div>`}
-  </div>`;
-}
-
-// تحميل مكتبتي التشغيل عند الحاجة فقط
-const loadScriptOnce = (() => {
-  const cache = {};
-  return (src, ready) => {
-    if (ready()) return Promise.resolve(true);
-    if (!cache[src]) cache[src] = new Promise(res => {
-      const s = document.createElement('script');
-      s.src = src; s.async = true;
-      s.onload = () => res(true);
-      s.onerror = () => { delete cache[src]; res(false); };
-      document.head.appendChild(s);
-    });
-    return cache[src];
-  };
-})();
-function loadYT() {
-  if (window.YT && window.YT.Player) return Promise.resolve(true);
-  return new Promise(res => {
-    const prev = window.onYouTubeIframeAPIReady;
-    window.onYouTubeIframeAPIReady = () => { if (prev) prev(); res(true); };
-    loadScriptOnce('https://www.youtube.com/iframe_api', () => false).then(ok => { if (!ok) res(false); });
-    setTimeout(() => res(!!(window.YT && window.YT.Player)), 15000);
-  });
-}
-const loadSC = () => loadScriptOnce('https://w.soundcloud.com/player/api.js', () => !!(window.SC && window.SC.Widget));
-
-// المشغّل المضمّن: يحفظ الموضع، ويوقف صوت الموقع إذا بدأ، ويتوقف إذا بدأ صوت الموقع
-function TzEmbed({ it, player, onEnded }) {
-  const boxRef = useRef(null);
-  // أحدث نسخة من المشغّل وإنهاء المقطع، لأن المستمعين يُسجَّلون مرة واحدة
-  const live = useRef({ player, onEnded });
-  live.current = { player, onEnded };
-  const [failed, setFailed] = useState(null);   // null | 'load' | 'blocked'
-  useEffect(() => {
-    let alive = true, yt = null, sc = null, poll = null, lastSave = 0;
-    const info = progress.tzInfo(it.id);
-    const resume = info && !info.w && info.p > 10 && (!info.d || info.p < info.d - 15) ? info.p - 3 : 0;
-    const save = (pos, dur, force) => {
-      const now = Date.now();
-      if (!force && now - lastSave < 5000) return;
-      lastSave = now;
-      progress.tzSave(it.id, pos, dur);
-    };
-    const stopSite = () => { const pl = live.current.player; if (pl.isPlaying) pl.stop(); };
-    // صوت الموقع بدأ: يتوقف المقطع المضمّن
-    const onSiteAudio = (e) => {
-      if (!(e.target instanceof HTMLMediaElement)) return;
-      try { if (yt && yt.pauseVideo) yt.pauseVideo(); if (sc) sc.pause(); } catch (err) {}
-    };
-    document.addEventListener('play', onSiteAudio, true);
-
-    if (it.s === 'yt') {
-      loadYT().then(ok => {
-        if (!alive) return;
-        if (!ok) return setFailed('load');
-        const el = document.createElement('div');
-        boxRef.current.appendChild(el);
-        yt = new window.YT.Player(el, {
-          host: 'https://www.youtube-nocookie.com',
-          videoId: it.v,
-          width: '100%', height: '100%',
-          playerVars: { playsinline: 1, rel: 0, start: Math.floor(resume), autoplay: 1 },
-          events: {
-            onStateChange: (e) => {
-              const S = window.YT.PlayerState;
-              if (e.data === S.PLAYING) {
-                stopSite();
-                clearInterval(poll);
-                poll = setInterval(() => { try { save(yt.getCurrentTime(), yt.getDuration()); } catch (err) {} }, 1000);
-              } else {
-                clearInterval(poll);
-                try { save(yt.getCurrentTime(), yt.getDuration(), true); } catch (err) {}
-                if (e.data === S.ENDED) live.current.onEnded();
-              }
-            },
-            // 101 و150: صاحب المقطع منع تشغيله خارج يوتيوب
-            onError: (e) => { if (alive) setFailed(e.data === 101 || e.data === 150 ? 'blocked' : 'load'); },
-          },
-        });
-      });
-    } else {
-      loadSC().then(ok => {
-        if (!alive) return;
-        if (!ok) return setFailed('load');
-        const f = document.createElement('iframe');
-        f.allow = 'autoplay';
-        f.title = it.t;
-        f.src = 'https://w.soundcloud.com/player/?url=' + encodeURIComponent(it.u)
-          + '&auto_play=true&visual=true&hide_related=true&show_comments=false&show_reposts=false&show_teaser=false&show_user=true&color=%23a8c99b';
-        boxRef.current.appendChild(f);
-        sc = window.SC.Widget(f);
-        const E = window.SC.Widget.Events;
-        let dur = 0;
-        sc.bind(E.READY, () => {
-          sc.getDuration(d => { dur = d / 1000; });
-          if (resume > 0) sc.seekTo(resume * 1000);
-        });
-        sc.bind(E.PLAY, stopSite);
-        sc.bind(E.PLAY_PROGRESS, (e) => save(e.currentPosition / 1000, dur || (e.relativePosition > 0 ? e.currentPosition / 1000 / e.relativePosition : 0)));
-        sc.bind(E.PAUSE, (e) => save(e.currentPosition / 1000, dur, true));
-        sc.bind(E.FINISH, () => { save(dur, dur, true); live.current.onEnded(); });
-        sc.bind(E.ERROR, () => alive && setFailed('load'));
-      });
-    }
-    return () => {
-      alive = false;
-      clearInterval(poll);
-      document.removeEventListener('play', onSiteAudio, true);
-      try { if (yt) { save(yt.getCurrentTime(), yt.getDuration(), true); yt.destroy(); } } catch (err) {}
-      try { if (sc) sc.unbind && ['ready', 'play', 'playProgress', 'pause', 'finish', 'error'].forEach(ev => sc.unbind(ev)); } catch (err) {}
-      if (boxRef.current) boxRef.current.innerHTML = '';
-    };
-  }, [it.id]);
-  return html`<div className=${'tz-embed tz-embed-' + it.s}>
-    <div ref=${boxRef} className="tz-embed-box"></div>
-    ${failed && html`<div className="tz-embed-fail">
-      <p>${t(failed === 'blocked' ? 'tzBlocked' : 'tzLoadFail')}</p>
-      <a className="small-btn" href=${it.u} target="_blank" rel="noopener noreferrer">${t(it.s === 'yt' ? 'tzOpenYoutube' : 'tzOpenSoundcloud')}</a>
-    </div>`}
-  </div>`;
-}
-
-function TzPlayerPage({ id, player }) {
-  useTzVersion();
-  const [notice, flash] = useFlash();
-  const items = tazkiya.items;
-  const it = items && items.find(x => x.id === id);
-  // التالي: اختيارات الشخص نفسه بالترتيب (الأحدث أولًا)، بعد هذه المادة
-  const same = it ? (items || []).filter(x => (it.a ? x.a === it.a : !x.a && x.n === it.n)).sort((a, b) => (b.ts || 0) - (a.ts || 0)) : [];
-  const rest = same.filter(x => x.id !== id);
-  const next = it ? same[same.findIndex(x => x.id === id) + 1] || null : null;
-  const [countdown, setCountdown] = useState(null);
-  useEffect(() => {
-    if (countdown == null) return;
-    if (countdown <= 0) { setCountdown(null); if (next) go('#/tz/v/' + next.id); return; }
-    const tm = setTimeout(() => setCountdown(c => (c == null ? null : c - 1)), 1000);
-    return () => clearTimeout(tm);
-  }, [countdown]);
-  const onEnded = () => { if (next) setCountdown(TZ_NEXT_SEC); };
-  if (!items) return html`<div className="page tz"><div className="topbar"><${BackButton} to="#/tz" /></div><${Skeleton} rows=${2} /></div>`;
-  if (!it) return html`<div className="page tz"><div className="topbar"><${BackButton} to="#/tz" /></div>
-    <div className="tz-empty"><p>${t('tzGone')}</p></div></div>`;
-  return html`<div className="page tz tz-watch">
-    <div className="topbar"><${BackButton} to="#/tz" /></div>
-    <${TzEmbed} key=${it.id} it=${it} player=${player} onEnded=${onEnded} />
-    <h1 className="tz-watch-title">${it.t}</h1>
-    <div className="tz-foot">
-      <${TzWho} it=${it} />
-      <div className="tz-actions">
-        <a className="tz-ext" href=${it.u} target="_blank" rel="noopener noreferrer" aria-label=${t(it.s === 'yt' ? 'tzOpenYoutube' : 'tzOpenSoundcloud')}><${Icon} name="external" size=${16} /></a>
-        <${HeartButton} count=${tazkiya.heartCount(it.id)} mine=${tazkiya.myHeart(it.id)} onToggle=${() => tzToggleHeart(it.id, flash)} />
-      </div>
-    </div>
-    ${notice && html`<p className="form-error">${notice}</p>`}
-    ${countdown != null && next && html`<div className="tz-next">
-      <span>${t('tzNextIn', { n: countdown })}</span><b>${next.t}</b>
-      <button className="link-btn muted" onClick=${() => setCountdown(null)}>${t('cancel')}</button>
-    </div>`}
-    ${rest.length > 0 && html`<section className="tz-more">
-      <h2>${t('tzMoreFrom', { name: tzWhoName(it) })}</h2>
-      ${rest.map(x => html`<button key=${x.id} className="tz-row" onClick=${() => go('#/tz/v/' + x.id)}>
-        <span className=${'tz-thumb mini' + (tazkiya.thumb(x) ? '' : ' no-img')}>${tazkiya.thumb(x) && html`<img src=${tazkiya.thumb(x)} alt="" loading="lazy" referrerpolicy="no-referrer" onError=${hideBroken} />`}</span>
-        <span className="tz-row-t">${x.t}</span>
-        ${progress.tzWatched(x.id) && html`<span className="tz-row-ok" aria-label=${t('tzWatched')}><${Icon} name="check" size=${14} /></span>`}
-      </button>`)}
-    </section>`}
+    ${!items ? html`<${Skeleton} rows=${2} />` : html`<${TzList} list=${mine} player=${player} flash=${flash} />`}
   </div>`;
 }
 
@@ -4700,26 +4722,22 @@ function TzQueueItem({ q }) {
   const approve = async () => {
     if (!p || !title.trim()) return;
     setBusy(true); setErr(null);
-    let th = q.th || null;
-    // الرابط تغيّر إلى ساوند كلاود آخر: تُجلب صورته
-    if (p.s === 'sc' && p.u !== q.u) { const m = await tazkiya.meta(p); th = (m && m.th) || null; }
-    const ok = await tazkiya.approve(q, Object.assign({}, p, { t: title, th: p.s === 'sc' ? th : null }));
+    const ok = await tazkiya.approve(q, Object.assign({}, p, { t: title, th: null }));
     setBusy(false);
     if (!ok) setErr(t('saveFailed'));
   };
   return html`<li className="tz-q">
     <div className="tz-q-top">
-      <span className=${'tz-thumb mini' + (tazkiya.thumb(Object.assign({}, q, p || {})) ? '' : ' no-img')}>
-        ${tazkiya.thumb(Object.assign({}, q, p || {})) && html`<img src=${tazkiya.thumb(Object.assign({}, q, p || {}))} alt="" referrerpolicy="no-referrer" onError=${hideBroken} />`}
-      </span>
+      <${TzSrc} s=${(p || q).s} />
       <small>${t('tzBy', { name: authorName(q.n) })} · ${new Date(q.ts || 0).toLocaleDateString('ar-EG')}</small>
     </div>
     <input className="name-input" value=${title} maxLength=${TZ_TITLE_MAX} onInput=${e => setTitle(e.target.value)} aria-label=${t('tzTitlePh')} />
     <input className="name-input" dir="ltr" value=${link} onInput=${e => setLink(e.target.value)} aria-label=${t('tzLinkPh')} />
     ${!p && html`<p className="form-error">${t('tzBadLink')}</p>`}
     ${err && html`<p className="form-error">${err}</p>`}
-    <div className="c-actions">
+    <div className="c-actions tz-q-actions">
       <button className="small-btn" disabled=${busy || !p || !title.trim()} onClick=${approve}>${t('tzApprove')}</button>
+      ${p && p.s === 'yt' && html`<a className="small-btn" href=${'https://soundcloud.com/search?q=' + encodeURIComponent(title)} target="_blank" rel="noopener noreferrer">${t('tzSearchSc')}</a>`}
       <a className="link-btn" href=${p ? p.u : q.u} target="_blank" rel="noopener noreferrer">${t('tzOpenLink')}</a>
       <button className="link-btn muted" disabled=${busy} onClick=${() => window.confirm(t('tzRejectConfirm')) && tazkiya.reject(q.id)}>${t('tzReject')}</button>
     </div>
@@ -4755,7 +4773,7 @@ const NAV_HIDDEN = ['staff'];
 const tabOf = (route) => (route.page === 'radio' ? 'home'
   : ['course', 'lecture', 'report'].includes(route.page) ? 'course'
   : route.page === 'general' ? 'general'
-  : ['tz', 'tzv', 'tzp'].includes(route.page) ? 'tz'
+  : ['tz', 'tzp'].includes(route.page) ? 'tz'
   : ['account', 'path'].includes(route.page) ? 'account'
   : route.page === 'home' ? 'home' : null);
 
@@ -4921,7 +4939,7 @@ function App() {
       : route.page === 'staff' ? t('staffTitle')
       : route.page === 'feedback' ? t('feedbackTitle')
       : route.page === 'path' ? t('pathTitle')
-      : ['tz', 'tzv', 'tzp'].includes(route.page) ? t('tzTitle')
+      : ['tz', 'tzp'].includes(route.page) ? t('tzTitle')
       : route.page === 'lecture' ? shortTitle(route.id)
       : IS_STANDALONE ? t('appShortName') : t('appName');
   }, [route]);
@@ -4944,11 +4962,9 @@ function App() {
   } else if (route.page === 'path') {
     page = html`<${PathPage} />`;
   } else if (route.page === 'tz') {
-    page = html`<${TzPage} />`;
-  } else if (route.page === 'tzv') {
-    page = html`<${TzPlayerPage} id=${route.id} player=${player} />`;
+    page = html`<${TzPage} player=${player} open=${route.open} />`;
   } else if (route.page === 'tzp') {
-    page = html`<${TzPersonPage} who=${route.who} keyId=${route.key} />`;
+    page = html`<${TzPersonPage} who=${route.who} keyId=${route.key} player=${player} />`;
   } else if (route.page === 'lecture') {
     // عنوان النسخة السريعة للقاء لم يكتمل بعد يفتح النسخة العادية
     const v = route.variant === 'fast' && !progress.isDone(route.id) ? 'normal' : route.variant;
