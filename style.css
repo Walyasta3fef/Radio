@@ -339,6 +339,18 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid 
 /* الأجزاء المسموعة في القائمة */
 .heard-bar { position: relative; height: 5px; }
 .heard-seg { position: absolute; top: 0; bottom: 0; background: var(--course); border-radius: 2px; }
+/* الجولة الحالية للقاء مكتمل: بلون معدن المرتبة التالية */
+.heard-round .heard-seg { background: var(--lv); }
+.meta-round { color: var(--lv); }
+
+/* حلقة اللقاء المكتمل: علامة الإكمال أو عدد مراته، وحولها الجولة الحالية تمتلئ */
+.lec-ring { position: relative; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; vertical-align: middle; }
+.lec-ring svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.lr-track { fill: none; stroke: rgba(255, 255, 255, .08); stroke-width: 2.6; }
+.lr-fill { fill: none; stroke: var(--lv); stroke-width: 2.6; stroke-linecap: round; transition: stroke-dashoffset .5s ease; }
+.lr-core { position: relative; width: 70%; height: 70%; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+.lec-ring .lvl-badge.lr-core { width: 70%; height: 70%; font-size: 11px; cursor: default; box-shadow: none; }
+.lr-done { background: var(--course); color: var(--course-ink); }
 
 /* =====================
    صفحة اللقاء: شريط واحد للتشغيل والأجزاء المسموعة
@@ -352,6 +364,7 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid 
 .sb-mark { position: absolute; top: 0; width: 6px; height: 6px; margin-inline-start: -3px; border-radius: 50%; background: var(--note); opacity: .85; }
 .sb-track { position: absolute; inset-inline: 0; top: 15px; height: 8px; border-radius: 999px; background: rgba(255, 255, 255, .09); overflow: hidden; }
 .sb-heard { position: absolute; top: 0; bottom: 0; background: rgba(168, 201, 155, .38); }
+.sb-in-round .sb-heard { background: var(--lv); opacity: .42; }
 .sb-played { position: absolute; top: 0; bottom: 0; inset-inline-start: 0; background: var(--course); border-radius: 999px; }
 .sb-thumb {
   position: absolute; top: 9px; width: 20px; height: 20px; margin-inline-start: -10px;
@@ -706,6 +719,8 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid 
 .times { align-items: center; }
 .times-heard { display: inline-flex; align-items: center; gap: 3px; color: var(--muted); }
 .times-heard.heard-done { color: var(--course); }
+.times-heard.times-round { color: var(--lv); font-weight: 700; gap: 6px; }
+.times-round .lec-ring .lvl-badge.lr-core { font-size: 9px; }
 .lecture .controls { gap: 12px; margin-top: 10px; }
 .lecture .status { margin: 6px 0 -6px; }
 .skip-nav { width: 40px; height: 40px; border-color: transparent; background: none; color: var(--muted); display: inline-flex; align-items: center; justify-content: center; }

@@ -250,8 +250,29 @@ const progress = (() => {
   function segments(id) {
     const e = state.lectures[id];
     if (!e || !e.c || !LECTURE_BY_ID[id]) return [];
-    const arr = bits(id);
-    const total = slotsOf(id);
+    return segmentsOf(bits(id), slotsOf(id));
+  }
+
+  // =====================
+  // الجولات: بعد إكمال اللقاء أول مرة تبدأ جولته التالية فورًا، وتُعدّ شرائحها من جديد (rb و rc)
+  // =====================
+  // نسبة ما سُمع من الجولة الحالية للقاء مكتمل (0 لغير المكتمل)
+  function roundPct(id) {
+    const e = state.lectures[id];
+    if (!e || !e.d || !e.rc || !LECTURE_BY_ID[id]) return 0;
+    return Math.min(100, Math.floor(e.rc / slotsOf(id) * 100));
+  }
+  // الأجزاء المسموعة في الجولة الحالية
+  function roundSegments(id) {
+    const e = state.lectures[id];
+    if (!e || !e.d || !e.rc || !LECTURE_BY_ID[id]) return [];
+    return segmentsOf(rbits(id), slotsOf(id));
+  }
+  // الشرائح المعتمدة للقاء: خريطة الجولة الحالية إن اكتمل، وإلا خريطة السماع الأول
+  const activeBits = (id) => (state.lectures[id] && state.lectures[id].d ? rbits(id) : bits(id));
+  const activeCount = (id) => { const e = state.lectures[id]; return e ? (e.d ? (e.rc || 0) : (e.c || 0)) : 0; };
+
+  function segmentsOf(arr, total) {
     const out = [];
     let start = -1;
     for (let i = 0; i <= total; i++) {
@@ -267,8 +288,8 @@ const progress = (() => {
   const GAP_SLOTS = Math.ceil(30 / SLOT_SECONDS);
   function nextUnheard(id, sec) {
     const e = state.lectures[id];
-    if (!e || !e.c || !LECTURE_BY_ID[id]) return null;
-    const arr = bits(id);
+    if (!e || !activeCount(id) || !LECTURE_BY_ID[id]) return null;
+    const arr = activeBits(id);
     const total = slotsOf(id);
     const on = (i) => !!(arr[i >> 3] & (1 << (i & 7)));
     const start = Math.floor(sec / SLOT_SECONDS);
@@ -299,6 +320,46 @@ const progress = (() => {
     if (!state.core && COURSE_HEAD.every(isDone)) { state.core = 1; touch(); }
   }
   const level = () => (state.lvl >= 1 ? state.lvl : state.core ? 0 : -1);
+
+  // موضع إكمال الجولة الحالية للقاء مكتمل: موضع التوقف إن كان في جزء لم يُسمع في هذه الجولة،
+  // وإلا أول جزء لم يُسمع فيها (الفجوات القصيرة تُعدّ مسموعة)، ومن البداية إن كانت الجولة جديدة
+  function roundResume(id) {
+    if (!isDone(id)) return position(id);
+    const e = state.lectures[id];
+    if (!e.rc) return 0;
+    const arr = rbits(id);
+    const total = slotsOf(id);
+    const on = (i) => !!(arr[i >> 3] & (1 << (i & 7)));
+    const p = position(id);
+    const ps = Math.floor(p / SLOT_SECONDS);
+    if (p > 0 && ps < total && !on(ps)) return p;
+    let i = 0;
+    while (i < total) {
+      if (on(i)) { i++; continue; }
+      let j = i;
+      while (j < total && !on(j)) j++;
+      if (j - i >= GAP_SLOTS || j >= total) break;
+      i = j;
+    }
+    return i >= total ? 0 : i * SLOT_SECONDS;
+  }
+
+  // جولة الكورس الحالية بعد إكماله أول مرة: n رقمها (2 فأكثر)، done اللقاءات التي أكملتها،
+  // percent نسبة ما سُمع منها بحسب المدة. null ما دام في الجولة الأولى
+  function lap() {
+    const ids = COURSE_ORDER.filter(id => LECTURE_BY_ID[id]);
+    if (!ids.length) return null;
+    const n = Math.min(...ids.map(rounds)) + 1;
+    if (n < 2) return null;
+    let heard = 0, total = 0, done = 0;
+    ids.forEach(id => {
+      const dur = LECTURE_BY_ID[id].normal;
+      total += dur;
+      if (rounds(id) >= n) { heard += dur; done++; }
+      else heard += Math.min(dur, (state.lectures[id].rc || 0) * SLOT_SECONDS);
+    });
+    return { n, done, count: ids.length, percent: total ? heard / total * 100 : 0 };
+  }
   const congratsSeen = () => (typeof state.cg === 'number' ? state.cg : -1);
   function setCongratsSeen(l) { if (l > congratsSeen()) { state.cg = l; touch(); save(); notifyNow(); } }
   // نسبة اللقاء المكتمل التي سُمعت بحذف السكتات فقط، إن بلغت ربعه فأكثر (وإلا 0)
@@ -339,9 +400,15 @@ const progress = (() => {
 
   // اللقاء الذي يكمل منه في الكورس: آخر لقاء فتحه من الكورس ولم يكتمل،
   // وإلا أول لقاء غير مكتمل بالترتيب. الاستماع من الراديو لا يغيّره
+  // وبعد إكمال الكورس: آخر لقاء فتحه ولم يكمله في الجولة الحالية، وإلا أول لقاء بالترتيب لم يكمله فيها
   function continueId() {
     if (state.last && LECTURE_BY_ID[state.last] && !isDone(state.last)) return state.last;
-    return COURSE_ORDER.find(id => !isDone(id)) || null;
+    const first = COURSE_ORDER.find(id => !isDone(id));
+    if (first) return first;
+    const L = lap();
+    if (!L) return null;
+    if (state.last && LECTURE_BY_ID[state.last] && rounds(state.last) < L.n) return state.last;
+    return COURSE_ORDER.find(id => rounds(id) < L.n) || null;
   }
 
   // هل بدأ الكورس فعلًا (فتح لقاء منه)
@@ -468,7 +535,7 @@ const progress = (() => {
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') save(); });
 
   return {
-    record, addTime, doneSkipped, rounds, level, congratsSeen, setCongratsSeen, stats, nextUnheard, seenAt, markSeen, legacySeconds, setPosition, position, setFastPosition, fastPosition, percent, segments, isDone, summary, continueId, hasAny,
+    record, addTime, doneSkipped, rounds, level, roundPct, roundSegments, roundResume, lap, congratsSeen, setCongratsSeen, stats, nextUnheard, seenAt, markSeen, legacySeconds, setPosition, position, setFastPosition, fastPosition, percent, segments, isDone, summary, continueId, hasAny,
     merge, exportState, exportSummary, reset, subscribe, save,
     get rev() { return rev; },
   };

@@ -1390,9 +1390,10 @@ function MiniBar({ value }) {
 }
 
 // شريط الأجزاء المسموعة في قائمة الكورس
-function HeardBar({ id }) {
-  const segs = progress.segments(id);
-  return html`<div className="bar heard-bar">
+function HeardBar({ id, round }) {
+  const segs = round ? progress.roundSegments(id) : progress.segments(id);
+  const style = round ? { '--lv': LVL_COLORS[Math.min(5, progress.rounds(id) + 1)] } : null;
+  return html`<div className=${'bar heard-bar' + (round ? ' heard-round' : '')} style=${style}>
     ${segs.map(([a, b], i) => html`<span key=${i} className="heard-seg"
       style=${{ insetInlineStart: a + '%', width: Math.max(0.6, b - a) + '%' }}></span>`)}
   </div>`;
@@ -1402,9 +1403,12 @@ function HeardBar({ id }) {
 // موضع الاستماع، والأجزاء المسموعة سابقًا، وأماكن التعليقات
 // plain: للنسخة السريعة، بلا أجزاء مسموعة ولا علامات. noteMarks: أماكن ملاحظات المستخدم
 function SeekBar({ id, value, duration, marks, noteMarks, plain, onInput, onCommit }) {
-  const segs = plain ? [] : progress.segments(id);
+  // اللقاء المكتمل: تظهر أجزاء جولته الحالية بلون المرتبة التالية، لا السماع الأول الممتلئ كله
+  const round = !plain && progress.isDone(id);
+  const segs = plain ? [] : round ? progress.roundSegments(id) : progress.segments(id);
   const pos = Math.min(100, (value / duration) * 100 || 0);
-  return html`<div className="seekbar">
+  return html`<div className=${'seekbar' + (round ? ' sb-in-round' : '')}
+      style=${round ? { '--lv': LVL_COLORS[Math.min(5, progress.rounds(id) + 1)] } : null}>
     <div className="sb-marks" aria-hidden="true">
       ${(marks || []).map((s, i) => html`<span key=${i} className="sb-mark"
         style=${{ insetInlineStart: Math.min(100, s / duration * 100) + '%' }}></span>`)}
@@ -1515,6 +1519,41 @@ const lvlCls = (l) => 'lvl-badge lvl-' + lvlKey(l);
 const lvlFace = (l, size) => (l == null || l < 0 ? '' : l === 0 ? html`<${Icon} name="leaf" size=${size} />` : html`<bdi>${Math.min(5, l)}</bdi>`);
 function MaxFace() {
   return html`<span className="max-face"><${Icon} name="crown" size=${14} /><bdi>5</bdi></span>`;
+}
+
+// =====================
+// الجولات: كل لقاء يكتمل تبدأ جولته التالية فورًا، والكورس كله يدخل جولته الثانية بعد إكمال لقاءاته كلها
+// لون الجولة هو معدن المرتبة التي تقرّب إليها
+// =====================
+const lapName = (n) => t('lapName', { o: t('ordinals').split('|')[n - 1] || String(n) });
+// «تابع»: اللقاء المكتمل يُكمَل من أول جزء لم يُسمع في جولته الحالية، وغيره من موضع التوقف
+function playContinue(player, id) {
+  if (progress.isDone(id)) {
+    const at = progress.roundResume(id);
+    const mine = player.mode === 'lecture' && player.lectureId === id && player.variant === 'normal';
+    if (mine) player.seekLecture(id, at); else progress.setPosition(id, at);
+  }
+  player.playLecture(id);
+}
+// حلقة اللقاء المكتمل: في وسطها علامة الإكمال أو عدد مراته بمعدن مرتبته،
+// وحولها تمتلئ الجولة الحالية بلون المرتبة التالية
+function LectureRing({ id, size = 30 }) {
+  const k = progress.rounds(id);
+  if (!k) return null;
+  const rp = progress.roundPct(id);
+  const R = 15.5, C = 2 * Math.PI * R;
+  const label = (k === 1 ? t('lectureDone') : t('doneTimesLabel', { times: timesText(k) }))
+    + (rp > 0 ? ' · ' + t('roundOf', { lap: lapName(k + 1) }) + ' ' + rp + '%' : '');
+  return html`<span className="lec-ring" role="img" aria-label=${label} title=${label}
+      style=${{ '--lv': LVL_COLORS[Math.min(5, k + 1)], width: size + 'px', height: size + 'px' }}>
+    <svg viewBox="0 0 36 36" aria-hidden="true">
+      <circle cx="18" cy="18" r=${R} className="lr-track" />
+      ${rp > 0 && html`<circle cx="18" cy="18" r=${R} className="lr-fill" strokeDasharray=${C}
+        strokeDashoffset=${C * (1 - rp / 100)} transform="rotate(-90 18 18)" />`}
+    </svg>
+    ${k === 1 ? html`<span className="lr-core lr-done"><${Icon} name="check" size=${Math.round(size * 0.4)} /></span>`
+      : html`<span className=${'lr-core lvl-badge lvl-' + Math.min(5, k)}><bdi>${k}</bdi></span>`}
+  </span>`;
 }
 function LevelBadge({ level }) {
   // توقيت لمعان مختلف لكل شارة ذهبية، فلا تلمع كلها معًا
@@ -2110,22 +2149,25 @@ function ContinueCard({ player }) {
   const l = LECTURE_BY_ID[id];
   const started = progress.hasAny();
   const dur = l.normal || 0;
-  const pos = Math.min(dur, progress.position(id) || 0);
-  const pct = dur ? Math.round(pos / dur * 100) : 0;
+  // بعد إكمال الكورس: التقدّم والوقت الباقي من جولة اللقاء الحالية
+  const lap = progress.isDone(id) ? progress.lap() : null;
+  const rp = lap ? progress.roundPct(id) : 0;
+  const pos = lap ? Math.round(dur * rp / 100) : Math.min(dur, progress.position(id) || 0);
+  const pct = lap ? rp : dur ? Math.round(pos / dur * 100) : 0;
   const left = Math.max(1, Math.round((dur - pos) / 60));
   const mine = player.mode === 'lecture' && player.lectureId === id;
   const active = mine && player.isPlaying;
   return html`<section className="section">
     <div className=${'card tint-course continue-card' + (active ? ' card-active' : '')}>
       <button className="cc-info" onClick=${() => go(lectureHash(id, 'normal'))}>
-        <small>${t(started ? 'continueTitle' : 'startCourse')}</small>
+        <small>${lap ? t('lapContinue', { lap: lapName(lap.n) }) : t(started ? 'continueTitle' : 'startCourse')}</small>
         <span className="cc-title">${l.title}</span>
         ${started && pos > 0 && html`<span className="cc-left">${t('minutesLeft', { n: left })}</span>`}
         ${started && pos > 0 && html`<span className="cc-bar" aria-hidden="true"><span style=${{ width: pct + '%' }}></span></span>`}
         ${better != null && html`<span className="cc-better">${t('weekBetter', { p: better })}</span>`}
       </button>
       <${PlayButton} size=${48} active=${active || (mine && player.status === 'loading')} status=${mine ? player.status : null}
-        onClick=${() => (active ? player.stop() : player.playLecture(id))} />
+        onClick=${() => (active ? player.stop() : playContinue(player, id))} />
     </div>
   </section>`;
 }
@@ -2356,6 +2398,7 @@ function CoursePage({ player, users }) {
   useOfflineVersion();
   const online = useOnline();
   const sum = progress.summary();
+  const lap = progress.lap();          // بعد إكمال الكورس: الجولة الحالية بدل الجولة الأولى
   const contId = progress.continueId();
   const counts = useCommentCounts();
   const feed = useRecentFeed(100);
@@ -2363,7 +2406,7 @@ function CoursePage({ player, users }) {
   feed.forEach(c => { if (isNewComment(c, c.l)) newBy[c.l] = true; });
   const saved = offline.usage();
 
-  const continueNow = () => { player.playLecture(contId); go('#/lecture/' + contId); };
+  const continueNow = () => { playContinue(player, contId); go('#/lecture/' + contId); };
   const removeAll = () => { if (window.confirm(t('dlRemoveAllConfirm'))) offline.removeAll(); };
 
   // صف لقاء في القائمة. الأساسيات (COURSE_HEAD) داخل إطار واحد في أول الكورس
@@ -2371,6 +2414,8 @@ function CoursePage({ player, users }) {
   const lessonRow = (id) => {
     const pct = progress.percent(id);
     const done = progress.isDone(id);
+    const k = progress.rounds(id);
+    const rp = progress.roundPct(id);
     const n = counts[id] || 0;
     const playing = player.isPlaying && player.mode === 'lecture' && player.lectureId === id;
     const isSaved = offline.has('normal', id);
@@ -2382,13 +2427,16 @@ function CoursePage({ player, users }) {
           <span className="lesson-title">${LECTURE_BY_ID[id].title}</span>
           <span className="lesson-meta">
             ${fmtTime(LECTURE_BY_ID[id].normal)}
-            ${pct ? html`<span> · ${t('heardLabel')} <${Pct} value=${pct + '%'} /></span>` : ''}
+            ${done ? (rp > 0 ? html`<span className="meta-round" style=${{ '--lv': LVL_COLORS[Math.min(5, k + 1)] }}> · ${lapName(k + 1)} <${Pct} value=${rp + '%'} /></span>`
+              : k >= 2 ? html`<span> · ${t('doneTimesLabel', { times: timesText(k) })}</span>` : '')
+              : pct ? html`<span> · ${t('heardLabel')} <${Pct} value=${pct + '%'} /></span>` : ''}
             ${playing ? html`<span> · ${t('playingHere')}</span>` : ''}
           </span>
           ${pct > 0 && !done && html`<${HeardBar} id=${id} />`}
+          ${done && rp > 0 && html`<${HeardBar} id=${id} round />`}
         </span>
         ${(done || n > 0 || newBy[id] || notes.has(id) || isSaved || isPartial) && html`<span className="lesson-side">
-          ${done && html`<span className="done-badge" aria-label=${t('lectureDone')}><${Icon} name="check" size=${14} /></span>`}
+          ${done && html`<${LectureRing} id=${id} />`}
           ${isSaved && html`<span className="note-badge" aria-label=${t('dlDone')}><${Icon} name="saved" size=${14} /></span>`}
           ${isPartial && html`<span className="note-badge dl-partial-badge" aria-label=${t('dlPartialBadge')}><${Icon} name="download" size=${14} /></span>`}
           ${notes.has(id) && html`<span className="note-badge" aria-label=${t('lectureHasNotes')}><${Icon} name="note" size=${13} /></span>`}
@@ -2417,14 +2465,15 @@ function CoursePage({ player, users }) {
           </span>`}
         <//>
       </h1>
-      <div className="big-pct"><${Pct} value=${sum.percent} /></div>
-      <${MiniBar} value=${sum.percent} />
+      <div className="big-pct"><${Pct} value=${lap ? lap.percent : sum.percent} /></div>
+      <${MiniBar} value=${lap ? lap.percent : sum.percent} />
       <div className="summary-foot">
-        <span className="hint">${t('doneOf', { done: sum.done, count: sum.count })}</span>
+        <span className="hint">${lap ? t('lapDoneOf', { lap: lapName(lap.n), done: lap.done, count: lap.count })
+          : t('doneOf', { done: sum.done, count: sum.count })}</span>
         <button className="report-btn" onClick=${() => go('#/report')}><${Icon} name="chart" size=${15} />${t('report')}</button>
       </div>
       ${contId && html`<button className="cta" onClick=${continueNow}>
-        ${progress.hasAny() ? t('continueFrom') : t('startCourse')}
+        ${lap ? t('lapContinue', { lap: lapName(lap.n) }) : progress.hasAny() ? t('continueFrom') : t('startCourse')}
       </button>`}
     </div>
 
@@ -2777,6 +2826,8 @@ function LecturePage({ id, variant, player }) {
   const status = active ? player.status : 'idle';
   const heard = progress.percent(id);
   const done = progress.isDone(id);
+  const k = progress.rounds(id);
+  const rp = progress.roundPct(id);
   const prev = lecturePrev(id, variant), next = lectureNext(id, variant);
   const comments = useComments(fast ? null : id);
   const marks = useMemo(() => comments.filter(c => typeof c.s === 'number').map(c => c.s), [comments]);
@@ -2875,10 +2926,15 @@ function LecturePage({ id, variant, player }) {
           <span>${fmtTime(shown)}</span>
           ${resumeAt != null ? html`<button className="resume-chip" onClick=${() => { player.seekLecture(id, resumeAt, variant); if (!active) player.playLecture(id, variant); }}>
             ${t('resumeFrom')} <bdi dir="ltr">${fmtTime(resumeAt)}</bdi>
-          </button>` : !fast && (done || heard > 0) && html`<span className=${'times-heard' + (done ? ' heard-done' : '')}>
-            ${done ? html`<${React.Fragment}><${Icon} name="check" size=${12} /> ${t('lectureDone')}<//>`
+          </button>` : !fast && (done || heard > 0) && (done && rp > 0
+            // في جولة جديدة: الحلقة الصغيرة واسم الجولة ونسبتها
+            ? html`<span className="times-heard times-round" style=${{ '--lv': LVL_COLORS[Math.min(5, k + 1)] }}>
+                <${LectureRing} id=${id} size=${20} /> ${lapName(k + 1)} · <${Pct} value=${rp + '%'} />
+              </span>`
+            : html`<span className=${'times-heard' + (done ? ' heard-done' : '')}>
+            ${done ? html`<${React.Fragment}><${Icon} name="check" size=${12} /> ${k >= 2 ? t('doneTimesLabel', { times: timesText(k) }) : t('lectureDone')}<//>`
               : html`<${React.Fragment}>${t('heardLabel')} <${Pct} value=${heard + '%'} /><//>`}
-          </span>`}
+          </span>`)}
           <span>${fmtTime(duration)}</span>
         </div>
 
