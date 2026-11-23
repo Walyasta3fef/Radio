@@ -1266,6 +1266,13 @@ button:active:not(:disabled) { scale: var(--press, .95); }
 
 /* نافذة الاقتراح */
 .tz-sug .name-input { width: 100%; }
+.tz-link-row { position: relative; }
+.tz-link-row .name-input { padding-left: 66px; padding-right: 12px; }  /* الخانة باتجاه الرابط (يسار)، والزر على يسارها */
+.tz-paste {
+  position: absolute; top: 50%; left: 8px; translate: 0 -50%;
+  height: 30px; padding: 0 12px; border-radius: 999px; font-size: 12px; font-weight: 800;
+  background: var(--tz-soft); color: var(--tz); border: 1px solid var(--tz-line);
+}
 .tz-prefer { font-size: 12px; line-height: 1.7; color: var(--muted); margin-top: -4px; }
 .tz-yt-note { font-size: 12px; line-height: 1.7; color: var(--tz); }
 .tz-preview { display: flex; align-items: center; gap: 10px; animation: pop-in .2s ease-out both; }

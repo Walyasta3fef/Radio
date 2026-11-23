@@ -4577,6 +4577,14 @@ function TzSuggest({ onClose, owner }) {
     });
     return () => { alive = false; };
   }, [parsed && parsed.u]);
+  // «لصق»: يضع المنسوخ بضغطة واحدة. إن رفض المتصفح يبقى الضغط المطوّل داخل الخانة متاحًا
+  const canPaste = !!(navigator.clipboard && navigator.clipboard.readText);
+  const pasteLink = async () => {
+    try {
+      const txt = ((await navigator.clipboard.readText()) || '').trim();
+      if (txt) { setLink(txt); setMsg(null); haptic(6); } else setMsg(t('pasteEmpty'));
+    } catch (err) { setMsg(t('pasteDenied')); }
+  };
   const submit = async (e) => {
     e.preventDefault();
     if (!parsed || dup || !title.trim()) return;
@@ -4598,8 +4606,11 @@ function TzSuggest({ onClose, owner }) {
         </div>`
       : html`<${React.Fragment}>
         <p className="intro-title" id="tz-sug-title">${t(owner ? 'tzAddTitle' : 'tzSuggestTitle')}</p>
-        <input className="name-input" dir="ltr" inputMode="url" autoFocus placeholder=${t('tzLinkPh')} value=${link}
-          onInput=${e => { setLink(e.target.value); setMsg(null); }} aria-label=${t('tzLinkPh')} />
+        <div className="tz-link-row">
+          <input className="name-input" dir="ltr" inputMode="url" autoFocus placeholder=${t('tzLinkPh')} value=${link}
+            onInput=${e => { setLink(e.target.value); setMsg(null); }} aria-label=${t('tzLinkPh')} />
+          ${canPaste && html`<button type="button" className="tz-paste" onClick=${pasteLink}>${t('paste')}</button>`}
+        </div>
         <p className="tz-prefer">${t('tzPreferSc')}</p>
         ${link.trim() && !parsed && html`<p className="form-error">${t('tzBadLink')}</p>`}
         ${dup && html`<p className="form-error">${t('tzDuplicate')}</p>`}
@@ -4973,7 +4984,9 @@ function App() {
     page = html`<${HomePage} player=${player} users=${users} />`;
   }
 
-  return html`<div className="app" onContextMenu=${e => e.preventDefault()}>
+  // قائمة الضغط المطوّل ممنوعة في الصفحة (لا نسخ ولا حفظ)، إلا في خانات الكتابة: فيها «لصق» و«تحديد الكل»
+  const noMenu = (e) => { if (!(e.target.closest && e.target.closest('input, textarea, [contenteditable="true"]'))) e.preventDefault(); };
+  return html`<div className="app" onContextMenu=${noMenu}>
     <${Stars} />
     <audio ref=${player.audioRef} preload="none" controlsList="nodownload" />
     <${InAppHint} />
