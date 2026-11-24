@@ -25,7 +25,8 @@ const progress = (() => {
   // lectures: لكل لقاء { h: الشرائح المسموعة مشفّرة، c: عددها، p: موضع التوقف، t: وقت آخر تحديث للموضع، d: اكتمل،
   //   fp: موضع التوقف في النسخة السريعة من الكورس، ft: وقت آخر تحديث له،
   //   z: الشرائح المسموعة لأول مرة و«حذف السكتات» يعمل، ولم تُسمع بعدها بالسرعة العادية (مشفّرة)،
-  //   k: عدد مرات إكمال اللقاء، rb و rc: الشرائح المسموعة في المرة الحالية بعد الإكمال الأول وعددها }
+  //   k: عدد مرات إكمال اللقاء، rb و rc: الشرائح المسموعة في المرة الحالية بعد الإكمال الأول وعددها،
+  //   rt: الشرائح التي لم تُسمع في المرة السابقة عند إكمالها (5% تقريبًا)؛ سماعها يكمّل تلك المرة ولا يبدأ التالية }
   // lvl: أعلى عدد مرات أُكمل فيه الكورس كله (من 1 إلى 5) ولا ينقص بإضافة لقاء جديد،
   // core: أكمل الأساسيات (COURSE_HEAD)، cg: آخر مرتبة عُرضت تهنئتها
   // sec: وقت الاستماع القديم قبل التقرير اليومي (لكل جهاز)، days: أيام الاستماع، last: آخر لقاء
@@ -33,7 +34,7 @@ const progress = (() => {
   //   { جهاز: { يوم: { c: الكورس، n: الراديو العادي، f: الراديو السريع، l: { لقاء: ثوانٍ } } } }
   // other: تقدّم لقاءات لا يعرفها هذا الجهاز بعد (لقاء جديد لم تصله قائمته)، يُحفظ كما هو حتى لا يضيع عند الرفع
   // tz: مشاهدة مواد «تزكية»: { معرّف: { p: الموضع بالثواني، d: المدة، w: 1 إذا اكتملت، t: آخر تحديث } }
-  const empty = () => ({ v: 2, lectures: {}, sec: {}, days: [], legacyDays: 0, last: null, lastAt: 0, daily: {}, seen: {}, other: {}, tz: {} });
+  const empty = () => ({ v: 2, rfx: 1, lectures: {}, sec: {}, days: [], legacyDays: 0, last: null, lastAt: 0, daily: {}, seen: {}, other: {}, tz: {} });
 
   function migrate(s) {
     if (!s) return empty();
@@ -51,6 +52,16 @@ const progress = (() => {
 
   let state = migrate(storage.getJSON(PROGRESS_KEY));
   if (!state.other) state.other = {};
+  // تنظيف لمرة واحدة: كان آخر اللقاء (الجزء الذي يُسمع لأول مرة بعد الإكمال) يُحسب خطأً سماعًا ثانيًا.
+  // وكذلك آخر كل مرة تالية، فكل سماع جارٍ لم يتجاوز 6% يعود صفرًا. rfx: تم التنظيف
+  const ROUND_FIX_MAX = 0.06;
+  const badRound = (id, x) => !!(x && x.d && x.rc
+    && LECTURE_BY_ID[id] && x.rc / Math.ceil(LECTURE_BY_ID[id].normal / SLOT_SECONDS) <= ROUND_FIX_MAX);
+  if (!state.rfx) {
+    Object.entries(state.lectures || {}).forEach(([id, e]) => { if (badRound(id, e)) { e.rc = 0; e.rb = ''; } });
+    state.rfx = 1;
+    storage.setJSON(PROGRESS_KEY, state);
+  }
   let bitsCache = {};
   const listeners = new Set();
   let dirty = false;
@@ -81,6 +92,11 @@ const progress = (() => {
   }
   const zCache = {};
   const rbCache = {};
+  const rtCache = {};
+  function rtbits(id) {
+    if (!rtCache[id]) rtCache[id] = decode(id, state.lectures[id] && state.lectures[id].rt);
+    return rtCache[id];
+  }
   function rbits(id) {
     if (!rbCache[id]) rbCache[id] = decode(id, state.lectures[id] && state.lectures[id].rb);
     return rbCache[id];
@@ -124,6 +140,9 @@ const progress = (() => {
   // تسجيل جزء مسموع فعلًا من لقاء. how: بلا قيمة استماع عادي، 'skipping' كلام مسموع و«حذف السكتات» يعمل،
   // 'skip' سكتة قُفز فوقها فتُحتسب مسموعة. لكل شريحة: الجديدة بحذف السكتات تُعلَّم،
   // والمسموعة بالعادي تُمحى علامتها، والمسموعة من قبل لا تتغيّر بالاستماع بحذف السكتات
+  // آخر شريحة سُمعت لأول مرة في التشغيل الجاري: التسجيل يصل كل ربع ثانية تقريبًا والشريحة خمس ثوانٍ،
+  // فلا تُحسب هذه الشريحة سماعًا ثانيًا ما دام التشغيل داخلها
+  const freshSlot = {};
   function record(id, from, to, how) {
     if (!LECTURE_BY_ID[id] || !(to > from)) return;
     const e = entry(id);
@@ -136,25 +155,39 @@ const progress = (() => {
     // بعد الإكمال الأول: الاستماع يُحسب في المرة التالية، فإذا بلغ 95% زاد عدد مرات الإكمال.
     // والجزء الذي لم يُسمع قط يكمّل السماع الأول ولا يُعدّ في التالي (فآخر اللقاء لا يبدأ سماعًا ثانيًا)
     const rb = e.d ? rbits(id) : null;
-    let rbChanged = false;
+    const rt = e.d && e.rt ? rtbits(id) : null;
+    let rbChanged = false, rtChanged = false;
+    let newB = false;
     for (let i = a; i <= b; i++) {
       const byte = i >> 3, mask = 1 << (i & 7);
-      if (rb && (arr[byte] & mask) && !(rb[byte] & mask)) { rb[byte] |= mask; e.rc = (e.rc || 0) + 1; rbChanged = true; }
+      if (rt && (rt[byte] & mask)) { rt[byte] &= ~mask; rtChanged = true; if (i === b) newB = true; }
+      else if (rb && (arr[byte] & mask) && !(rb[byte] & mask) && freshSlot[id] !== i) { rb[byte] |= mask; e.rc = (e.rc || 0) + 1; rbChanged = true; }
       if (!(arr[byte] & mask)) {
         arr[byte] |= mask; e.c++; changed = true;
+        if (i === b) newB = true;
         if (how) z[byte] |= mask;
       } else if (!how && z && (z[byte] & mask)) { z[byte] &= ~mask; changed = true; }
     }
+    if (newB) freshSlot[id] = b;
+    else if (freshSlot[id] !== b) delete freshSlot[id];
     if (z) e.z = encodeZ(z);
+    if (rtChanged) e.rt = encodeZ(rt);
     if (changed) {
       e.h = encode(arr);
       if (!e.d && e.c / total >= DONE_RATIO) { e.d = 1; e.da = dayKey(); e.k = 1; }
     }
     if (rbChanged) {
-      if (e.rc / total >= DONE_RATIO) { e.k = Math.min(99, (e.k || 1) + 1); rb.fill(0); e.rc = 0; e.rb = ''; }
+      if (e.rc / total >= DONE_RATIO) {
+        // ما لم يُسمع في هذه المرة يكمّلها إذا سُمع، ولا يبدأ المرة التالية
+        const tail = new Uint8Array(rb.length);
+        for (let i = 0; i < total; i++) if (!(rb[i >> 3] & (1 << (i & 7)))) tail[i >> 3] |= 1 << (i & 7);
+        rtCache[id] = tail; e.rt = encodeZ(tail);
+        e.k = Math.min(99, (e.k || 1) + 1); rb.fill(0); e.rc = 0; e.rb = '';
+        freshSlot[id] = b;
+      }
       else e.rb = encode(rb);
     }
-    if (changed || rbChanged) updateLevels();
+    if (changed || rbChanged || rtChanged) updateLevels();
     const day = dayKey();
     if (!state.days.includes(day)) state.days.push(day);
     touch();
@@ -463,12 +496,22 @@ const progress = (() => {
         e.z = encodeZ(zm);
       }
       // المرة الحالية بعد الإكمال: من الجهة الأكثر إكمالًا، وعند التساوي تُجمع الجهتان
+      // بيانات جهاز لم يصله تنظيف السماع الثاني بعد: يُتجاهل سماعه الثاني الخاطئ
+      if (!remote.rfx && badRound(id, r)) r = Object.assign({}, r, { rb: '', rc: 0 });
       const rk = r.d ? Math.max(1, r.k || 1) : 0, ek = e.d ? Math.max(1, e.k || 1) : 0;
-      if (rk > ek) { e.k = rk; e.rb = r.rb || ''; e.rc = r.rc || 0; delete rbCache[id]; }
-      else if (rk === ek && rk > 0 && r.rb) {
-        const rm = rbits(id), rt = decode(id, r.rb);
-        for (let i = 0; i < rm.length; i++) rm[i] |= rt[i];
-        e.rc = popcount(rm); e.rb = encode(rm);
+      if (rk > ek) { e.k = rk; e.rb = r.rb || ''; e.rc = r.rc || 0; e.rt = r.rt || ''; delete rbCache[id]; delete rtCache[id]; }
+      else if (rk === ek && rk > 0) {
+        if (r.rb) {
+          const rm = rbits(id), rt = decode(id, r.rb);
+          for (let i = 0; i < rm.length; i++) rm[i] |= rt[i];
+          e.rc = popcount(rm); e.rb = encode(rm);
+        }
+        // ما سُمع من بقية المرة السابقة في أي جهة لا يعود
+        if (e.rt) {
+          const tm = rtbits(id), tt = decode(id, r.rt);
+          for (let i = 0; i < tm.length; i++) tm[i] &= tt[i];
+          e.rt = encodeZ(tm);
+        }
       }
       for (let i = 0; i < mine.length; i++) mine[i] |= theirs[i];
       e.h = encode(mine);
@@ -538,6 +581,7 @@ const progress = (() => {
     bitsCache = {};
     Object.keys(zCache).forEach(k => delete zCache[k]);
     Object.keys(rbCache).forEach(k => delete rbCache[k]);
+    Object.keys(rtCache).forEach(k => delete rtCache[k]);
     storage.set(PROGRESS_KEY, '');
     dirty = false;
     rev++;
